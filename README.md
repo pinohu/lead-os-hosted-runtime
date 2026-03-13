@@ -43,3 +43,23 @@ Hosted runtime
 ## Deploy target
 
 This repo is designed for modern Next.js hosting and should sit behind a subdomain used exclusively for lead capture and funnel execution.
+
+## Railway deployment
+
+This repo is preconfigured for Railway with [`railway.json`](./railway.json).
+
+Recommended flow:
+
+1. Create a new Railway project from this GitHub repo
+2. Set the root to the repository root
+3. Add the environment variables from [`.env.example`](./.env.example)
+4. Point your subdomain, such as `leads.audreysplace.place`, to Railway
+5. Verify the runtime with:
+
+- `/api/health`
+- `/api/widgets/boot`
+- `/api/embed/manifest`
+
+## WordPress pairing
+
+Use the companion repo [lead-os-embed-widgets](https://github.com/pinohu/lead-os-embed-widgets) on the WordPress site.
