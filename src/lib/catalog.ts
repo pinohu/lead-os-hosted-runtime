@@ -21,7 +21,7 @@ export const nicheCatalog: Record<string, NicheDefinition> = {
     assessmentTitle: "Legal Intake Readiness Assessment",
     calculatorBias: "compliance",
   },
-  home-services: {
+  "home-services": {
     slug: "home-services",
     label: "Home Services",
     summary: "Quote and booking acceleration for contractors and trades.",
