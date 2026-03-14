@@ -3,12 +3,19 @@ import { THREE_VISIT_FRAMEWORK } from "@/lib/automation";
 import { buildDashboardSnapshot } from "@/lib/dashboard";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { getAutomationHealth } from "@/lib/providers";
-import { getCanonicalEvents, getLeadRecords } from "@/lib/runtime-store";
+import { getBookingJobs, getCanonicalEvents, getDocumentJobs, getLeadRecords, getWorkflowRuns } from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
 
 export default async function DashboardPage() {
   const session = await requireOperatorPageSession("/dashboard");
-  const snapshot = buildDashboardSnapshot(await getLeadRecords(), await getCanonicalEvents());
+  const [leads, events, bookingJobs, documentJobs, workflowRuns] = await Promise.all([
+    getLeadRecords(),
+    getCanonicalEvents(),
+    getBookingJobs(),
+    getDocumentJobs(),
+    getWorkflowRuns(),
+  ]);
+  const snapshot = buildDashboardSnapshot(leads, events);
   const health = getAutomationHealth();
 
   return (
@@ -25,6 +32,15 @@ export default async function DashboardPage() {
           <div className="cta-row">
             <Link href="/dashboard/providers" className="primary">
               Provider health
+            </Link>
+            <Link href="/dashboard/bookings" className="secondary">
+              Booking jobs
+            </Link>
+            <Link href="/dashboard/documents" className="secondary">
+              Document jobs
+            </Link>
+            <Link href="/dashboard/workflows" className="secondary">
+              Workflow runs
             </Link>
             <a href="/auth/sign-out" className="secondary">
               Sign out
@@ -68,6 +84,50 @@ export default async function DashboardPage() {
           <p className="eyebrow">Customer M2 to M3</p>
           <h2>{snapshot.conversionRates.customerM2ToM3}%</h2>
           <p className="muted">Value-realized rate from activated customers.</p>
+        </article>
+      </section>
+
+      <section className="grid two">
+        <article className="panel">
+          <p className="eyebrow">Execution queues</p>
+          <h2>What operators can act on right now</h2>
+          <div className="stack-grid">
+            <article className="stack-card">
+              <p className="eyebrow">Bookings</p>
+              <h3>{bookingJobs.length}</h3>
+              <p className="muted">Scheduling jobs recorded in the runtime.</p>
+              <Link href="/dashboard/bookings" className="secondary">
+                Open booking queue
+              </Link>
+            </article>
+            <article className="stack-card">
+              <p className="eyebrow">Documents</p>
+              <h3>{documentJobs.length}</h3>
+              <p className="muted">Proposal, agreement, and onboarding document jobs.</p>
+              <Link href="/dashboard/documents" className="secondary">
+                Open document queue
+              </Link>
+            </article>
+            <article className="stack-card">
+              <p className="eyebrow">Workflow runs</p>
+              <h3>{workflowRuns.length}</h3>
+              <p className="muted">n8n and internal workflow emissions logged by LeadOS.</p>
+              <Link href="/dashboard/workflows" className="secondary">
+                Open workflow history
+              </Link>
+            </article>
+          </div>
+        </article>
+
+        <article className="panel">
+          <p className="eyebrow">Operator focus</p>
+          <h2>Fast links for intervention</h2>
+          <ul className="check-list">
+            <li><Link href="/dashboard/providers">Provider health and channel readiness</Link></li>
+            <li><Link href="/dashboard/bookings">Scheduling requests and availability lookups</Link></li>
+            <li><Link href="/dashboard/documents">Proposal, agreement, and onboarding document jobs</Link></li>
+            <li><Link href="/dashboard/workflows">Workflow emissions and execution outcomes</Link></li>
+          </ul>
         </article>
       </section>
 
