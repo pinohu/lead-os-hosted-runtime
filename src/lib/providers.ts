@@ -292,6 +292,118 @@ export async function emitWorkflowAction(eventName: string, payload: Record<stri
   } satisfies ProviderResult;
 }
 
+export async function startChatAction(payload: Record<string, unknown>) {
+  const provider = integrationMap.insighto;
+  if (!provider.configured || !provider.live) {
+    return dryRunResult("Insighto.ai", "Chat workflow prepared", payload);
+  }
+  return {
+    ok: true,
+    provider: "Insighto.ai",
+    mode: "prepared",
+    detail: "Insighto adapter is wired and awaiting account-specific endpoint details",
+    payload,
+  } satisfies ProviderResult;
+}
+
+export async function startVoiceAction(payload: Record<string, unknown>) {
+  const provider = integrationMap.thoughtly;
+  if (!provider.configured || !provider.live) {
+    return dryRunResult("Thoughtly", "Voice workflow prepared", payload);
+  }
+  return {
+    ok: true,
+    provider: "Thoughtly",
+    mode: "prepared",
+    detail: "Thoughtly adapter is wired and awaiting account-specific endpoint details",
+    payload,
+  } satisfies ProviderResult;
+}
+
+export async function createBookingAction(payload: Record<string, unknown>) {
+  const provider = integrationMap.lunacal;
+  if (!provider.configured || !provider.live) {
+    return dryRunResult("Lunacal", "Booking request prepared", payload);
+  }
+  return {
+    ok: true,
+    provider: "Lunacal",
+    mode: "prepared",
+    detail: "Lunacal adapter is wired and awaiting account-specific endpoint details",
+    payload,
+  } satisfies ProviderResult;
+}
+
+export async function generateDocumentAction(payload: Record<string, unknown>) {
+  const provider = integrationMap.documentero;
+  if (!provider.configured || !provider.live) {
+    return dryRunResult("Documentero", "Document generation prepared", payload);
+  }
+  return {
+    ok: true,
+    provider: "Documentero",
+    mode: "prepared",
+    detail: "Documentero adapter is wired and awaiting account-specific endpoint details",
+    payload,
+  } satisfies ProviderResult;
+}
+
+export async function startReferralAction(payload: Record<string, unknown>) {
+  const provider = integrationMap.partnero;
+  if (!provider.configured || !provider.live) {
+    return dryRunResult("Partnero", "Referral workflow prepared", payload);
+  }
+  return {
+    ok: true,
+    provider: "Partnero",
+    mode: "prepared",
+    detail: "Partnero adapter is wired and awaiting account-specific endpoint details",
+    payload,
+  } satisfies ProviderResult;
+}
+
+export async function startCommerceAction(payload: Record<string, unknown>) {
+  const provider = integrationMap.thrivecart;
+  if (!provider.configured || !provider.live) {
+    return dryRunResult("ThriveCart", "Commerce workflow prepared", payload);
+  }
+  return {
+    ok: true,
+    provider: "ThriveCart",
+    mode: "prepared",
+    detail: "ThriveCart adapter is wired and awaiting account-specific endpoint details",
+    payload,
+  } satisfies ProviderResult;
+}
+
+export async function emitSecondaryWorkflowAction(payload: Record<string, unknown>) {
+  const provider = integrationMap.activepieces;
+  if (!provider.configured || !provider.live) {
+    return dryRunResult("Activepieces", "Secondary workflow prepared", payload);
+  }
+  const response = await postJson(process.env.ACTIVEPIECES_WEBHOOK_URL ?? "", payload);
+  return {
+    ok: response.ok,
+    provider: "Activepieces",
+    mode: "live",
+    detail: response.ok ? "Secondary workflow emitted" : `Secondary workflow failed: ${response.status}`,
+  } satisfies ProviderResult;
+}
+
+export async function emitRpaFallbackAction(payload: Record<string, unknown>) {
+  const provider = integrationMap.electroneek;
+  if (!provider.configured || !provider.live) {
+    return dryRunResult("ElectroNeek", "RPA fallback prepared", payload);
+  }
+  const response = await postJson(process.env.ELECTRONEEK_WEBHOOK_URL ?? "", payload);
+  return {
+    ok: response.ok,
+    provider: "ElectroNeek",
+    mode: "live",
+    detail: response.ok ? "RPA fallback emitted" : `RPA fallback failed: ${response.status}`,
+  } satisfies ProviderResult;
+}
+
 export async function runSmokeTest(dryRun = true) {
   return {
     dryRun,
@@ -318,6 +430,14 @@ export async function runSmokeTest(dryRun = true) {
       }),
       whatsapp: await sendWhatsAppAction({ phone: "+15555550123", body: "Smoke test" }),
       sms: await sendSmsAction({ phone: "+15555550123", body: "Smoke test" }),
+      chat: await startChatAction({ dryRun }),
+      voice: await startVoiceAction({ dryRun }),
+      booking: await createBookingAction({ dryRun }),
+      documents: await generateDocumentAction({ dryRun }),
+      referral: await startReferralAction({ dryRun }),
+      commerce: await startCommerceAction({ dryRun }),
+      activepieces: await emitSecondaryWorkflowAction({ dryRun }),
+      electroneek: await emitRpaFallbackAction({ dryRun }),
     },
   };
 }
