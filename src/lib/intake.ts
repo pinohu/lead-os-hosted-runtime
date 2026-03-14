@@ -1,7 +1,9 @@
 import { buildImmediateFollowupPlan } from "./automation.ts";
 import { decideNextStep } from "./orchestrator.ts";
 import {
+  createBookingAction,
   emitWorkflowAction,
+  generateDocumentAction,
   logEventsToLedger,
   sendAlertAction,
   sendEmailAction,
@@ -13,11 +15,15 @@ import type { LeadStage } from "./runtime-schema.ts";
 import type { CustomerMilestoneId, LeadMilestoneId } from "./runtime-schema.ts";
 import {
   appendEvents,
+  getBookingJobs,
+  getDocumentJobs,
   getLeadRecord,
   markNurtureStageSent,
   recordProviderExecution,
   recordWorkflowRun,
   type StoredLeadRecord,
+  upsertBookingJob,
+  upsertDocumentJob,
   upsertLeadRecord,
 } from "./runtime-store.ts";
 import {
@@ -88,6 +94,10 @@ export interface IntakeResult {
     whatsapp: Awaited<ReturnType<typeof sendWhatsAppAction>> | null;
     sms: Awaited<ReturnType<typeof sendSmsAction>> | null;
   };
+  jobs: {
+    booking: Awaited<ReturnType<typeof getBookingJobs>>[number] | null;
+    documents: Awaited<ReturnType<typeof getDocumentJobs>>;
+  };
 }
 
 const VALID_SOURCES: IntakeSource[] = [
@@ -135,6 +145,11 @@ function computeLeadScore(payload: HostedLeadPayload) {
 }
 
 function resolveLeadStage(payload: HostedLeadPayload): LeadStage {
+  const metadata = payload.metadata ?? {};
+  if (metadata.referralReady === true) return "referral-ready";
+  if (metadata.activationMilestone === true) return "active";
+  if (metadata.onboardingStarted === true) return "onboarding";
+  if (metadata.checkoutCompleted === true || metadata.conversionCompleted === true) return "converted";
   if (payload.wantsCheckout) return "offered";
   if (payload.wantsBooking || payload.askingForQuote) return "qualified";
   if (payload.source === "checkout") return "offered";
@@ -189,6 +204,55 @@ function buildReplayKey(payload: HostedLeadPayload, normalizedEmail?: string, no
     normalizedPhone ?? "",
     payload.service ?? payload.niche ?? "",
   ].join("|");
+}
+
+function normalizeDocumentTypes(stage: LeadStage, metadata: Record<string, unknown> | undefined) {
+  const requested = new Set<string>();
+  const explicitType = typeof metadata?.documentType === "string" ? metadata.documentType.trim() : "";
+  if (explicitType) {
+    requested.add(explicitType);
+  }
+  if (stage === "qualified" || stage === "booked" || stage === "offered") {
+    requested.add("proposal");
+  }
+  if (stage === "converted" || metadata?.checkoutCompleted === true || metadata?.conversionCompleted === true) {
+    requested.add("agreement");
+  }
+  if (stage === "onboarding" || metadata?.onboardingStarted === true) {
+    requested.add("onboarding-pack");
+  }
+  return [...requested];
+}
+
+function resolveBookingJobStatus(result: Awaited<ReturnType<typeof createBookingAction>>) {
+  if (result.mode === "dry-run") {
+    return "prepared";
+  }
+  if (!result.ok) {
+    return result.mode === "live" ? "unavailable" : "failed";
+  }
+
+  const detail = result.detail.toLowerCase();
+  if (detail.includes("submitted")) {
+    return "booked";
+  }
+  if (detail.includes("availability")) {
+    return "availability-found";
+  }
+  if (detail.includes("handoff") || detail.includes("destination")) {
+    return "handoff-ready";
+  }
+  return result.mode === "prepared" ? "prepared" : "ready";
+}
+
+function resolveDocumentJobStatus(result: Awaited<ReturnType<typeof generateDocumentAction>>) {
+  if (result.mode === "dry-run") {
+    return "prepared";
+  }
+  if (!result.ok) {
+    return "failed";
+  }
+  return result.mode === "live" ? "generated" : "prepared";
 }
 
 function isRecentReplay(key: string) {
@@ -491,6 +555,94 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     await appendEvents([createCanonicalEvent(trace, "followup_sms_sent", "sms", smsResult.ok ? "SENT" : "FAILED")]);
   }
 
+  const shouldCreateBookingJob =
+    payload.wantsBooking ||
+    payload.askingForQuote ||
+    decision.family === "qualification" ||
+    stage === "qualified" ||
+    stage === "booked";
+  const bookingActionResult = shouldCreateBookingJob
+    ? await createBookingAction({
+        dryRun: payload.dryRun,
+        leadKey,
+        trace,
+        firstName,
+        lastName,
+        email: normalizedEmail,
+        phone: normalizedPhone,
+        company: payload.company,
+        service: trace.service,
+        niche: trace.niche,
+        source: payload.source,
+        family: decision.family,
+        stage,
+        score,
+        metadata: payload.metadata ?? {},
+      })
+    : null;
+  const bookingJob = bookingActionResult
+    ? await upsertBookingJob({
+        leadKey,
+        provider: bookingActionResult.provider,
+        status: resolveBookingJobStatus(bookingActionResult),
+        detail: bookingActionResult.detail,
+        payload: {
+          family: decision.family,
+          stage,
+          score,
+          ...bookingActionResult.payload,
+        },
+      })
+    : null;
+
+  const documentTypes = normalizeDocumentTypes(stage, payload.metadata);
+  const documentJobs = await Promise.all(
+    documentTypes.map(async (documentType) => {
+      const result = await generateDocumentAction({
+        dryRun: payload.dryRun,
+        leadKey,
+        trace,
+        firstName,
+        lastName,
+        email: normalizedEmail,
+        phone: normalizedPhone,
+        company: payload.company,
+        service: trace.service,
+        niche: trace.niche,
+        family: decision.family,
+        stage,
+        score,
+        documentType,
+        metadata: payload.metadata ?? {},
+      });
+
+      const job = await upsertDocumentJob({
+        leadKey,
+        provider: result.provider,
+        status: resolveDocumentJobStatus(result),
+        detail: result.detail,
+        payload: {
+          documentType,
+          family: decision.family,
+          stage,
+          score,
+          ...result.payload,
+        },
+      });
+
+      if (result.ok && result.mode === "live" && documentType === "proposal") {
+        await appendEvents([
+          createCanonicalEvent(trace, "proposal_sent", "internal", "SENT", {
+            provider: result.provider,
+            documentType,
+          }),
+        ]);
+      }
+
+      return { job, result };
+    }),
+  );
+
   await Promise.all([
     recordProviderExecution({
       leadKey,
@@ -574,6 +726,28 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
         payload: smsResult.payload,
       }),
     ] : []),
+    ...(bookingActionResult ? [
+      recordProviderExecution({
+        leadKey,
+        provider: bookingActionResult.provider,
+        kind: "booking",
+        ok: bookingActionResult.ok,
+        mode: bookingActionResult.mode,
+        detail: bookingActionResult.detail,
+        payload: bookingActionResult.payload,
+      }),
+    ] : []),
+    ...documentJobs.map(({ result }) =>
+      recordProviderExecution({
+        leadKey,
+        provider: result.provider,
+        kind: "documents",
+        ok: result.ok,
+        mode: result.mode,
+        detail: result.detail,
+        payload: result.payload,
+      })
+    ),
   ]);
 
   return {
@@ -595,6 +769,10 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
       email: emailResult,
       whatsapp: whatsappResult,
       sms: smsResult,
+    },
+    jobs: {
+      booking: bookingJob,
+      documents: documentJobs.map(({ job }) => job),
     },
   };
 }

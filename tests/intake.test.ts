@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { getDefaultFunnelGraph } from "../src/lib/funnel-library.ts";
 import { persistLead, validateLeadPayload } from "../src/lib/intake.ts";
-import { resetRuntimeStore } from "../src/lib/runtime-store.ts";
+import { getBookingJobs, getDocumentJobs, resetRuntimeStore } from "../src/lib/runtime-store.ts";
 import { tenantConfig } from "../src/lib/tenant.ts";
 
 test("validateLeadPayload requires a source and identity", () => {
@@ -46,4 +46,42 @@ test("default funnel graphs exist for canonical families", () => {
   assert.equal(graph.family, "webinar");
   assert.ok(graph.nodes.length >= 5);
   assert.ok(graph.edges.length >= 4);
+});
+
+test("persistLead creates a persisted booking job for high-intent leads", async () => {
+  await resetRuntimeStore();
+  const result = await persistLead({
+    source: "assessment",
+    email: "bookme@test.com",
+    firstName: "Book",
+    wantsBooking: true,
+    dryRun: true,
+  });
+
+  assert.ok(result.jobs.booking);
+  assert.equal(result.jobs.booking?.status, "prepared");
+
+  const storedJobs = await getBookingJobs(result.leadKey);
+  assert.equal(storedJobs.length, 1);
+  assert.equal(storedJobs[0]?.leadKey, result.leadKey);
+});
+
+test("persistLead creates persisted document jobs for proposal-stage leads", async () => {
+  await resetRuntimeStore();
+  const result = await persistLead({
+    source: "assessment",
+    email: "proposal@test.com",
+    firstName: "Proposal",
+    askingForQuote: true,
+    metadata: {
+      documentType: "proposal",
+    },
+    dryRun: true,
+  });
+
+  assert.ok(result.jobs.documents.length >= 1);
+  assert.equal(result.jobs.documents[0]?.status, "prepared");
+
+  const storedDocs = await getDocumentJobs(result.leadKey);
+  assert.ok(storedDocs.some((job) => job.payload?.documentType === "proposal"));
 });

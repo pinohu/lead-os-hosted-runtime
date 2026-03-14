@@ -20,6 +20,14 @@ interface IntegrationConfig {
   responsibility: string;
 }
 
+interface HttpResult {
+  ok: boolean;
+  status: number;
+  text: string;
+  json?: unknown;
+  contentType?: string | null;
+}
+
 const LIVE_MODE = process.env.LEAD_OS_ENABLE_LIVE_SENDS !== "false";
 
 function getEnvValue(...keys: string[]) {
@@ -178,6 +186,10 @@ function getTrafftApiUrl() {
   return (getEnvValue("TRAFFT_API_URL", "TRAFFT_BASE_URL") ?? embeddedSecrets.trafft.apiUrl)?.replace(/\/+$/, "");
 }
 
+function getTrafftBookingUrl() {
+  return getEnvValue("TRAFFT_BOOKING_URL", "TRAFFT_PUBLIC_BOOKING_URL", "TRAFFT_EVENT_LINK");
+}
+
 function getTrafftClientId() {
   return getEnvValue("TRAFFT_CLIENT_ID") ?? embeddedSecrets.trafft.clientId;
 }
@@ -186,12 +198,55 @@ function getTrafftClientSecret() {
   return getEnvValue("TRAFFT_CLIENT_SECRET") ?? embeddedSecrets.trafft.clientSecret;
 }
 
+function getTrafftBearerToken() {
+  return getEnvValue("TRAFFT_BEARER_TOKEN", "TRAFFT_API_TOKEN", "TRAFFT_ACCESS_TOKEN");
+}
+
+function getTrafftDefaultServiceId() {
+  return getEnvValue("TRAFFT_DEFAULT_SERVICE_ID");
+}
+
+function getTrafftServiceMap() {
+  const raw = getEnvValue("TRAFFT_SERVICE_MAP");
+  if (!raw) {
+    return {} as Record<string, string>;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return Object.entries(parsed).reduce<Record<string, string>>((acc, [key, value]) => {
+      if (typeof value === "string" && value.trim().length > 0) {
+        acc[key.trim().toLowerCase()] = value.trim();
+      }
+      return acc;
+    }, {});
+  } catch {
+    return {};
+  }
+}
+
 function getDocumenteroApiKey() {
   return getEnvValue("DOCUMENTERO_API_KEY") ?? embeddedSecrets.documentero.apiKey;
 }
 
 function getDocumenteroTemplateId() {
   return getEnvValue("DOCUMENTERO_TEMPLATE_ID");
+}
+
+function getDocumenteroProposalTemplateId() {
+  return getEnvValue("DOCUMENTERO_TEMPLATE_PROPOSAL_ID");
+}
+
+function getDocumenteroAgreementTemplateId() {
+  return getEnvValue("DOCUMENTERO_TEMPLATE_AGREEMENT_ID");
+}
+
+function getDocumenteroOnboardingTemplateId() {
+  return getEnvValue("DOCUMENTERO_TEMPLATE_ONBOARDING_ID");
+}
+
+function getDocumenteroDefaultFormat() {
+  return getEnvValue("DOCUMENTERO_DEFAULT_FORMAT") ?? "pdf";
 }
 
 function getDocumenteroWebhookUrl() {
@@ -212,6 +267,18 @@ function getCroveWebhookUrl() {
 
 function getCroveTemplateId() {
   return getEnvValue("CROVE_TEMPLATE_ID");
+}
+
+function getCroveProposalTemplateId() {
+  return getEnvValue("CROVE_TEMPLATE_PROPOSAL_ID");
+}
+
+function getCroveAgreementTemplateId() {
+  return getEnvValue("CROVE_TEMPLATE_AGREEMENT_ID");
+}
+
+function getCroveOnboardingTemplateId() {
+  return getEnvValue("CROVE_TEMPLATE_ONBOARDING_ID");
 }
 
 function getThrivecartApiKey() {
@@ -280,7 +347,7 @@ export const integrationMap = {
   smsit: integration(Boolean(getSmsitApiKey() && getSmsitBaseUrl()), "sms"),
   insighto: integration(Boolean(getInsightoApiKey() || getInsightoWebhookUrl() || getInsightoAgentId()), "chat"),
   thoughtly: integration(Boolean(getThoughtlyApiKey() || getThoughtlyWebhookUrl() || getThoughtlyAgentId()), "voice"),
-  trafft: integration(Boolean((getTrafftClientId() && getTrafftClientSecret() && getTrafftApiUrl()) || getLunacalApiKey() || getLunacalBookingUrl()), "booking"),
+  trafft: integration(Boolean((getTrafftClientId() && getTrafftClientSecret() && getTrafftApiUrl()) || getTrafftBearerToken() || getTrafftBookingUrl() || getLunacalApiKey() || getLunacalBookingUrl()), "booking"),
   documentero: integration(Boolean(getDocumenteroApiKey() || getDocumenteroWebhookUrl() || getDocumenteroTemplateId()), "documents"),
   crove: integration(Boolean((getCroveApiKey() && getCroveBaseUrl()) || getCroveWebhookUrl() || getCroveTemplateId()), "documents"),
   thrivecart: integration(Boolean(getThrivecartApiKey() || getThrivecartWebhookSecret() || getThrivecartCheckoutUrl() || getThrivecartWebhookUrl()), "commerce"),
@@ -290,8 +357,62 @@ export const integrationMap = {
   electroneek: integration(Boolean(getElectroneekWebhookUrl() || getElectroneekApiKey()), "fallbackAutomation"),
 };
 
+function parseJson(text: string) {
+  if (!text) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+function asRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function getNestedRecord(value: unknown, key: string) {
+  const record = asRecord(value);
+  const nested = record?.[key];
+  return asRecord(nested);
+}
+
+function getStringValue(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function getBooleanValue(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "boolean") {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+async function request(url: string, init: RequestInit): Promise<HttpResult> {
+  const response = await fetch(url, init);
+  const text = await response.text();
+  return {
+    ok: response.ok,
+    status: response.status,
+    text,
+    json: parseJson(text),
+    contentType: response.headers.get("content-type"),
+  };
+}
+
 async function postJson(url: string, body: unknown, headers: Record<string, string> = {}) {
-  const response = await fetch(url, {
+  return request(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -299,15 +420,195 @@ async function postJson(url: string, body: unknown, headers: Record<string, stri
     },
     body: JSON.stringify(body),
   });
-  return {
-    ok: response.ok,
-    status: response.status,
-    text: await response.text(),
-  };
+}
+
+async function getJson(url: string, headers: Record<string, string> = {}) {
+  return request(url, {
+    method: "GET",
+    headers,
+  });
 }
 
 function dryRunResult(provider: string, detail: string, payload?: Record<string, unknown>): ProviderResult {
   return { ok: true, provider, mode: "dry-run", detail, payload };
+}
+
+function buildTrafftApiUrl(path: string) {
+  const baseUrl = getTrafftApiUrl();
+  if (!baseUrl) {
+    return undefined;
+  }
+
+  return `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function buildTrafftBookingUrl(payload?: Record<string, unknown>) {
+  const directBookingUrl = getTrafftBookingUrl();
+  if (directBookingUrl) {
+    return directBookingUrl;
+  }
+
+  const metadata = getNestedRecord(payload, "metadata");
+  return getStringValue(
+    payload?.bookingUrl,
+    payload?.publicBookingUrl,
+    metadata?.bookingUrl,
+    metadata?.publicBookingUrl,
+    metadata?.bookingLink,
+  );
+}
+
+function resolveTrafftServiceId(payload: Record<string, unknown>) {
+  const metadata = getNestedRecord(payload, "metadata");
+  const explicitId = getStringValue(
+    payload.serviceId,
+    payload.trafftServiceId,
+    metadata?.serviceId,
+    metadata?.trafftServiceId,
+  );
+  if (explicitId) {
+    return explicitId;
+  }
+
+  const serviceName = getStringValue(payload.service, metadata?.service)?.toLowerCase();
+  if (!serviceName) {
+    return getTrafftDefaultServiceId();
+  }
+
+  const serviceMap = getTrafftServiceMap();
+  return serviceMap[serviceName] ?? getTrafftDefaultServiceId();
+}
+
+function buildTrafftCalendarWindow(payload: Record<string, unknown>) {
+  const metadata = getNestedRecord(payload, "metadata");
+  const desiredDate =
+    getStringValue(payload.desiredDate, payload.selectedDate, metadata?.desiredDate, metadata?.selectedDate);
+  const anchor = desiredDate ? new Date(`${desiredDate}T00:00:00`) : new Date();
+  const safeAnchor = Number.isNaN(anchor.getTime()) ? new Date() : anchor;
+  const start = new Date(Date.UTC(safeAnchor.getUTCFullYear(), safeAnchor.getUTCMonth(), 1));
+  const end = new Date(Date.UTC(safeAnchor.getUTCFullYear(), safeAnchor.getUTCMonth() + 1, 15));
+
+  return {
+    calendarStartDate: start.toISOString().slice(0, 10),
+    calendarEndDate: end.toISOString().slice(0, 10),
+  };
+}
+
+function flattenTrafftAvailability(raw: unknown, desiredDate?: string) {
+  const slots = asRecord(raw);
+  if (!slots) {
+    return [] as Array<Record<string, unknown>>;
+  }
+
+  const dates = Object.keys(slots).sort();
+  const prioritizedDates = desiredDate && dates.includes(desiredDate)
+    ? [desiredDate, ...dates.filter((date) => date !== desiredDate)]
+    : dates;
+
+  const availability: Array<Record<string, unknown>> = [];
+  for (const date of prioritizedDates) {
+    const timeslots = asRecord(slots[date]);
+    if (!timeslots) {
+      continue;
+    }
+
+    for (const time of Object.keys(timeslots).sort()) {
+      availability.push({
+        date,
+        time,
+        slot: timeslots[time],
+      });
+      if (availability.length >= 10) {
+        return availability;
+      }
+    }
+  }
+
+  return availability;
+}
+
+function resolveDocumentType(payload: Record<string, unknown>) {
+  const metadata = getNestedRecord(payload, "metadata");
+  return getStringValue(
+    payload.documentType,
+    payload.type,
+    metadata?.documentType,
+    metadata?.type,
+  ) ?? "proposal";
+}
+
+function resolveDocumentTemplateId(payload: Record<string, unknown>, documentType: string) {
+  const metadata = getNestedRecord(payload, "metadata");
+  const explicitId = getStringValue(
+    payload.templateId,
+    payload.documentTemplateId,
+    metadata?.templateId,
+    metadata?.documentTemplateId,
+  );
+  if (explicitId) {
+    return explicitId;
+  }
+
+  switch (documentType) {
+    case "agreement":
+    case "service-agreement":
+      return getDocumenteroAgreementTemplateId() ?? getDocumenteroTemplateId();
+    case "onboarding":
+    case "onboarding-pack":
+      return getDocumenteroOnboardingTemplateId() ?? getDocumenteroTemplateId();
+    case "proposal":
+    default:
+      return getDocumenteroProposalTemplateId() ?? getDocumenteroTemplateId();
+  }
+}
+
+function resolveCroveTemplateId(payload: Record<string, unknown>, documentType: string) {
+  const metadata = getNestedRecord(payload, "metadata");
+  const explicitId = getStringValue(
+    payload.croveTemplateId,
+    metadata?.croveTemplateId,
+  );
+  if (explicitId) {
+    return explicitId;
+  }
+
+  switch (documentType) {
+    case "agreement":
+    case "service-agreement":
+      return getCroveAgreementTemplateId() ?? getCroveTemplateId();
+    case "onboarding":
+    case "onboarding-pack":
+      return getCroveOnboardingTemplateId() ?? getCroveTemplateId();
+    case "proposal":
+    default:
+      return getCroveProposalTemplateId() ?? getCroveTemplateId();
+  }
+}
+
+function buildDocumentData(payload: Record<string, unknown>) {
+  const explicit = asRecord(payload.documentData) ?? asRecord(payload.data);
+  if (explicit) {
+    return explicit;
+  }
+
+  const trace = getNestedRecord(payload, "trace");
+  const metadata = getNestedRecord(payload, "metadata");
+
+  return {
+    leadKey: getStringValue(payload.leadKey, trace?.leadKey),
+    firstName: getStringValue(payload.firstName),
+    lastName: getStringValue(payload.lastName),
+    fullName: `${getStringValue(payload.firstName) ?? ""} ${getStringValue(payload.lastName) ?? ""}`.trim(),
+    email: getStringValue(payload.email, metadata?.email),
+    phone: getStringValue(payload.phone, metadata?.phone),
+    company: getStringValue(payload.company, metadata?.company),
+    service: getStringValue(payload.service, trace?.service),
+    niche: getStringValue(payload.niche, trace?.niche),
+    family: getStringValue(payload.family),
+    stage: getStringValue(payload.stage),
+    score: typeof payload.score === "number" ? payload.score : undefined,
+    metadata,
+  };
 }
 
 export function getAutomationHealth() {
@@ -644,26 +945,138 @@ export async function startVoiceAction(payload: Record<string, unknown>) {
 
 export async function createBookingAction(payload: Record<string, unknown>) {
   const provider = integrationMap.trafft;
-  if (!provider.configured || !provider.live) {
+  if (payload.dryRun || !provider.configured || !provider.live) {
     return dryRunResult("Trafft", "Booking request prepared", payload);
   }
   const trafftUrl = getTrafftApiUrl();
+  const bookingUrl = buildTrafftBookingUrl(payload);
+  const authToken = getTrafftBearerToken();
+
   if (trafftUrl) {
+    const tenantDataResponse = await getJson(buildTrafftApiUrl("/api/v1/common/tenant-data") ?? "");
+    if (!tenantDataResponse.ok) {
+      return {
+        ok: false,
+        provider: "Trafft",
+        mode: "live",
+        detail: `Trafft tenant lookup failed: ${tenantDataResponse.status}`,
+        payload: {
+          ...payload,
+          bookingUrl,
+          apiUrl: trafftUrl,
+        },
+      } satisfies ProviderResult;
+    }
+
+    const tenantData = asRecord(tenantDataResponse.json);
+    const serviceId = resolveTrafftServiceId(payload);
+    const metadata = getNestedRecord(payload, "metadata");
+    const employeeId = getStringValue(payload.employeeId, metadata?.employeeId);
+    const locationId = getStringValue(payload.locationId, metadata?.locationId);
+    const desiredDate = getStringValue(payload.desiredDate, payload.selectedDate, metadata?.desiredDate, metadata?.selectedDate);
+    const desiredTime = getStringValue(payload.desiredTime, payload.selectedTime, metadata?.desiredTime, metadata?.selectedTime);
+
+    if (authToken && asRecord(payload.appointmentPayload)) {
+      const appointmentResponse = await postJson(
+        buildTrafftApiUrl("/api/v1/appointments") ?? "",
+        payload.appointmentPayload,
+        { Authorization: `Bearer ${authToken}` },
+      );
+      return {
+        ok: appointmentResponse.ok,
+        provider: "Trafft",
+        mode: "live",
+        detail: appointmentResponse.ok
+          ? "Booking request submitted to Trafft"
+          : `Trafft booking request failed: ${appointmentResponse.status}`,
+        payload: {
+          ...payload,
+          tenantId: tenantData?.tenantId,
+          bookingUrl,
+          response: appointmentResponse.json ?? appointmentResponse.text,
+        },
+      } satisfies ProviderResult;
+    }
+
+    if (serviceId) {
+      const { calendarStartDate, calendarEndDate } = buildTrafftCalendarWindow(payload);
+      const params = new URLSearchParams({
+        calendarStartDate,
+        calendarEndDate,
+        service: serviceId,
+        serviceWasPredefined: "true",
+        isShareBookingForm: "true",
+      });
+      if (employeeId) {
+        params.set("employee", employeeId);
+      }
+      if (locationId) {
+        params.set("location", locationId);
+      }
+
+      const availabilityResponse = await getJson(
+        `${buildTrafftApiUrl("/api/v1/public/booking/steps/date-time")}?${params.toString()}`,
+      );
+      const availabilityPreview = flattenTrafftAvailability(availabilityResponse.json, desiredDate);
+
+      return {
+        ok: availabilityResponse.ok && availabilityPreview.length > 0,
+        provider: "Trafft",
+        mode: "live",
+        detail: availabilityResponse.ok
+          ? availabilityPreview.length > 0
+            ? desiredTime
+              ? `Trafft availability loaded${availabilityPreview.some((slot) => slot.date === desiredDate && slot.time === desiredTime) ? "; desired slot is present" : "; desired slot was not in the first availability window"}`
+              : `Trafft availability loaded with ${availabilityPreview.length} candidate slots`
+            : "Trafft availability loaded but no open slots were returned for the requested window"
+          : `Trafft availability lookup failed: ${availabilityResponse.status}`,
+        payload: {
+          ...payload,
+          tenantId: tenantData?.tenantId,
+          tenantName: tenantData?.tenantName,
+          serviceId,
+          employeeId,
+          locationId,
+          desiredDate,
+          desiredTime,
+          bookingUrl,
+          availabilityPreview,
+        },
+      } satisfies ProviderResult;
+    }
+
     return {
       ok: true,
       provider: "Trafft",
       mode: "live",
-      detail: "Booking destination resolved",
+      detail: "Trafft tenant verified; add a service id or service map to perform slot lookup or direct booking submission",
       payload: {
         ...payload,
-        bookingUrl: trafftUrl,
+        tenantId: tenantData?.tenantId,
+        tenantName: tenantData?.tenantName,
+        bookingUrl,
+        apiUrl: trafftUrl,
         clientIdPresent: Boolean(getTrafftClientId()),
         clientSecretPresent: Boolean(getTrafftClientSecret()),
+        authTokenPresent: Boolean(authToken),
       },
     } satisfies ProviderResult;
   }
-  const bookingUrl = getLunacalBookingUrl();
+
+  const lunacalUrl = getLunacalBookingUrl();
   if (bookingUrl?.startsWith("http")) {
+    return {
+      ok: true,
+      provider: "Trafft",
+      mode: "live",
+      detail: "Booking handoff URL resolved",
+      payload: {
+        ...payload,
+        bookingUrl,
+      },
+    } satisfies ProviderResult;
+  }
+  if (lunacalUrl?.startsWith("http")) {
     return {
       ok: true,
       provider: "Lunacal",
@@ -671,7 +1084,7 @@ export async function createBookingAction(payload: Record<string, unknown>) {
       detail: "Booking destination resolved",
       payload: {
         ...payload,
-        bookingUrl,
+        bookingUrl: lunacalUrl,
       },
     } satisfies ProviderResult;
   }
@@ -679,8 +1092,8 @@ export async function createBookingAction(payload: Record<string, unknown>) {
     ok: true,
     provider: "Trafft",
     mode: "prepared",
-    detail: (getTrafftClientId() && getTrafftClientSecret())
-      ? "Trafft API credentials detected; add or confirm the white-label booking URL to activate runtime handoff"
+    detail: (getTrafftClientId() && getTrafftClientSecret()) || getTrafftBearerToken()
+      ? "Trafft booking adapter is wired; add a public booking URL or service mapping to enable live slot lookup and handoff"
       : getLunacalApiKey()
       ? "Lunacal API key detected; add booking or webhook URL to activate runtime handoff"
       : "Booking adapter is wired and awaiting account-specific endpoint details",
@@ -688,6 +1101,7 @@ export async function createBookingAction(payload: Record<string, unknown>) {
       ...payload,
       trafftUrl,
       bookingUrl,
+      lunacalUrl,
     },
   } satisfies ProviderResult;
 }
@@ -695,35 +1109,83 @@ export async function createBookingAction(payload: Record<string, unknown>) {
 export async function generateDocumentAction(payload: Record<string, unknown>) {
   const provider = integrationMap.documentero;
   const croveProvider = integrationMap.crove;
-  if ((!provider.configured || !provider.live) && (!croveProvider.configured || !croveProvider.live)) {
+  if (payload.dryRun || ((!provider.configured || !provider.live) && (!croveProvider.configured || !croveProvider.live))) {
     return dryRunResult("Document Provider", "Document generation prepared", payload);
+  }
+
+  const documentType = resolveDocumentType(payload);
+  const documentData = buildDocumentData(payload);
+  const templateId = resolveDocumentTemplateId(payload, documentType);
+  if (provider.configured && provider.live && getDocumenteroApiKey() && templateId) {
+    const format = getStringValue(payload.documentFormat, payload.format) ?? getDocumenteroDefaultFormat();
+    const response = await postJson(
+      "https://app.documentero.com/api",
+      {
+        document: templateId,
+        data: documentData,
+        format,
+      },
+      { Authorization: `apiKey ${getDocumenteroApiKey()}` },
+    );
+    return {
+      ok: response.ok,
+      provider: "Documentero",
+      mode: "live",
+      detail: response.ok ? `Documentero generated ${documentType}` : `Documentero request failed: ${response.status}`,
+      payload: {
+        ...payload,
+        documentType,
+        templateId,
+        format,
+        response: response.json ?? response.text,
+      },
+    } satisfies ProviderResult;
   }
 
   const documenteroWebhookUrl = getDocumenteroWebhookUrl();
   if (provider.configured && provider.live && documenteroWebhookUrl) {
     const response = await postJson(documenteroWebhookUrl, {
-      templateId: getDocumenteroTemplateId(),
-      payload,
-    }, getDocumenteroApiKey() ? { Authorization: `Bearer ${getDocumenteroApiKey()}` } : {});
+      templateId,
+      documentType,
+      payload: {
+        ...payload,
+        documentData,
+      },
+    }, getDocumenteroApiKey() ? { Authorization: `apiKey ${getDocumenteroApiKey()}` } : {});
     return {
       ok: response.ok,
       provider: "Documentero",
       mode: "live",
-      detail: response.ok ? "Document request sent" : `Document request failed: ${response.status}`,
+      detail: response.ok ? `Documentero webhook accepted ${documentType}` : `Documentero webhook failed: ${response.status}`,
+      payload: {
+        ...payload,
+        documentType,
+        templateId,
+      },
     } satisfies ProviderResult;
   }
 
+  const croveTemplateId = resolveCroveTemplateId(payload, documentType);
   const croveWebhookUrl = getCroveWebhookUrl();
   if (croveProvider.configured && croveProvider.live && croveWebhookUrl) {
     const response = await postJson(croveWebhookUrl, {
-      templateId: getCroveTemplateId(),
-      payload,
+      templateId: croveTemplateId,
+      documentType,
+      payload: {
+        ...payload,
+        documentData,
+      },
     }, getCroveApiKey() ? { Authorization: `Bearer ${getCroveApiKey()}` } : {});
     return {
       ok: response.ok,
       provider: "Crove",
       mode: "live",
-      detail: response.ok ? "Document request sent" : `Document request failed: ${response.status}`,
+      detail: response.ok ? `Crove webhook accepted ${documentType}` : `Crove webhook failed: ${response.status}`,
+      payload: {
+        ...payload,
+        documentType,
+        templateId: croveTemplateId,
+      },
     } satisfies ProviderResult;
   }
 
@@ -732,12 +1194,14 @@ export async function generateDocumentAction(payload: Record<string, unknown>) {
       ok: true,
       provider: "Documentero",
       mode: "prepared",
-      detail: getDocumenteroTemplateId()
-        ? "Documentero template detected; add webhook URL to render documents from the runtime"
-        : "Documentero adapter is wired and awaiting account-specific endpoint details",
+      detail: templateId
+        ? "Documentero template detected; direct execution is available, but the request still needs live template-specific payload mapping or webhook flow"
+        : "Documentero API key is present; add a template id to generate real documents from the runtime",
       payload: {
         ...payload,
-        templateId: getDocumenteroTemplateId(),
+        documentType,
+        templateId,
+        documentData,
       },
     } satisfies ProviderResult;
   }
@@ -746,12 +1210,14 @@ export async function generateDocumentAction(payload: Record<string, unknown>) {
     ok: true,
     provider: "Crove",
     mode: "prepared",
-    detail: getCroveTemplateId()
+    detail: croveTemplateId
       ? "Crove template detected; add webhook URL to render documents from the runtime"
       : "Crove adapter is wired and awaiting account-specific endpoint details",
     payload: {
       ...payload,
-      templateId: getCroveTemplateId(),
+      documentType,
+      templateId: croveTemplateId,
+      documentData,
     },
   } satisfies ProviderResult;
 }
