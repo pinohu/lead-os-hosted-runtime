@@ -1330,8 +1330,6 @@ export async function createBookingAction(payload: Record<string, unknown>) {
       calendarStartDate,
       calendarEndDate,
       service: serviceId,
-      serviceWasPredefined: "true",
-      isShareBookingForm: "true",
       strictDateRange: "false",
       showAllAvailableTimes: "false",
     });
