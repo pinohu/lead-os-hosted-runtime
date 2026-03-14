@@ -1,0 +1,67 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  createMagicLinkUrl,
+  decodeOperatorToken,
+  getAllowedOperatorEmails,
+  sanitizeNextPath,
+} from "../src/lib/operator-auth-core.ts";
+
+test("sanitizeNextPath only allows internal paths", () => {
+  assert.equal(sanitizeNextPath("/dashboard"), "/dashboard");
+  assert.equal(sanitizeNextPath("//evil.example.com"), "/dashboard");
+  assert.equal(sanitizeNextPath("https://evil.example.com"), "/dashboard");
+  assert.equal(sanitizeNextPath(undefined), "/dashboard");
+});
+
+test("getAllowedOperatorEmails prefers configured operator emails", () => {
+  const allowed = getAllowedOperatorEmails(
+    " Ops@Example.org ; owner@example.org,invalid ",
+    ["fallback@example.com", "polycarpohu@gmail.com"],
+  );
+
+  assert.deepEqual(allowed, ["ops@example.org", "owner@example.org"]);
+});
+
+test("getAllowedOperatorEmails falls back to non-example defaults", () => {
+  const allowed = getAllowedOperatorEmails("", [
+    "support@example.com",
+    "team@yourdeputy.com",
+    "polycarpohu@gmail.com",
+  ]);
+
+  assert.deepEqual(allowed, ["team@yourdeputy.com", "polycarpohu@gmail.com"]);
+});
+
+test("magic-link tokens validate for approved emails and retain next path", async () => {
+  const secret = "operator-secret";
+  const allowedEmails = ["polycarpohu@gmail.com"];
+  const { token, url } = await createMagicLinkUrl(
+    "PolycarpOhu@gmail.com",
+    "https://leados.yourdeputy.com",
+    secret,
+    allowedEmails,
+    "/dashboard",
+  );
+
+  assert.match(url, /\/auth\/verify\?/);
+  const payload = await decodeOperatorToken(token, "magic", secret, allowedEmails);
+
+  assert.ok(payload);
+  assert.equal(payload?.email, "polycarpohu@gmail.com");
+  assert.equal(payload?.next, "/dashboard");
+});
+
+test("tokens fail validation when signed email is no longer approved", async () => {
+  const secret = "operator-secret";
+  const { token } = await createMagicLinkUrl(
+    "polycarpohu@gmail.com",
+    "https://leados.yourdeputy.com",
+    secret,
+    ["polycarpohu@gmail.com"],
+    "/dashboard",
+  );
+
+  const payload = await decodeOperatorToken(token, "magic", secret, ["someoneelse@example.org"]);
+  assert.equal(payload, null);
+});

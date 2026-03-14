@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildCorsHeaders } from "@/lib/cors";
+import { getNiche } from "@/lib/catalog";
+import { buildExperienceManifest } from "@/lib/experience";
 import { buildDefaultFunnelGraphs } from "@/lib/funnel-library";
 import { getAutomationHealth } from "@/lib/providers";
 import { tenantConfig } from "@/lib/tenant";
@@ -14,6 +16,7 @@ export async function OPTIONS(request: Request) {
 export async function GET(request: Request) {
   const funnels = buildDefaultFunnelGraphs(tenantConfig.tenantId);
   const health = getAutomationHealth();
+  const experience = buildExperienceManifest(getNiche(tenantConfig.defaultNiche));
   return NextResponse.json({
     success: true,
     widget: {
@@ -25,10 +28,6 @@ export async function GET(request: Request) {
         intake: "/api/intake",
         decision: "/api/decision",
         manifest: "/api/embed/manifest",
-        dashboard: "/dashboard",
-        dashboardApi: "/api/dashboard",
-        n8nManifest: "/api/n8n/manifest",
-        n8nProvision: "/api/n8n/provision",
       },
       defaults: {
         service: tenantConfig.defaultService,
@@ -36,6 +35,7 @@ export async function GET(request: Request) {
       },
       channels: tenantConfig.channels,
       enabledFunnels: tenantConfig.enabledFunnels,
+      experience,
       primaryFunnels: Object.values(funnels).map((graph) => ({
         id: graph.id,
         family: graph.family,

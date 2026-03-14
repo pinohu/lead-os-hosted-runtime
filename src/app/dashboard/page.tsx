@@ -1,9 +1,11 @@
 import { THREE_VISIT_FRAMEWORK } from "@/lib/automation";
 import { buildDashboardSnapshot } from "@/lib/dashboard";
+import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { getCanonicalEvents, getLeadRecords } from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const session = await requireOperatorPageSession("/dashboard");
   const snapshot = buildDashboardSnapshot(getLeadRecords(), getCanonicalEvents());
 
   return (
@@ -15,6 +17,12 @@ export default function DashboardPage() {
           LeadOS now optimizes for the third meaningful interaction. This dashboard tracks how many
           people reach milestone two and milestone three across both lead and customer journeys.
         </p>
+        <div className="cta-row">
+          <span className="muted">Signed in as {session.email}</span>
+          <a href="/auth/sign-out" className="secondary">
+            Sign out
+          </a>
+        </div>
       </section>
 
       <div className="grid two">

@@ -28,6 +28,19 @@ test("persistLead stores normalized email-based identities and returns graph-awa
   assert.equal(result.record.milestones.visitCount, 1);
 });
 
+test("persistLead honors a preferred funnel family when one is supplied", async () => {
+  resetRuntimeStore();
+  const result = await persistLead({
+    source: "manual",
+    email: "preferred@test.com",
+    firstName: "Preferred",
+    preferredFamily: "webinar",
+  });
+
+  assert.equal(result.decision.family, "webinar");
+  assert.match(result.decision.reason, /honoring the preferred funnel family/i);
+});
+
 test("default funnel graphs exist for canonical families", () => {
   const graph = getDefaultFunnelGraph(tenantConfig.tenantId, "webinar");
   assert.equal(graph.family, "webinar");

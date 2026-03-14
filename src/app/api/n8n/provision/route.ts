@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
+import { requireOperatorApiSession } from "@/lib/operator-auth";
 import { canProvisionToN8n, getN8nStarterWorkflowStatus, provisionN8nStarterWorkflows } from "@/lib/n8n-client";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireOperatorApiSession(request);
+  if (auth.response) {
+    return auth.response;
+  }
+
   if (!canProvisionToN8n()) {
     return NextResponse.json(
       {
@@ -35,6 +41,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireOperatorApiSession(request);
+  if (auth.response) {
+    return auth.response;
+  }
+
   if (!canProvisionToN8n()) {
     return NextResponse.json(
       {

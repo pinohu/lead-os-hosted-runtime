@@ -16,6 +16,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
+        <a href="#main-content" className="skip-link">
+          Skip to content
+        </a>
         {partneroProgramId ? (
           <Script
             id="partnero-js"
@@ -25,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             }}
           />
         ) : null}
-        {children}
+        <div id="main-content">{children}</div>
       </body>
     </html>
   );

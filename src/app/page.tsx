@@ -1,73 +1,129 @@
-import { HostedHero } from "@/components/HostedHero";
+import { headers } from "next/headers";
+import { AdaptiveLeadCaptureForm } from "@/components/AdaptiveLeadCaptureForm";
+import { ExperienceScaffold } from "@/components/ExperienceScaffold";
+import { EXPERIENCE_HEURISTICS, resolveExperienceProfile } from "@/lib/experience";
+import { getNiche } from "@/lib/catalog";
 import { buildDashboardSnapshot } from "@/lib/dashboard";
 import { buildDefaultFunnelGraphs } from "@/lib/funnel-library";
 import { getAutomationHealth } from "@/lib/providers";
+import type { FunnelFamily } from "@/lib/runtime-schema";
 import { getCanonicalEvents, getLeadRecords } from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
 
-export default function HomePage() {
+type HomePageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function asString(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function asBoolean(value: string | string[] | undefined) {
+  const normalized = asString(value)?.toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes";
+}
+
+function asIntent(value: string | string[] | undefined): "discover" | "compare" | "solve-now" | undefined {
+  const normalized = asString(value);
+  return normalized === "discover" || normalized === "compare" || normalized === "solve-now"
+    ? normalized
+    : undefined;
+}
+
+function asFamily(value: string | string[] | undefined): FunnelFamily | undefined {
+  const normalized = asString(value);
+  const valid: FunnelFamily[] = [
+    "lead-magnet",
+    "qualification",
+    "chat",
+    "webinar",
+    "authority",
+    "checkout",
+    "retention",
+    "rescue",
+    "referral",
+    "continuity",
+  ];
+  return normalized && valid.includes(normalized as FunnelFamily) ? (normalized as FunnelFamily) : undefined;
+}
+
+export default async function HomePage({ searchParams }: HomePageProps) {
+  const params = (await searchParams) ?? {};
+  const niche = getNiche(asString(params.niche) ?? tenantConfig.defaultNiche);
+  const headerStore = await headers();
   const graphs = buildDefaultFunnelGraphs(tenantConfig.tenantId);
   const health = getAutomationHealth();
   const snapshot = buildDashboardSnapshot(getLeadRecords(), getCanonicalEvents());
+  const profile = resolveExperienceProfile({
+    family: asFamily(params.family),
+    niche,
+    supportEmail: tenantConfig.supportEmail,
+    source: asString(params.source),
+    intent: asIntent(params.intent),
+    returning: asBoolean(params.returning),
+    milestone: asString(params.milestone),
+    preferredMode: asString(params.mode),
+    score: Number(asString(params.score) ?? 0) || undefined,
+    userAgent: headerStore.get("user-agent") ?? undefined,
+    referrer: headerStore.get("referer") ?? undefined,
+  });
+
   return (
-    <main>
-      <HostedHero />
-      <div className="grid two">
-        <section className="panel">
-          <h2>What this runtime does</h2>
-          <p className="muted">
-            This hosted app is designed to sit behind a lead subdomain and run the full LeadOS
-            operating model: graph execution, canonical events, funnel-family routing, and
-            multi-channel automation handoff.
-          </p>
-          <ul>
-            <li>Centralizes intake, dedupe, and trace metadata for all external sites</li>
-            <li>Represents every funnel as canonical nodes and conditional edges</li>
-            <li>Emits lifecycle events for scoring, routing, messaging, and conversion</li>
-            <li>Provides automation health, smoke tests, and nurture cron endpoints</li>
+    <ExperienceScaffold
+      eyebrow="LeadOS Adaptive Runtime"
+      title={`${tenantConfig.brandName} turns first visits into milestone-two and milestone-three momentum`}
+      summary={`${profile.heroSummary} The runtime already knows how to capture, score, route, follow up, and recover the next step across ${Object.keys(graphs).length} funnel families.`}
+      profile={profile}
+      metrics={[
+        {
+          label: "Lead M2 progression",
+          value: `${snapshot.milestones.lead.returnEngaged}`,
+          detail: "Returning leads already tracked in the live runtime.",
+        },
+        {
+          label: "Lead M3 progression",
+          value: `${snapshot.milestones.lead.bookedOrOffered}`,
+          detail: "Qualified next-step completions captured so far.",
+        },
+        {
+          label: "Automation mode",
+          value: health.liveMode ? "Live" : "Dry run",
+          detail: "Channels and workflows already connected to the runtime.",
+        },
+      ]}
+    >
+      <section className="grid two">
+        <article className="panel">
+          <p className="eyebrow">Usability heuristics</p>
+          <h2>Every surface now aims to remove confusion before it appears</h2>
+          <ul className="check-list">
+            {EXPERIENCE_HEURISTICS.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
           </ul>
-        </section>
-        <section className="panel">
-          <h2>Tenant defaults</h2>
-          <p className="muted">Brand: {tenantConfig.brandName}</p>
-          <p className="muted">Default service: {tenantConfig.defaultService}</p>
-          <p className="muted">Default niche: {tenantConfig.defaultNiche}</p>
-          <p className="muted">Support: {tenantConfig.supportEmail}</p>
-          <p className="muted">Funnels: {Object.keys(graphs).length}</p>
-          <p className="muted">Live mode: {health.liveMode ? "enabled" : "dry-run"}</p>
-        </section>
-      </div>
-      <section className="panel">
-        <h2>Canonical Funnel Families</h2>
-        <div className="grid two">
-          {Object.values(graphs).map((graph) => (
-            <article key={graph.id} className="panel">
-              <p className="eyebrow">{graph.family}</p>
-              <h3>{graph.name}</h3>
-              <p className="muted">Goal: {graph.goal}</p>
-              <p className="muted">Nodes: {graph.nodes.length}</p>
-            </article>
-          ))}
-        </div>
+        </article>
+        <article className="panel">
+          <p className="eyebrow">Operational footprint</p>
+          <h2>Adaptive journeys, not static landing pages</h2>
+          <ul className="check-list">
+            {Object.values(graphs).slice(0, 5).map((graph) => (
+              <li key={graph.id}>
+                <strong>{graph.name}</strong>: {graph.nodes.length} canonical nodes, {graph.goal} goal
+              </li>
+            ))}
+          </ul>
+        </article>
       </section>
-      <div className="grid two">
-        <section className="panel">
-          <h2>Milestone Snapshot</h2>
-          <p className="muted">Lead M1 captured: {snapshot.milestones.lead.captured}</p>
-          <p className="muted">Lead M2 return engaged: {snapshot.milestones.lead.returnEngaged}</p>
-          <p className="muted">Lead M3 booked or offered: {snapshot.milestones.lead.bookedOrOffered}</p>
-          <p className="muted">Customer M1 onboarded: {snapshot.milestones.customer.onboarded}</p>
-          <p className="muted">Customer M2 activated: {snapshot.milestones.customer.activated}</p>
-          <p className="muted">Customer M3 value realized: {snapshot.milestones.customer.valueRealized}</p>
-        </section>
-        <section className="panel">
-          <h2>Operator Visibility</h2>
-          <p className="muted">Recent leads tracked: {snapshot.leadTimeline.length}</p>
-          <p className="muted">Recent milestone events: {snapshot.recentMilestoneEvents.length}</p>
-          <p className="muted">Top funnel families: {snapshot.topFamilies.map((entry) => `${entry.family} (${entry.count})`).join(", ") || "No traffic yet"}</p>
-          <p className="muted">Full dashboard: /dashboard</p>
-        </section>
-      </div>
-    </main>
+
+      <AdaptiveLeadCaptureForm
+        source="manual"
+        family={profile.family}
+        niche={niche.slug}
+        service={tenantConfig.defaultService}
+        pagePath="/"
+        returning={asBoolean(params.returning)}
+        profile={profile}
+      />
+    </ExperienceScaffold>
   );
 }

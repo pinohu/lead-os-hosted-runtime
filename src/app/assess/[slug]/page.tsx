@@ -1,32 +1,93 @@
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
+import { AdaptiveLeadCaptureForm } from "@/components/AdaptiveLeadCaptureForm";
+import { ExperienceScaffold } from "@/components/ExperienceScaffold";
 import { getNiche, nicheCatalog } from "@/lib/catalog";
+import { resolveExperienceProfile } from "@/lib/experience";
+import { tenantConfig } from "@/lib/tenant";
+
+type AssessmentPageProps = {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function asString(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function asBoolean(value: string | string[] | undefined) {
+  const normalized = asString(value)?.toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes";
+}
 
 export function generateStaticParams() {
   return Object.keys(nicheCatalog).map((slug) => ({ slug }));
 }
 
-export default async function AssessmentPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
+export default async function AssessmentPage({ params, searchParams }: AssessmentPageProps) {
   const { slug } = await params;
+  const query = await searchParams;
   const niche = getNiche(slug);
 
   if (!niche) notFound();
 
+  const headerStore = await headers();
+  const profile = resolveExperienceProfile({
+    family: "qualification",
+    niche,
+    supportEmail: tenantConfig.supportEmail,
+    source: asString(query.source) ?? "assessment",
+    intent: asString(query.intent) === "solve-now" ? "solve-now" : "compare",
+    returning: asBoolean(query.returning),
+    milestone: asString(query.milestone),
+    preferredMode: asString(query.mode) ?? "booking-first",
+    score: Number(asString(query.score) ?? 75),
+    userAgent: headerStore.get("user-agent") ?? undefined,
+    referrer: headerStore.get("referer") ?? undefined,
+  });
+
   return (
-    <main>
-      <section className="panel">
-        <p className="eyebrow">Hosted Assessment</p>
-        <h1>{niche.assessmentTitle}</h1>
-        <p className="muted">{niche.summary}</p>
-        <ol>
-          <li>Capture the visitor identity from the external site or widget.</li>
-          <li>Ask a focused set of niche-specific qualification questions.</li>
-          <li>Return the next best action back into the hosted runtime.</li>
-        </ol>
+    <ExperienceScaffold
+      eyebrow="Hosted assessment"
+      title={niche.assessmentTitle}
+      summary={`${niche.summary} This assessment path is now designed to feel like guided diagnosis instead of a long form. Each answer should earn the next question and move the visitor closer to a credible next step.`}
+      profile={profile}
+      metrics={[
+        { label: "Assessment style", value: "Progressive", detail: "Only the next useful question should appear." },
+        { label: "Return logic", value: "Milestone-aware", detail: "Visit two and three get lighter, smarter asks." },
+        { label: "Output", value: "Tailored next action", detail: "Booking, nurture, or authority path based on fit." },
+      ]}
+    >
+      <section className="grid two">
+        <article className="panel">
+          <p className="eyebrow">Questioning principle</p>
+          <h2>Never ask before the value is clear</h2>
+          <ul className="check-list">
+            <li>Each question needs a clear reason connected to the visitor&apos;s outcome.</li>
+            <li>Progress stays visible so effort never feels ambiguous.</li>
+            <li>Back navigation stays light so visitors keep control of the path.</li>
+          </ul>
+        </article>
+        <article className="panel">
+          <p className="eyebrow">Result design</p>
+          <h2>Diagnosis first, pressure second</h2>
+          <ul className="check-list">
+            <li>The output frames what matters, not internal funnel jargon.</li>
+            <li>Hot leads shorten into booking or proposal quickly.</li>
+            <li>Unready leads keep a lower-friction second-touch return path.</li>
+          </ul>
+        </article>
       </section>
-    </main>
+
+      <AdaptiveLeadCaptureForm
+        source="assessment"
+        family="qualification"
+        niche={niche.slug}
+        service={tenantConfig.defaultService}
+        pagePath={`/assess/${niche.slug}`}
+        returning={asBoolean(query.returning)}
+        profile={profile}
+      />
+    </ExperienceScaffold>
   );
 }

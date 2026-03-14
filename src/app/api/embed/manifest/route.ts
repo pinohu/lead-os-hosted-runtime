@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { nicheCatalog } from "@/lib/catalog";
 import { buildCorsHeaders } from "@/lib/cors";
 import { getRecipeForFamily } from "@/lib/automation";
+import { buildExperienceManifest } from "@/lib/experience";
 import { buildDefaultFunnelGraphs } from "@/lib/funnel-library";
 import { getAutomationHealth } from "@/lib/providers";
 import { tenantConfig } from "@/lib/tenant";
@@ -26,6 +27,10 @@ export async function GET(request: Request) {
       assessment: true,
       calculator: true,
     },
+    experience: Object.values(nicheCatalog).map((niche) => ({
+      niche: niche.slug,
+      manifest: buildExperienceManifest(niche),
+    })),
     funnels: Object.values(graphs).map((graph) => ({
       id: graph.id,
       family: graph.family,

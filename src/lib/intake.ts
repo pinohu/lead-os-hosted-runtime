@@ -24,6 +24,7 @@ import {
   ensureTraceContext,
 } from "./trace.ts";
 import { tenantConfig } from "./tenant.ts";
+import type { FunnelFamily } from "./runtime-schema.ts";
 
 export type IntakeSource =
   | "contact_form"
@@ -61,6 +62,7 @@ export interface HostedLeadPayload {
   wantsCheckout?: boolean;
   prefersChat?: boolean;
   contentEngaged?: boolean;
+  preferredFamily?: FunnelFamily;
   dryRun?: boolean;
 }
 
@@ -225,6 +227,7 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     source: payload.source,
     service: payload.service,
     niche: payload.niche,
+    preferredFamily: payload.preferredFamily,
     hasEmail: Boolean(normalizedEmail),
     hasPhone: Boolean(normalizedPhone),
     returning: payload.returning,
