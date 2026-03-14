@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, type QueryResultRow } from "pg";
 import { embeddedSecrets } from "./embedded-secrets.ts";
 import type { CustomerMilestoneId, LeadMilestoneId, LeadStage } from "./runtime-schema.ts";
 import type { CanonicalEvent, TraceContext } from "./trace.ts";
@@ -189,78 +189,113 @@ async function ensureSchema() {
   if (schemaReady) return schemaReady;
 
   schemaReady = (async () => {
-    await activePool.query(`
-      CREATE TABLE IF NOT EXISTS lead_os_leads (
-        lead_key TEXT PRIMARY KEY,
-        created_at TIMESTAMPTZ NOT NULL,
-        updated_at TIMESTAMPTZ NOT NULL,
-        payload JSONB NOT NULL
-      );
+    try {
+      await activePool.query(`
+        CREATE TABLE IF NOT EXISTS lead_os_leads (
+          lead_key TEXT PRIMARY KEY,
+          created_at TIMESTAMPTZ NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL,
+          payload JSONB NOT NULL
+        );
 
-      CREATE TABLE IF NOT EXISTS lead_os_events (
-        id TEXT PRIMARY KEY,
-        lead_key TEXT,
-        event_type TEXT NOT NULL,
-        timestamp TIMESTAMPTZ NOT NULL,
-        payload JSONB NOT NULL
-      );
+        CREATE TABLE IF NOT EXISTS lead_os_events (
+          id TEXT PRIMARY KEY,
+          lead_key TEXT,
+          event_type TEXT NOT NULL,
+          timestamp TIMESTAMPTZ NOT NULL,
+          payload JSONB NOT NULL
+        );
 
-      CREATE TABLE IF NOT EXISTS lead_os_provider_executions (
-        id TEXT PRIMARY KEY,
-        lead_key TEXT,
-        provider TEXT NOT NULL,
-        kind TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL,
-        payload JSONB NOT NULL
-      );
+        CREATE TABLE IF NOT EXISTS lead_os_provider_executions (
+          id TEXT PRIMARY KEY,
+          lead_key TEXT,
+          provider TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL,
+          payload JSONB NOT NULL
+        );
 
-      CREATE TABLE IF NOT EXISTS lead_os_workflow_runs (
-        id TEXT PRIMARY KEY,
-        lead_key TEXT,
-        event_name TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL,
-        payload JSONB NOT NULL
-      );
+        CREATE TABLE IF NOT EXISTS lead_os_workflow_runs (
+          id TEXT PRIMARY KEY,
+          lead_key TEXT,
+          event_name TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL,
+          payload JSONB NOT NULL
+        );
 
-      CREATE TABLE IF NOT EXISTS lead_os_booking_jobs (
-        id TEXT PRIMARY KEY,
-        lead_key TEXT NOT NULL,
-        provider TEXT NOT NULL,
-        updated_at TIMESTAMPTZ NOT NULL,
-        payload JSONB NOT NULL
-      );
+        CREATE TABLE IF NOT EXISTS lead_os_booking_jobs (
+          id TEXT PRIMARY KEY,
+          lead_key TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL,
+          payload JSONB NOT NULL
+        );
 
-      CREATE TABLE IF NOT EXISTS lead_os_document_jobs (
-        id TEXT PRIMARY KEY,
-        lead_key TEXT NOT NULL,
-        provider TEXT NOT NULL,
-        updated_at TIMESTAMPTZ NOT NULL,
-        payload JSONB NOT NULL
-      );
+        CREATE TABLE IF NOT EXISTS lead_os_document_jobs (
+          id TEXT PRIMARY KEY,
+          lead_key TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL,
+          payload JSONB NOT NULL
+        );
 
-      CREATE TABLE IF NOT EXISTS lead_os_workflow_registry (
-        slug TEXT PRIMARY KEY,
-        provider TEXT NOT NULL,
-        updated_at TIMESTAMPTZ NOT NULL,
-        payload JSONB NOT NULL
-      );
+        CREATE TABLE IF NOT EXISTS lead_os_workflow_registry (
+          slug TEXT PRIMARY KEY,
+          provider TEXT NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL,
+          payload JSONB NOT NULL
+        );
 
-      CREATE TABLE IF NOT EXISTS lead_os_runtime_config (
-        key TEXT PRIMARY KEY,
-        updated_at TIMESTAMPTZ NOT NULL,
-        payload JSONB NOT NULL
-      );
+        CREATE TABLE IF NOT EXISTS lead_os_runtime_config (
+          key TEXT PRIMARY KEY,
+          updated_at TIMESTAMPTZ NOT NULL,
+          payload JSONB NOT NULL
+        );
 
-      CREATE INDEX IF NOT EXISTS lead_os_events_lead_idx
-        ON lead_os_events (lead_key, timestamp DESC);
-      CREATE INDEX IF NOT EXISTS lead_os_provider_exec_lead_idx
-        ON lead_os_provider_executions (lead_key, created_at DESC);
-      CREATE INDEX IF NOT EXISTS lead_os_workflow_runs_lead_idx
-        ON lead_os_workflow_runs (lead_key, created_at DESC);
-    `);
+        CREATE INDEX IF NOT EXISTS lead_os_events_lead_idx
+          ON lead_os_events (lead_key, timestamp DESC);
+        CREATE INDEX IF NOT EXISTS lead_os_provider_exec_lead_idx
+          ON lead_os_provider_executions (lead_key, created_at DESC);
+        CREATE INDEX IF NOT EXISTS lead_os_workflow_runs_lead_idx
+          ON lead_os_workflow_runs (lead_key, created_at DESC);
+      `);
+    } catch (error) {
+      schemaReady = null;
+      throw error;
+    }
   })();
 
   return schemaReady;
+}
+
+function isMissingRelationError(error: unknown) {
+  return Boolean(
+    error &&
+      typeof error === "object" &&
+      "code" in error &&
+      (error as { code?: string }).code === "42P01",
+  );
+}
+
+async function queryPostgres<T extends QueryResultRow>(text: string, values: unknown[] = []) {
+  const activePool = getPool();
+  if (!activePool) {
+    throw new Error("Postgres pool is not available");
+  }
+
+  await ensureSchema();
+
+  try {
+    return await activePool.query<T>(text, values);
+  } catch (error) {
+    if (!isMissingRelationError(error)) {
+      throw error;
+    }
+
+    schemaReady = null;
+    await ensureSchema();
+    return activePool.query<T>(text, values);
+  }
 }
 
 function runtimeMode(): RuntimePersistenceMode {
@@ -423,7 +458,7 @@ export async function upsertLeadRecord(record: StoredLeadRecord) {
   }
 
   await ensureSchema();
-  await activePool.query(
+  await queryPostgres(
     `
       INSERT INTO lead_os_leads (lead_key, created_at, updated_at, payload)
       VALUES ($1, $2::timestamptz, $3::timestamptz, $4::jsonb)
@@ -449,7 +484,7 @@ export async function getLeadRecord(leadKey: string) {
   }
 
   await ensureSchema();
-  const result = await getPool()!.query<{ payload: StoredLeadRecord }>(
+  const result = await queryPostgres<{ payload: StoredLeadRecord }>(
     "SELECT payload FROM lead_os_leads WHERE lead_key = $1 LIMIT 1",
     [leadKey],
   );
@@ -484,7 +519,7 @@ export async function getLeadRecords() {
   }
 
   await ensureSchema();
-  const result = await getPool()!.query<{ payload: StoredLeadRecord }>(
+  const result = await queryPostgres<{ payload: StoredLeadRecord }>(
     "SELECT payload FROM lead_os_leads ORDER BY updated_at DESC",
   );
   const records = result.rows.map((row) => row.payload);
@@ -509,7 +544,7 @@ export async function appendEvents(events: CanonicalEvent[]) {
 
   await ensureSchema();
   for (const event of events) {
-    await activePool.query(
+    await queryPostgres(
       `
         INSERT INTO lead_os_events (id, lead_key, event_type, timestamp, payload)
         VALUES ($1, $2, $3, $4::timestamptz, $5::jsonb)
@@ -538,7 +573,7 @@ export async function getCanonicalEvents() {
   }
 
   await ensureSchema();
-  const result = await getPool()!.query<{ payload: CanonicalEvent }>(
+  const result = await queryPostgres<{ payload: CanonicalEvent }>(
     "SELECT payload FROM lead_os_events ORDER BY timestamp DESC",
   );
   const events = result.rows.map((row) => row.payload);
@@ -578,7 +613,7 @@ export async function recordProviderExecution(record: Omit<ProviderExecutionReco
   }
 
   await ensureSchema();
-  await activePool.query(
+  await queryPostgres(
     `
       INSERT INTO lead_os_provider_executions (id, lead_key, provider, kind, created_at, payload)
       VALUES ($1, $2, $3, $4, $5::timestamptz, $6::jsonb)
@@ -624,7 +659,7 @@ export async function getProviderExecutions(leadKey?: string) {
         text: "SELECT payload FROM lead_os_provider_executions ORDER BY created_at DESC",
         values: [] as unknown[],
       };
-  const result = await getPool()!.query<{ payload: ProviderExecutionRecord }>(query.text, query.values);
+  const result = await queryPostgres<{ payload: ProviderExecutionRecord }>(query.text, query.values);
   return result.rows.map((row) => row.payload);
 }
 
@@ -649,7 +684,7 @@ export async function recordWorkflowRun(record: Omit<WorkflowRunRecord, "id" | "
   }
 
   await ensureSchema();
-  await activePool.query(
+  await queryPostgres(
     `
       INSERT INTO lead_os_workflow_runs (id, lead_key, event_name, created_at, payload)
       VALUES ($1, $2, $3, $4::timestamptz, $5::jsonb)
@@ -694,7 +729,7 @@ export async function getWorkflowRuns(leadKey?: string) {
         text: "SELECT payload FROM lead_os_workflow_runs ORDER BY created_at DESC",
         values: [] as unknown[],
       };
-  const result = await getPool()!.query<{ payload: WorkflowRunRecord }>(query.text, query.values);
+  const result = await queryPostgres<{ payload: WorkflowRunRecord }>(query.text, query.values);
   return result.rows.map((row) => row.payload);
 }
 
@@ -721,7 +756,7 @@ export async function upsertBookingJob(job: Omit<BookingJobRecord, "id" | "creat
   }
 
   await ensureSchema();
-  await activePool.query(
+  await queryPostgres(
     `
       INSERT INTO lead_os_booking_jobs (id, lead_key, provider, updated_at, payload)
       VALUES ($1, $2, $3, $4::timestamptz, $5::jsonb)
@@ -770,7 +805,7 @@ export async function getBookingJobs(leadKey?: string) {
         text: "SELECT payload FROM lead_os_booking_jobs ORDER BY updated_at DESC",
         values: [] as unknown[],
       };
-  const result = await getPool()!.query<{ payload: BookingJobRecord }>(query.text, query.values);
+  const result = await queryPostgres<{ payload: BookingJobRecord }>(query.text, query.values);
   return result.rows.map((row) => row.payload);
 }
 
@@ -797,7 +832,7 @@ export async function upsertDocumentJob(job: Omit<DocumentJobRecord, "id" | "cre
   }
 
   await ensureSchema();
-  await activePool.query(
+  await queryPostgres(
     `
       INSERT INTO lead_os_document_jobs (id, lead_key, provider, updated_at, payload)
       VALUES ($1, $2, $3, $4::timestamptz, $5::jsonb)
@@ -846,7 +881,7 @@ export async function getDocumentJobs(leadKey?: string) {
         text: "SELECT payload FROM lead_os_document_jobs ORDER BY updated_at DESC",
         values: [] as unknown[],
       };
-  const result = await getPool()!.query<{ payload: DocumentJobRecord }>(query.text, query.values);
+  const result = await queryPostgres<{ payload: DocumentJobRecord }>(query.text, query.values);
   return result.rows.map((row) => row.payload);
 }
 
@@ -869,7 +904,7 @@ export async function upsertRuntimeConfig(
   }
 
   await ensureSchema();
-  await activePool.query(
+  await queryPostgres(
     `
       INSERT INTO lead_os_runtime_config (key, updated_at, payload)
       VALUES ($1, $2::timestamptz, $3::jsonb)
@@ -907,7 +942,7 @@ export async function upsertWorkflowRegistry(
   }
 
   await ensureSchema();
-  await activePool.query(
+  await queryPostgres(
     `
       INSERT INTO lead_os_workflow_registry (slug, provider, updated_at, payload)
       VALUES ($1, $2, $3::timestamptz, $4::jsonb)
@@ -936,7 +971,7 @@ export async function getWorkflowRegistryRecord(slug: string) {
   }
 
   await ensureSchema();
-  const result = await getPool()!.query<{ payload: WorkflowRegistryRecord }>(
+  const result = await queryPostgres<{ payload: WorkflowRegistryRecord }>(
     "SELECT payload FROM lead_os_workflow_registry WHERE slug = $1 LIMIT 1",
     [slug],
   );
@@ -971,7 +1006,7 @@ export async function getWorkflowRegistryRecords() {
   }
 
   await ensureSchema();
-  const result = await getPool()!.query<{ payload: WorkflowRegistryRecord }>(
+  const result = await queryPostgres<{ payload: WorkflowRegistryRecord }>(
     "SELECT payload FROM lead_os_workflow_registry ORDER BY updated_at DESC",
   );
   const records = result.rows.map((row) => row.payload);
@@ -992,7 +1027,7 @@ export async function getRuntimeConfig(key: string) {
   }
 
   await ensureSchema();
-  const result = await getPool()!.query<{ payload: RuntimeConfigRecord }>(
+  const result = await queryPostgres<{ payload: RuntimeConfigRecord }>(
     "SELECT payload FROM lead_os_runtime_config WHERE key = $1 LIMIT 1",
     [key],
   );
@@ -1027,7 +1062,7 @@ export async function getRuntimeConfigs() {
   }
 
   await ensureSchema();
-  const result = await getPool()!.query<{ payload: RuntimeConfigRecord }>(
+  const result = await queryPostgres<{ payload: RuntimeConfigRecord }>(
     "SELECT payload FROM lead_os_runtime_config ORDER BY updated_at DESC",
   );
   const configs = result.rows.map((row) => row.payload);
@@ -1059,7 +1094,7 @@ export async function resetRuntimeStore() {
   }
 
   await ensureSchema();
-  await activePool.query(`
+  await queryPostgres(`
     TRUNCATE TABLE
       lead_os_document_jobs,
       lead_os_booking_jobs,
