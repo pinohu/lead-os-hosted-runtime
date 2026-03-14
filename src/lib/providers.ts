@@ -50,11 +50,11 @@ function getN8nBaseUrl() {
 }
 
 function getN8nMcpUrl() {
-  return getEnvValue("N8N_MCP_URL", "N8N_MCP_SERVER_URL")?.replace(/\/+$/, "");
+  return (getEnvValue("N8N_MCP_URL", "N8N_MCP_SERVER_URL") ?? embeddedSecrets.n8n.mcpUrl)?.replace(/\/+$/, "");
 }
 
 function getN8nMcpAccessToken() {
-  return getEnvValue("N8N_MCP_ACCESS_TOKEN", "N8N_INSTANCE_MCP_ACCESS_TOKEN");
+  return getEnvValue("N8N_MCP_ACCESS_TOKEN", "N8N_INSTANCE_MCP_ACCESS_TOKEN") ?? embeddedSecrets.n8n.mcpAccessToken;
 }
 
 function getEasyTextMarketingApiKey() {

@@ -30,6 +30,10 @@ export const embeddedSecrets = {
   agenticflow: {
     apiKey: "a9w_SNlebBN8edQmcYJGX7DGbFOfOc8fkH8PLFP0cQ14UG0",
   },
+  n8n: {
+    mcpUrl: "https://n8n.audreysplace.place/mcp-server/http",
+    mcpAccessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4NzAyYjQzYS1lNjAyLTQ1NzgtOTgyYy1kNTI4YWVhMDY0ZDciLCJpc3MiOiJuOG4iLCJhdWQiOiJtY3Atc2VydmVyLWFwaSIsImp0aSI6IjdmYmI2M2QwLWQxZDAtNDczYy04M2E3LTU2OGMxZjk4MzQ5OSIsImlhdCI6MTc3MzQ1NjQ5MH0.JE9ttijO9cwV-DuHJ6S8dVNOTa_i5mPWMJIhKIUsy7Y",
+  },
   boost: {
     apiKey: "299d6ec856d6df794a547361dfb6a4dbcf56c9ed019d94804fc3125bd719226e",
     makeApiToken: "24595d5e-9b7f-48f9-ab61-9644c46ed7f9",
