@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { RuntimeConfigForm } from "@/components/RuntimeConfigForm";
+import { discoverDocumenteroTemplates, discoverTrafftTenant } from "@/lib/provider-discovery";
 import {
   buildRuntimeConfigSummary,
   getOperationalRuntimeConfig,
@@ -9,7 +10,11 @@ import { tenantConfig } from "@/lib/tenant";
 
 export default async function RuntimeSettingsPage() {
   await requireOperatorPageSession("/dashboard/settings");
-  const config = await getOperationalRuntimeConfig();
+  const [config, templateCatalog, trafftTenant] = await Promise.all([
+    getOperationalRuntimeConfig(),
+    discoverDocumenteroTemplates(),
+    discoverTrafftTenant(),
+  ]);
   const summary = buildRuntimeConfigSummary(config);
 
   return (
@@ -53,6 +58,38 @@ export default async function RuntimeSettingsPage() {
             </li>
           </ul>
         </aside>
+      </section>
+
+      <section className="grid two">
+        <article className="panel">
+          <p className="eyebrow">Documentero discovery</p>
+          <h2>Available templates detected from the account API</h2>
+          {templateCatalog.length === 0 ? (
+            <p className="muted">No account templates were discovered yet. If you only see the sample template in Documentero, create your real proposal/agreement/onboarding templates there first.</p>
+          ) : (
+            <ul className="check-list">
+              {templateCatalog.map((template) => (
+                <li key={template.value}>
+                  {template.label}: {template.value}
+                </li>
+              ))}
+            </ul>
+          )}
+        </article>
+
+        <article className="panel">
+          <p className="eyebrow">Trafft discovery</p>
+          <h2>Booking tenant visibility</h2>
+          {trafftTenant ? (
+            <ul className="check-list">
+              <li>Tenant name: {trafftTenant.tenantName ?? "Unknown"}</li>
+              <li>Tenant id: {trafftTenant.tenantId ?? "Unknown"}</li>
+              <li>Note: service IDs still need to be mapped before LeadOS can auto-resolve public slot lookups consistently.</li>
+            </ul>
+          ) : (
+            <p className="muted">Trafft tenant data could not be read from the runtime right now.</p>
+          )}
+        </article>
       </section>
 
       <RuntimeConfigForm initialConfig={config} />
