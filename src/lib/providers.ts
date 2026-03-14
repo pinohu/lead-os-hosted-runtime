@@ -114,7 +114,7 @@ function getN8nMappedWebhookUrl(eventName: string, payload: Record<string, unkno
 }
 
 function getEasyTextMarketingApiKey() {
-  return getEnvValue("EASY_TEXT_MARKETING_API_KEY", "EASYTEXTMARKETING_API_KEY");
+  return getEnvValue("EASY_TEXT_MARKETING_API_KEY", "EASYTEXTMARKETING_API_KEY") ?? embeddedSecrets.easyTextMarketing.apiKey;
 }
 
 function getEasyTextMarketingWebhookUrl() {
