@@ -153,6 +153,18 @@ function getLunacalBookingUrl() {
   return getEnvValue("LUNACAL_BOOKING_URL", "LUNACAL_EVENT_LINK", "LUNACAL_WEBHOOK_URL");
 }
 
+function getTrafftApiUrl() {
+  return (getEnvValue("TRAFFT_API_URL", "TRAFFT_BASE_URL") ?? embeddedSecrets.trafft.apiUrl)?.replace(/\/+$/, "");
+}
+
+function getTrafftClientId() {
+  return getEnvValue("TRAFFT_CLIENT_ID") ?? embeddedSecrets.trafft.clientId;
+}
+
+function getTrafftClientSecret() {
+  return getEnvValue("TRAFFT_CLIENT_SECRET") ?? embeddedSecrets.trafft.clientSecret;
+}
+
 function getDocumenteroApiKey() {
   return getEnvValue("DOCUMENTERO_API_KEY");
 }
@@ -226,7 +238,7 @@ export const integrationMap = {
   easyTextMarketing: integration(Boolean(getEasyTextMarketingApiKey() || getEasyTextMarketingWebhookUrl()), "sms"),
   insighto: integration(Boolean(getInsightoApiKey() || getInsightoWebhookUrl() || getInsightoAgentId()), "chat"),
   thoughtly: integration(Boolean(getThoughtlyApiKey() || getThoughtlyWebhookUrl() || getThoughtlyAgentId()), "voice"),
-  lunacal: integration(Boolean(getLunacalApiKey() || getLunacalBookingUrl()), "booking"),
+  trafft: integration(Boolean((getTrafftClientId() && getTrafftClientSecret() && getTrafftApiUrl()) || getLunacalApiKey() || getLunacalBookingUrl()), "booking"),
   documentero: integration(Boolean(getDocumenteroApiKey() || getDocumenteroWebhookUrl() || getDocumenteroTemplateId()), "documents"),
   thrivecart: integration(Boolean(getThrivecartApiKey() || getThrivecartWebhookSecret() || getThrivecartCheckoutUrl() || getThrivecartWebhookUrl()), "commerce"),
   upviral: integration(Boolean(process.env.UPVIRAL_API_KEY ?? embeddedSecrets.upviral.apiKey), "referral"),
@@ -570,9 +582,24 @@ export async function startVoiceAction(payload: Record<string, unknown>) {
 }
 
 export async function createBookingAction(payload: Record<string, unknown>) {
-  const provider = integrationMap.lunacal;
+  const provider = integrationMap.trafft;
   if (!provider.configured || !provider.live) {
-    return dryRunResult("Lunacal", "Booking request prepared", payload);
+    return dryRunResult("Trafft", "Booking request prepared", payload);
+  }
+  const trafftUrl = getTrafftApiUrl();
+  if (trafftUrl) {
+    return {
+      ok: true,
+      provider: "Trafft",
+      mode: "live",
+      detail: "Booking destination resolved",
+      payload: {
+        ...payload,
+        bookingUrl: trafftUrl,
+        clientIdPresent: Boolean(getTrafftClientId()),
+        clientSecretPresent: Boolean(getTrafftClientSecret()),
+      },
+    } satisfies ProviderResult;
   }
   const bookingUrl = getLunacalBookingUrl();
   if (bookingUrl?.startsWith("http")) {
@@ -589,13 +616,16 @@ export async function createBookingAction(payload: Record<string, unknown>) {
   }
   return {
     ok: true,
-    provider: "Lunacal",
+    provider: "Trafft",
     mode: "prepared",
-    detail: getLunacalApiKey()
+    detail: (getTrafftClientId() && getTrafftClientSecret())
+      ? "Trafft API credentials detected; add or confirm the white-label booking URL to activate runtime handoff"
+      : getLunacalApiKey()
       ? "Lunacal API key detected; add booking or webhook URL to activate runtime handoff"
-      : "Lunacal adapter is wired and awaiting account-specific endpoint details",
+      : "Booking adapter is wired and awaiting account-specific endpoint details",
     payload: {
       ...payload,
+      trafftUrl,
       bookingUrl,
     },
   } satisfies ProviderResult;

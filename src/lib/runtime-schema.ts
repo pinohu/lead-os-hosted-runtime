@@ -332,7 +332,7 @@ export const TOOL_OWNERSHIP_MAP: Record<string, ToolOwnership> = {
   cro: { primary: "Plerdy", responsibility: "conversion behavior optimization" },
   commerce: { primary: "ThriveCart", responsibility: "checkout, order bumps, subscriptions, cart recovery" },
   referral: { primary: "Partnero", responsibility: "affiliate and referral engine", support: ["UpViral"] },
-  booking: { primary: "Lunacal", responsibility: "booking and scheduling" },
+  booking: { primary: "Trafft", responsibility: "booking and scheduling", support: ["Lunacal"] },
   documents: { primary: "Documentero", responsibility: "proposals, contracts, onboarding documents" },
   fallbackAutomation: { primary: "Activepieces", responsibility: "secondary workflow layer", support: ["ElectroNeek"] },
 };

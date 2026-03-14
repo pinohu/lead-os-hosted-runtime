@@ -40,6 +40,11 @@ export const embeddedSecrets = {
     programId: "QFTTJFCR",
     assetsHost: "https://assets.partnero.com",
   },
+  trafft: {
+    apiUrl: "https://yourdeputy.admin.wlbookings.com",
+    clientId: "798c2da2d725d9e5a2f7f60874cdada5",
+    clientSecret: "6bda84be54b3fcef0db0c9d6b0fedb2bc096f8205376b8d9ca48bc80bf96f232",
+  },
   agenticflow: {
     apiKey: "a9w_SNlebBN8edQmcYJGX7DGbFOfOc8fkH8PLFP0cQ14UG0",
   },
