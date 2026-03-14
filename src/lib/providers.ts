@@ -1,4 +1,6 @@
+import { embeddedSecrets } from "./embedded-secrets.ts";
 import { TOOL_OWNERSHIP_MAP } from "./runtime-schema.ts";
+import { createContact } from "./suitedash.ts";
 import type { CanonicalEvent, TraceContext } from "./trace.ts";
 
 type ProviderStatus = "configured" | "dry-run" | "missing";
@@ -31,20 +33,20 @@ function integration(configured: boolean, ownerKey: keyof typeof TOOL_OWNERSHIP_
 }
 
 export const integrationMap = {
-  suitedash: integration(Boolean(process.env.SUITEDASH_PUBLIC_ID && process.env.SUITEDASH_SECRET_KEY), "crm"),
-  aitable: integration(Boolean(process.env.AITABLE_API_TOKEN && process.env.AITABLE_DATASHEET_ID), "ledger"),
-  agenticflow: integration(Boolean(process.env.AGENTICFLOW_API_KEY), "intelligence"),
+  suitedash: integration(Boolean((process.env.SUITEDASH_PUBLIC_ID ?? embeddedSecrets.suitedash.publicId) && (process.env.SUITEDASH_SECRET_KEY ?? embeddedSecrets.suitedash.secretKey)), "crm"),
+  aitable: integration(Boolean((process.env.AITABLE_API_TOKEN ?? embeddedSecrets.aitable.apiToken) && (process.env.AITABLE_DATASHEET_ID ?? embeddedSecrets.aitable.datasheetId)), "ledger"),
+  agenticflow: integration(Boolean(process.env.AGENTICFLOW_API_KEY ?? embeddedSecrets.agenticflow.apiKey), "intelligence"),
   n8n: integration(Boolean(process.env.N8N_WEBHOOK_URL), "orchestration"),
-  boost: integration(Boolean(process.env.BOOST_SPACE_API_KEY), "orchestration"),
-  emailit: integration(Boolean(process.env.EMAILIT_API_KEY), "email"),
-  wbiztool: integration(Boolean(process.env.WBIZTOOL_API_KEY && process.env.WBIZTOOL_INSTANCE_ID), "whatsapp"),
+  boost: integration(Boolean((process.env.BOOST_SPACE_API_KEY ?? embeddedSecrets.boost.apiKey) || (process.env.BOOST_SPACE_MAKE_TOKEN ?? embeddedSecrets.boost.makeApiToken)), "orchestration"),
+  emailit: integration(Boolean(process.env.EMAILIT_API_KEY ?? embeddedSecrets.emailit.apiKey), "email"),
+  wbiztool: integration(Boolean((process.env.WBIZTOOL_API_KEY ?? embeddedSecrets.wbiztool.apiKey) && (process.env.WBIZTOOL_INSTANCE_ID ?? embeddedSecrets.wbiztool.instanceId)), "whatsapp"),
   easyTextMarketing: integration(Boolean(process.env.EASY_TEXT_MARKETING_API_KEY), "sms"),
   insighto: integration(Boolean(process.env.INSIGHTO_API_KEY), "chat"),
   thoughtly: integration(Boolean(process.env.THOUGHTLY_API_KEY), "voice"),
   lunacal: integration(Boolean(process.env.LUNACAL_API_KEY), "booking"),
   documentero: integration(Boolean(process.env.DOCUMENTERO_API_KEY), "documents"),
   thrivecart: integration(Boolean(process.env.THRIVECART_WEBHOOK_SECRET), "commerce"),
-  upviral: integration(Boolean(process.env.UPVIRAL_API_KEY), "referral"),
+  upviral: integration(Boolean(process.env.UPVIRAL_API_KEY ?? embeddedSecrets.upviral.apiKey), "referral"),
   partnero: integration(Boolean(process.env.PARTNERO_API_KEY), "referral"),
   activepieces: integration(Boolean(process.env.ACTIVEPIECES_WEBHOOK_URL), "fallbackAutomation"),
   electroneek: integration(Boolean(process.env.ELECTRONEEK_WEBHOOK_URL), "fallbackAutomation"),
@@ -102,12 +104,26 @@ export async function syncLeadToCrm(payload: Record<string, unknown>) {
   if (!provider.configured || !provider.live) {
     return dryRunResult("SuiteDash", "CRM sync prepared", payload);
   }
+  const firstName = String(payload.firstName ?? "Lead");
+  const lastName = String(payload.lastName ?? ".");
+  const email = String(payload.email ?? "");
+  const result = await createContact({
+    first_name: firstName,
+    last_name: lastName,
+    email,
+    role: "Lead",
+    company_name: payload.company ? String(payload.company) : undefined,
+    phone: payload.phone ? String(payload.phone) : undefined,
+    tags: [String(payload.service ?? "lead-capture"), String(payload.niche ?? "general")],
+    notes: [`Lead key: ${String(payload.leadKey ?? "")}`, `Stage: ${String(payload.stage ?? "captured")}`],
+    send_welcome_email: false,
+  });
   return {
     ok: true,
     provider: "SuiteDash",
-    mode: "prepared",
-    detail: "SuiteDash credentials detected; payload prepared for sync",
-    payload,
+    mode: "live",
+    detail: result.message ?? "CRM synced",
+    payload: result.data as Record<string, unknown> | undefined,
   } satisfies ProviderResult;
 }
 
@@ -120,7 +136,7 @@ export async function logEventsToLedger(events: CanonicalEvent[]) {
   }
 
   const response = await postJson(
-    `https://aitable.ai/fusion/v1/datasheets/${process.env.AITABLE_DATASHEET_ID}/records?fieldKey=name`,
+    `https://aitable.ai/fusion/v1/datasheets/${process.env.AITABLE_DATASHEET_ID ?? embeddedSecrets.aitable.datasheetId}/records?fieldKey=name`,
     {
       records: events.map((event) => ({
         fields: {
@@ -136,7 +152,7 @@ export async function logEventsToLedger(events: CanonicalEvent[]) {
       })),
       fieldKey: "name",
     },
-    { Authorization: `Bearer ${process.env.AITABLE_API_TOKEN}` },
+    { Authorization: `Bearer ${process.env.AITABLE_API_TOKEN ?? embeddedSecrets.aitable.apiToken}` },
   );
 
   return {
@@ -170,7 +186,7 @@ export async function sendEmailAction(payload: {
         blueprintId: payload.trace.blueprintId,
       },
     },
-    { Authorization: `Bearer ${process.env.EMAILIT_API_KEY}` },
+    { Authorization: `Bearer ${process.env.EMAILIT_API_KEY ?? embeddedSecrets.emailit.apiKey}` },
   );
 
   return {
@@ -190,12 +206,12 @@ export async function sendWhatsAppAction(payload: { phone: string; body: string 
   const response = await postJson(
     "https://app.wbiztool.com/api/send",
     {
-      instance_id: process.env.WBIZTOOL_INSTANCE_ID,
+      instance_id: process.env.WBIZTOOL_INSTANCE_ID ?? embeddedSecrets.wbiztool.instanceId,
       to: payload.phone.replace(/[^0-9+]/g, "").replace(/^\+/, ""),
       type: "text",
       body: payload.body,
     },
-    { apikey: process.env.WBIZTOOL_API_KEY ?? "" },
+    { apikey: process.env.WBIZTOOL_API_KEY ?? embeddedSecrets.wbiztool.apiKey },
   );
 
   return {
@@ -225,7 +241,7 @@ export async function sendAlertAction(payload: { title: string; body: string; tr
     return dryRunResult("Ops Alert", "Discord/Telegram alert prepared", payload);
   }
 
-  const webhook = process.env.DISCORD_HIGH_VALUE_WEBHOOK;
+  const webhook = process.env.DISCORD_HIGH_VALUE_WEBHOOK ?? embeddedSecrets.discord.highValueWebhook;
   if (!webhook) {
     return {
       ok: false,

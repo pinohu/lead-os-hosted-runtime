@@ -1,3 +1,5 @@
+import { embeddedSecrets } from "./embedded-secrets.ts";
+
 export type TenantConfig = {
   tenantId: string;
   brandName: string;
@@ -36,7 +38,7 @@ export const tenantConfig: TenantConfig = {
     : ["lead-magnet", "qualification", "chat", "webinar", "authority", "checkout", "retention", "rescue", "referral", "continuity"],
   channels: {
     email: true,
-    whatsapp: process.env.WBIZTOOL_API_KEY != null,
+    whatsapp: (process.env.WBIZTOOL_API_KEY ?? embeddedSecrets.wbiztool.apiKey) != null,
     sms: process.env.EASY_TEXT_MARKETING_API_KEY != null,
     chat: true,
     voice: process.env.THOUGHTLY_API_KEY != null,
