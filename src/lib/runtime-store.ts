@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { embeddedSecrets } from "./embedded-secrets.ts";
 import type { CustomerMilestoneId, LeadMilestoneId, LeadStage } from "./runtime-schema.ts";
 import type { CanonicalEvent, TraceContext } from "./trace.ts";
 
@@ -89,9 +90,49 @@ const documentJobStore = new Map<string, DocumentJobRecord>();
 
 let pool: Pool | null = null;
 let schemaReady: Promise<void> | null = null;
+let aitableCache: { fetchedAt: number; entries: AitableRuntimeEntry[] } | null = null;
+
+type RuntimePersistenceMode = "memory" | "postgres" | "aitable";
+
+type AitableRuntimeKind =
+  | "lead"
+  | "event"
+  | "provider-execution"
+  | "workflow-run"
+  | "booking-job"
+  | "document-job";
+
+type AitableRuntimeEntry = {
+  kind: AitableRuntimeKind;
+  key: string;
+  payload:
+    | StoredLeadRecord
+    | CanonicalEvent
+    | ProviderExecutionRecord
+    | WorkflowRunRecord
+    | BookingJobRecord
+    | DocumentJobRecord;
+};
 
 function getDatabaseUrl() {
   return process.env.LEAD_OS_DATABASE_URL ?? process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
+}
+
+function getAitableApiToken() {
+  return process.env.AITABLE_API_TOKEN ?? embeddedSecrets.aitable.apiToken;
+}
+
+function getAitableDatasheetId() {
+  return process.env.AITABLE_DATASHEET_ID ?? embeddedSecrets.aitable.datasheetId;
+}
+
+function canUseAitablePersistence() {
+  return process.env.LEAD_OS_USE_AITABLE_PERSISTENCE !== "false" &&
+    Boolean(getAitableApiToken() && getAitableDatasheetId());
+}
+
+function buildAitableRecordsUrl(pageNum = 1, pageSize = 1000) {
+  return `https://aitable.ai/fusion/v1/datasheets/${getAitableDatasheetId()}/records?fieldKey=name&pageNum=${pageNum}&pageSize=${pageSize}`;
 }
 
 function getPool() {
@@ -178,8 +219,14 @@ async function ensureSchema() {
   return schemaReady;
 }
 
-function runtimeMode() {
-  return getPool() ? "postgres" : "memory";
+function runtimeMode(): RuntimePersistenceMode {
+  if (getPool()) {
+    return "postgres";
+  }
+  if (canUseAitablePersistence()) {
+    return "aitable";
+  }
+  return "memory";
 }
 
 function sortByUpdatedAt<T extends { updatedAt: string }>(records: T[]) {
@@ -198,10 +245,135 @@ export function getRuntimePersistenceMode() {
   return runtimeMode();
 }
 
+function invalidateAitableCache() {
+  aitableCache = null;
+}
+
+function buildAitableEntry(kind: AitableRuntimeKind, key: string, payload: AitableRuntimeEntry["payload"]) {
+  const anyPayload = payload as unknown as Record<string, unknown>;
+  const leadKey = typeof anyPayload.leadKey === "string" ? anyPayload.leadKey : "";
+  return {
+    fields: {
+      Title: `runtime:${kind}:${key}`,
+      Scenario: kind,
+      Company: leadKey || key,
+      "Contact Email": typeof anyPayload.email === "string" ? anyPayload.email : "",
+      "Contact Name": typeof anyPayload.firstName === "string"
+        ? `${anyPayload.firstName}${typeof anyPayload.lastName === "string" && anyPayload.lastName ? ` ${anyPayload.lastName}` : ""}`.trim()
+        : "",
+      Status: typeof anyPayload.status === "string" ? anyPayload.status : "RUNTIME",
+      Touchpoint: kind,
+      "AI Generated": JSON.stringify({ kind, key, payload }),
+    },
+  };
+}
+
+async function appendAitableRuntimeEntry(kind: AitableRuntimeKind, key: string, payload: AitableRuntimeEntry["payload"]) {
+  const token = getAitableApiToken();
+  if (!token || !getAitableDatasheetId()) {
+    return;
+  }
+
+  await fetch(buildAitableRecordsUrl(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      records: [buildAitableEntry(kind, key, payload)],
+      fieldKey: "name",
+    }),
+  });
+  invalidateAitableCache();
+}
+
+function parseAitableRuntimeEntry(raw: unknown) {
+  const record = raw && typeof raw === "object" ? raw as { fields?: Record<string, unknown> } : undefined;
+  const fields = record?.fields;
+  const encoded = typeof fields?.["AI Generated"] === "string" ? fields["AI Generated"] : undefined;
+  if (!encoded) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(encoded) as Partial<AitableRuntimeEntry>;
+    if (
+      parsed &&
+      typeof parsed.kind === "string" &&
+      typeof parsed.key === "string" &&
+      parsed.payload &&
+      typeof parsed.payload === "object"
+    ) {
+      return parsed as AitableRuntimeEntry;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+async function getAitableRuntimeEntries() {
+  if (aitableCache && Date.now() - aitableCache.fetchedAt < 5000) {
+    return aitableCache.entries;
+  }
+
+  const token = getAitableApiToken();
+  const datasheetId = getAitableDatasheetId();
+  if (!token || !datasheetId) {
+    return [] as AitableRuntimeEntry[];
+  }
+
+  const entries: AitableRuntimeEntry[] = [];
+  let pageNum = 1;
+  const pageSize = 200;
+  while (true) {
+    const response = await fetch(buildAitableRecordsUrl(pageNum, pageSize), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      break;
+    }
+
+    const json = await response.json() as {
+      data?: {
+        total?: number;
+        records?: unknown[];
+      };
+    };
+    const records = Array.isArray(json.data?.records) ? json.data.records : [];
+    for (const record of records) {
+      const parsed = parseAitableRuntimeEntry(record);
+      if (parsed) {
+        entries.push(parsed);
+      }
+    }
+
+    if (records.length < pageSize) {
+      break;
+    }
+    pageNum += 1;
+  }
+
+  aitableCache = {
+    fetchedAt: Date.now(),
+    entries,
+  };
+
+  return entries;
+}
+
 export async function upsertLeadRecord(record: StoredLeadRecord) {
   leadStore.set(record.leadKey, record);
 
   const activePool = getPool();
+  if (!activePool && runtimeMode() === "aitable") {
+    await appendAitableRuntimeEntry("lead", record.leadKey, record);
+    return record;
+  }
   if (!activePool) {
     return record;
   }
@@ -224,6 +396,10 @@ export async function upsertLeadRecord(record: StoredLeadRecord) {
 }
 
 export async function getLeadRecord(leadKey: string) {
+  if (!getPool() && runtimeMode() === "aitable") {
+    const records = await getLeadRecords();
+    return records.find((record) => record.leadKey === leadKey);
+  }
   if (!getPool()) {
     return leadStore.get(leadKey);
   }
@@ -241,6 +417,24 @@ export async function getLeadRecord(leadKey: string) {
 }
 
 export async function getLeadRecords() {
+  if (!getPool() && runtimeMode() === "aitable") {
+    const records = getAitableRuntimeEntries();
+    const latestByLead = new Map<string, StoredLeadRecord>();
+    for (const entry of await records) {
+      if (entry.kind !== "lead") continue;
+      const record = entry.payload as StoredLeadRecord;
+      const existing = latestByLead.get(record.leadKey);
+      if (!existing || new Date(record.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
+        latestByLead.set(record.leadKey, record);
+      }
+    }
+    const values = sortByUpdatedAt([...latestByLead.values()]);
+    leadStore.clear();
+    for (const value of values) {
+      leadStore.set(value.leadKey, value);
+    }
+    return values;
+  }
   if (!getPool()) {
     return sortByUpdatedAt([...leadStore.values()]);
   }
@@ -261,6 +455,10 @@ export async function appendEvents(events: CanonicalEvent[]) {
   eventStore.push(...events);
 
   const activePool = getPool();
+  if (!activePool && runtimeMode() === "aitable") {
+    await Promise.all(events.map((event) => appendAitableRuntimeEntry("event", event.id, event)));
+    return;
+  }
   if (!activePool || events.length === 0) {
     return;
   }
@@ -279,6 +477,16 @@ export async function appendEvents(events: CanonicalEvent[]) {
 }
 
 export async function getCanonicalEvents() {
+  if (!getPool() && runtimeMode() === "aitable") {
+    const entries = await getAitableRuntimeEntries();
+    const events = entries
+      .filter((entry) => entry.kind === "event")
+      .map((entry) => entry.payload as CanonicalEvent)
+      .sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
+    eventStore.length = 0;
+    eventStore.push(...events);
+    return events;
+  }
   if (!getPool()) {
     return [...eventStore].slice().sort((left, right) =>
       new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime()
@@ -317,6 +525,10 @@ export async function recordProviderExecution(record: Omit<ProviderExecutionReco
   providerExecutionStore.unshift(normalizedRecord);
 
   const activePool = getPool();
+  if (!activePool && runtimeMode() === "aitable") {
+    await appendAitableRuntimeEntry("provider-execution", normalizedRecord.id, normalizedRecord);
+    return normalizedRecord;
+  }
   if (!activePool) {
     return normalizedRecord;
   }
@@ -341,6 +553,15 @@ export async function recordProviderExecution(record: Omit<ProviderExecutionReco
 }
 
 export async function getProviderExecutions(leadKey?: string) {
+  if (!getPool() && runtimeMode() === "aitable") {
+    const entries = await getAitableRuntimeEntries();
+    return sortByCreatedAt(
+      entries
+        .filter((entry) => entry.kind === "provider-execution")
+        .map((entry) => entry.payload as ProviderExecutionRecord)
+        .filter((record) => !leadKey || record.leadKey === leadKey),
+    );
+  }
   if (!getPool()) {
     return sortByCreatedAt(
       providerExecutionStore
@@ -375,6 +596,10 @@ export async function recordWorkflowRun(record: Omit<WorkflowRunRecord, "id" | "
   workflowRunStore.unshift(normalizedRecord);
 
   const activePool = getPool();
+  if (!activePool && runtimeMode() === "aitable") {
+    await appendAitableRuntimeEntry("workflow-run", normalizedRecord.id, normalizedRecord);
+    return normalizedRecord;
+  }
   if (!activePool) {
     return normalizedRecord;
   }
@@ -398,6 +623,15 @@ export async function recordWorkflowRun(record: Omit<WorkflowRunRecord, "id" | "
 }
 
 export async function getWorkflowRuns(leadKey?: string) {
+  if (!getPool() && runtimeMode() === "aitable") {
+    const entries = await getAitableRuntimeEntries();
+    return sortByCreatedAt(
+      entries
+        .filter((entry) => entry.kind === "workflow-run")
+        .map((entry) => entry.payload as WorkflowRunRecord)
+        .filter((record) => !leadKey || record.leadKey === leadKey),
+    );
+  }
   if (!getPool()) {
     return sortByCreatedAt(
       workflowRunStore
@@ -434,6 +668,10 @@ export async function upsertBookingJob(job: Omit<BookingJobRecord, "id" | "creat
   bookingJobStore.set(normalizedJob.id, normalizedJob);
 
   const activePool = getPool();
+  if (!activePool && runtimeMode() === "aitable") {
+    await appendAitableRuntimeEntry("booking-job", normalizedJob.id, normalizedJob);
+    return normalizedJob;
+  }
   if (!activePool) {
     return normalizedJob;
   }
@@ -457,6 +695,21 @@ export async function upsertBookingJob(job: Omit<BookingJobRecord, "id" | "creat
 }
 
 export async function getBookingJobs(leadKey?: string) {
+  if (!getPool() && runtimeMode() === "aitable") {
+    const entries = await getAitableRuntimeEntries();
+    const latestById = new Map<string, BookingJobRecord>();
+    for (const entry of entries) {
+      if (entry.kind !== "booking-job") continue;
+      const record = entry.payload as BookingJobRecord;
+      const existing = latestById.get(record.id);
+      if (!existing || new Date(record.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
+        latestById.set(record.id, record);
+      }
+    }
+    return sortByUpdatedAt(
+      [...latestById.values()].filter((record) => !leadKey || record.leadKey === leadKey),
+    );
+  }
   if (!getPool()) {
     return sortByUpdatedAt(
       [...bookingJobStore.values()].filter((record) => !leadKey || record.leadKey === leadKey),
@@ -491,6 +744,10 @@ export async function upsertDocumentJob(job: Omit<DocumentJobRecord, "id" | "cre
   documentJobStore.set(normalizedJob.id, normalizedJob);
 
   const activePool = getPool();
+  if (!activePool && runtimeMode() === "aitable") {
+    await appendAitableRuntimeEntry("document-job", normalizedJob.id, normalizedJob);
+    return normalizedJob;
+  }
   if (!activePool) {
     return normalizedJob;
   }
@@ -514,6 +771,21 @@ export async function upsertDocumentJob(job: Omit<DocumentJobRecord, "id" | "cre
 }
 
 export async function getDocumentJobs(leadKey?: string) {
+  if (!getPool() && runtimeMode() === "aitable") {
+    const entries = await getAitableRuntimeEntries();
+    const latestById = new Map<string, DocumentJobRecord>();
+    for (const entry of entries) {
+      if (entry.kind !== "document-job") continue;
+      const record = entry.payload as DocumentJobRecord;
+      const existing = latestById.get(record.id);
+      if (!existing || new Date(record.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
+        latestById.set(record.id, record);
+      }
+    }
+    return sortByUpdatedAt(
+      [...latestById.values()].filter((record) => !leadKey || record.leadKey === leadKey),
+    );
+  }
   if (!getPool()) {
     return sortByUpdatedAt(
       [...documentJobStore.values()].filter((record) => !leadKey || record.leadKey === leadKey),
@@ -541,6 +813,7 @@ export async function resetRuntimeStore() {
   workflowRunStore.length = 0;
   bookingJobStore.clear();
   documentJobStore.clear();
+  invalidateAitableCache();
 
   const activePool = getPool();
   if (!activePool) {
