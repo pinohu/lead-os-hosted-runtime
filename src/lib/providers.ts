@@ -29,6 +29,8 @@ interface HttpResult {
   contentType?: string | null;
 }
 
+type TrafftRuntimeConfig = Awaited<ReturnType<typeof getOperationalRuntimeConfig>>["trafft"];
+
 const LIVE_MODE = process.env.LEAD_OS_ENABLE_LIVE_SENDS !== "false";
 let trafftTokenCache: { token: string; expiresAt: number } | null = null;
 
@@ -455,6 +457,39 @@ function buildTrafftApiUrl(path: string) {
   return `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+function getTrafftPublicOrigin(runtimeConfig?: TrafftRuntimeConfig) {
+  const directBookingUrl = buildTrafftBookingUrl(undefined, runtimeConfig);
+  if (directBookingUrl) {
+    try {
+      return new URL(directBookingUrl).origin;
+    } catch {
+      // Ignore invalid booking URLs and fall back to host transformation.
+    }
+  }
+
+  const adminUrl = getTrafftApiUrl();
+  if (!adminUrl) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(adminUrl);
+    url.hostname = url.hostname.replace(".admin.", ".");
+    return url.origin;
+  } catch {
+    return undefined;
+  }
+}
+
+function buildTrafftPublicApiUrl(path: string, runtimeConfig?: TrafftRuntimeConfig) {
+  const origin = getTrafftPublicOrigin(runtimeConfig);
+  if (!origin) {
+    return undefined;
+  }
+
+  return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 function getTrafftAuthEndpoints() {
   return [
     buildTrafftApiUrl("/api/v1/auth/token"),
@@ -665,6 +700,154 @@ function flattenTrafftAvailability(raw: unknown, desiredDate?: string) {
   }
 
   return availability;
+}
+
+function selectTrafftAvailabilitySlot(
+  availability: Array<Record<string, unknown>>,
+  desiredDate?: string,
+  desiredTime?: string,
+) {
+  if (availability.length === 0) {
+    return undefined;
+  }
+
+  if (desiredDate && desiredTime) {
+    const exact = availability.find((slot) => slot.date === desiredDate && slot.time === desiredTime);
+    if (exact) {
+      return exact;
+    }
+  }
+
+  if (desiredDate) {
+    const sameDay = availability.find((slot) => slot.date === desiredDate);
+    if (sameDay) {
+      return sameDay;
+    }
+  }
+
+  return availability[0];
+}
+
+function normalizePhoneNumber(value?: string) {
+  if (!value) {
+    return "";
+  }
+
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function normalizePhoneDigits(value?: string) {
+  const normalized = normalizePhoneNumber(value);
+  if (!normalized) {
+    return "";
+  }
+
+  return normalized.replace(/[^\d]/g, "");
+}
+
+function resolveTrafftPhoneCountryCode(payload: Record<string, unknown>, metadata?: Record<string, unknown>) {
+  const explicit = getStringValue(
+    payload.phoneCountryCode,
+    metadata?.phoneCountryCode,
+  );
+  if (explicit) {
+    return explicit.toUpperCase();
+  }
+
+  const phone = normalizePhoneNumber(getStringValue(payload.phone, metadata?.phone));
+  if (phone.startsWith("+1")) {
+    return "US";
+  }
+  if (phone.startsWith("+44")) {
+    return "GB";
+  }
+  if (phone.startsWith("+61")) {
+    return "AU";
+  }
+  if (phone.startsWith("+234")) {
+    return "NG";
+  }
+
+  return "US";
+}
+
+function buildTrafftPublicBookingPayload(
+  payload: Record<string, unknown>,
+  selectedSlot: Record<string, unknown>,
+  serviceId: string,
+  desiredDate: string | undefined,
+  desiredTime: string | undefined,
+  runtimeConfig?: TrafftRuntimeConfig,
+) {
+  const metadata = getNestedRecord(payload, "metadata");
+  const slotDate = getStringValue(selectedSlot.date, desiredDate);
+  const slotTime = getStringValue(selectedSlot.time, desiredTime);
+  const slotPayload = selectedSlot.slot;
+  const locationId = getStringValue(payload.locationId, metadata?.locationId);
+  const employeeId = getStringValue(payload.employeeId, metadata?.employeeId);
+  const firstName = getStringValue(payload.firstName, metadata?.firstName) ?? "Lead";
+  const lastName = getStringValue(payload.lastName, metadata?.lastName) ?? "Guest";
+  const rawPhoneNumber = normalizePhoneNumber(getStringValue(payload.phone, metadata?.phone));
+  const phoneNumber = rawPhoneNumber || "";
+  const phoneDigits = normalizePhoneDigits(rawPhoneNumber);
+  const language = getStringValue(
+    payload.language,
+    metadata?.language,
+    payload.locale,
+    metadata?.locale,
+  ) ?? "en";
+
+  return {
+    additionalPersons: Math.max(
+      0,
+      Number(payload.additionalPersons ?? metadata?.additionalPersons ?? 0) || 0,
+    ),
+    authorizePaymentData: null,
+    stripePaymentData: null,
+    squarePaymentData: null,
+    customFields: asRecord(payload.customFields) ?? {},
+    customer: {
+      appliedPromo: null,
+      confirmPassword: "",
+      promoCode: "",
+      createAccount: false,
+      email: getStringValue(payload.email, metadata?.email) ?? "",
+      emailSubscription: false,
+      firstName,
+      language,
+      lastName,
+      newPassword: "",
+      password: "",
+      phoneCountryCode: phoneDigits ? resolveTrafftPhoneCountryCode(payload, metadata) : "",
+      phoneNumber,
+      phoneValid: Boolean(phoneDigits),
+      rawPhoneNumber,
+      status: "new",
+    },
+    employee: employeeId,
+    externalPaymentId: null,
+    extras: Array.isArray(payload.extras) ? payload.extras : [],
+    location: locationId,
+    payAppointmentInFull: false,
+    paymentGateway: "onSite",
+    recurringBookings: Array.isArray(payload.recurringBookings) ? payload.recurringBookings : [],
+    selectedDate: slotDate,
+    selectedSlot: slotPayload,
+    selectedTime: slotTime,
+    service: serviceId,
+    serviceCategory: getStringValue(payload.serviceCategory, metadata?.serviceCategory),
+    userTimezone: getStringValue(
+      payload.userTimezone,
+      metadata?.userTimezone,
+      payload.timezone,
+      metadata?.timezone,
+    ) ?? "America/New_York",
+    shareUuid: getStringValue(payload.shareUuid, metadata?.shareUuid) ?? "",
+    paymentMethods: Array.isArray(payload.paymentMethods) ? payload.paymentMethods : [],
+    isIframe: false,
+    numberOfBookingsForPayment: 1,
+    publicBookingOrigin: getTrafftPublicOrigin(runtimeConfig),
+  };
 }
 
 function resolveDocumentType(payload: Record<string, unknown>) {
@@ -1098,33 +1281,23 @@ export async function createBookingAction(payload: Record<string, unknown>) {
   }
   const runtimeConfig = await getOperationalRuntimeConfig();
   const trafftUrl = getTrafftApiUrl();
+  const trafftPublicOrigin = getTrafftPublicOrigin(runtimeConfig.trafft);
   const bookingUrl = buildTrafftBookingUrl(payload, runtimeConfig.trafft);
   const authResolution = await requestTrafftBearerToken();
   const authToken = authResolution?.token;
+  const metadata = getNestedRecord(payload, "metadata");
+  const serviceId = resolveTrafftServiceId(payload, runtimeConfig.trafft);
+  const employeeId = getStringValue(payload.employeeId, metadata?.employeeId);
+  const locationId = getStringValue(payload.locationId, metadata?.locationId);
+  const desiredDate = getStringValue(payload.desiredDate, payload.selectedDate, metadata?.desiredDate, metadata?.selectedDate);
+  const desiredTime = getStringValue(payload.desiredTime, payload.selectedTime, metadata?.desiredTime, metadata?.selectedTime);
+  let tenantData: Record<string, unknown> | undefined;
 
   if (trafftUrl) {
     const tenantDataResponse = await getJson(buildTrafftApiUrl("/api/v1/common/tenant-data") ?? "");
-    if (!tenantDataResponse.ok) {
-      return {
-        ok: false,
-        provider: "Trafft",
-        mode: "live",
-        detail: `Trafft tenant lookup failed: ${tenantDataResponse.status}`,
-        payload: {
-          ...payload,
-          bookingUrl,
-          apiUrl: trafftUrl,
-        },
-      } satisfies ProviderResult;
+    if (tenantDataResponse.ok) {
+      tenantData = asRecord(tenantDataResponse.json);
     }
-
-    const tenantData = asRecord(tenantDataResponse.json);
-    const serviceId = resolveTrafftServiceId(payload, runtimeConfig.trafft);
-    const metadata = getNestedRecord(payload, "metadata");
-    const employeeId = getStringValue(payload.employeeId, metadata?.employeeId);
-    const locationId = getStringValue(payload.locationId, metadata?.locationId);
-    const desiredDate = getStringValue(payload.desiredDate, payload.selectedDate, metadata?.desiredDate, metadata?.selectedDate);
-    const desiredTime = getStringValue(payload.desiredTime, payload.selectedTime, metadata?.desiredTime, metadata?.selectedTime);
 
     if (authToken && asRecord(payload.appointmentPayload)) {
       const appointmentResponse = await postJson(
@@ -1149,60 +1322,150 @@ export async function createBookingAction(payload: Record<string, unknown>) {
         },
       } satisfies ProviderResult;
     }
+  }
 
-    if (serviceId) {
-      const { calendarStartDate, calendarEndDate } = buildTrafftCalendarWindow(payload);
-      const params = new URLSearchParams({
-        calendarStartDate,
-        calendarEndDate,
-        service: serviceId,
-        serviceWasPredefined: "true",
-        isShareBookingForm: "true",
-      });
-      if (employeeId) {
-        params.set("employee", employeeId);
-      }
-      if (locationId) {
-        params.set("location", locationId);
-      }
+  if (serviceId && trafftPublicOrigin) {
+    const { calendarStartDate, calendarEndDate } = buildTrafftCalendarWindow(payload);
+    const params = new URLSearchParams({
+      calendarStartDate,
+      calendarEndDate,
+      service: serviceId,
+      serviceWasPredefined: "true",
+      isShareBookingForm: "true",
+      strictDateRange: "false",
+      showAllAvailableTimes: "false",
+    });
+    if (employeeId) {
+      params.set("employee", employeeId);
+    }
+    if (locationId) {
+      params.set("location", locationId);
+    }
+    if (desiredDate) {
+      params.set("selectedDate", desiredDate);
+    }
+    if (desiredTime) {
+      params.set("selectedTime", desiredTime);
+    }
 
-      const availabilityResponse = await getJson(
-        `${buildTrafftApiUrl("/api/v1/public/booking/steps/date-time")}?${params.toString()}`,
+    const availabilityUrl = `${buildTrafftPublicApiUrl("/api/v1/public/booking/steps/date-time", runtimeConfig.trafft)}?${params.toString()}`;
+    const availabilityResponse = await getJson(availabilityUrl);
+    const availabilityPreview = flattenTrafftAvailability(availabilityResponse.json, desiredDate);
+    const selectedSlot = selectTrafftAvailabilitySlot(availabilityPreview, desiredDate, desiredTime);
+
+    if (availabilityResponse.ok && selectedSlot) {
+      const bookingSubmitPayload = buildTrafftPublicBookingPayload(
+        payload,
+        selectedSlot,
+        serviceId,
+        desiredDate,
+        desiredTime,
+        runtimeConfig.trafft,
       );
-      const availabilityPreview = flattenTrafftAvailability(availabilityResponse.json, desiredDate);
+      const bookingSubmitResponse = await postJson(
+        buildTrafftPublicApiUrl("/api/v1/public/booking", runtimeConfig.trafft) ?? "",
+        bookingSubmitPayload,
+      );
+
+      if (bookingSubmitResponse.ok) {
+        return {
+          ok: true,
+          provider: "Trafft",
+          mode: "live",
+          detail: "Booking request submitted to Trafft public booking flow",
+          payload: {
+            ...payload,
+            bookingUrl,
+            publicBookingOrigin: trafftPublicOrigin,
+            serviceId,
+            employeeId,
+            locationId,
+            desiredDate,
+            desiredTime,
+            selectedSlot,
+            availabilityPreview,
+            bookingSubmitPayload,
+            response: bookingSubmitResponse.json ?? bookingSubmitResponse.text,
+          },
+        } satisfies ProviderResult;
+      }
+
+      if (bookingUrl?.startsWith("http")) {
+        return {
+          ok: true,
+          provider: "Trafft",
+          mode: "live",
+          detail: `Trafft public booking submit failed: ${bookingSubmitResponse.status}; booking handoff ready`,
+          payload: {
+            ...payload,
+            bookingUrl,
+            publicBookingOrigin: trafftPublicOrigin,
+            serviceId,
+            employeeId,
+            locationId,
+            desiredDate,
+            desiredTime,
+            selectedSlot,
+            availabilityPreview,
+            bookingSubmitPayload,
+            response: bookingSubmitResponse.json ?? bookingSubmitResponse.text,
+          },
+        } satisfies ProviderResult;
+      }
 
       return {
-        ok: (availabilityResponse.ok && availabilityPreview.length > 0) || Boolean(bookingUrl?.startsWith("http")),
+        ok: false,
         provider: "Trafft",
         mode: "live",
-        detail: availabilityResponse.ok
-          ? availabilityPreview.length > 0
-            ? desiredTime
-              ? `Trafft availability loaded${availabilityPreview.some((slot) => slot.date === desiredDate && slot.time === desiredTime) ? "; desired slot is present" : "; desired slot was not in the first availability window"}`
-              : `Trafft availability loaded with ${availabilityPreview.length} candidate slots`
-            : bookingUrl?.startsWith("http")
-            ? "Trafft availability returned no public slots in the first window; booking handoff ready"
-            : "Trafft availability loaded but no open slots were returned for the requested window"
-          : bookingUrl?.startsWith("http")
-          ? `Trafft availability lookup failed: ${availabilityResponse.status}; booking handoff ready`
-          : `Trafft availability lookup failed: ${availabilityResponse.status}`,
+        detail: `Trafft public booking submit failed: ${bookingSubmitResponse.status}`,
         payload: {
           ...payload,
-          tenantId: tenantData?.tenantId,
-          tenantName: tenantData?.tenantName,
+          publicBookingOrigin: trafftPublicOrigin,
           serviceId,
           employeeId,
           locationId,
           desiredDate,
           desiredTime,
-          bookingUrl,
-          authStrategy: authResolution?.strategy,
-          authEndpoint: authResolution?.endpoint,
+          selectedSlot,
           availabilityPreview,
+          bookingSubmitPayload,
+          response: bookingSubmitResponse.json ?? bookingSubmitResponse.text,
         },
       } satisfies ProviderResult;
     }
 
+    return {
+      ok: (availabilityResponse.ok && availabilityPreview.length > 0) || Boolean(bookingUrl?.startsWith("http")),
+      provider: "Trafft",
+      mode: "live",
+      detail: availabilityResponse.ok
+        ? availabilityPreview.length > 0
+          ? desiredTime
+            ? `Trafft availability loaded${availabilityPreview.some((slot) => slot.date === desiredDate && slot.time === desiredTime) ? "; desired slot is present" : "; desired slot was not in the first availability window"}`
+            : `Trafft availability loaded with ${availabilityPreview.length} candidate slots`
+          : bookingUrl?.startsWith("http")
+          ? "Trafft availability returned no public slots in the first window; booking handoff ready"
+          : "Trafft availability loaded but no open slots were returned for the requested window"
+        : bookingUrl?.startsWith("http")
+        ? `Trafft availability lookup failed: ${availabilityResponse.status}; booking handoff ready`
+        : `Trafft availability lookup failed: ${availabilityResponse.status}`,
+      payload: {
+        ...payload,
+        publicBookingOrigin: trafftPublicOrigin,
+        serviceId,
+        employeeId,
+        locationId,
+        desiredDate,
+        desiredTime,
+        bookingUrl,
+        authStrategy: authResolution?.strategy,
+        authEndpoint: authResolution?.endpoint,
+        availabilityPreview,
+      },
+    } satisfies ProviderResult;
+  }
+
+  if (tenantData) {
     if (bookingUrl?.startsWith("http")) {
       return {
         ok: true,
@@ -1215,6 +1478,7 @@ export async function createBookingAction(payload: Record<string, unknown>) {
           tenantName: tenantData?.tenantName,
           bookingUrl,
           apiUrl: trafftUrl,
+          publicBookingOrigin: trafftPublicOrigin,
           authStrategy: authResolution?.strategy,
           authEndpoint: authResolution?.endpoint,
           clientIdPresent: Boolean(getTrafftClientId()),
@@ -1236,6 +1500,7 @@ export async function createBookingAction(payload: Record<string, unknown>) {
         tenantName: tenantData?.tenantName,
         bookingUrl,
         apiUrl: trafftUrl,
+        publicBookingOrigin: trafftPublicOrigin,
         clientIdPresent: Boolean(getTrafftClientId()),
         clientSecretPresent: Boolean(getTrafftClientSecret()),
         authTokenPresent: Boolean(authToken),
