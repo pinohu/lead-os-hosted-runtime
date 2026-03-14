@@ -285,11 +285,11 @@ export function getAutomationHealth() {
     liveMode: LIVE_MODE,
     providers,
     channels: {
-      email: providers.emailit.status,
-      whatsapp: providers.wbiztool.status,
-      sms: providers.easyTextMarketing.status,
-      chat: providers.insighto.status,
-      voice: providers.thoughtly.status,
+      email: providers.emailit.live,
+      whatsapp: providers.wbiztool.live,
+      sms: providers.easyTextMarketing.live,
+      chat: providers.insighto.live,
+      voice: providers.thoughtly.live,
     },
   };
 }

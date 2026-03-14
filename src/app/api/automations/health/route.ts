@@ -7,12 +7,13 @@ import { tenantConfig } from "@/lib/tenant";
 
 export async function GET() {
   const graphs = buildDefaultFunnelGraphs(tenantConfig.tenantId);
+  const health = getAutomationHealth();
   return NextResponse.json({
     success: true,
     tenantId: tenantConfig.tenantId,
-    liveMode: getAutomationHealth().liveMode,
-    providers: getAutomationHealth().providers,
-    channels: tenantConfig.channels,
+    liveMode: health.liveMode,
+    providers: health.providers,
+    channels: health.channels,
     funnels: Object.values(graphs).map((graph) => ({
       id: graph.id,
       family: graph.family,
