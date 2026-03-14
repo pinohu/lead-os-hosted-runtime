@@ -25,6 +25,10 @@ export async function GET(request: Request) {
         intake: "/api/intake",
         decision: "/api/decision",
         manifest: "/api/embed/manifest",
+        dashboard: "/dashboard",
+        dashboardApi: "/api/dashboard",
+        n8nManifest: "/api/n8n/manifest",
+        n8nProvision: "/api/n8n/provision",
       },
       defaults: {
         service: tenantConfig.defaultService,

@@ -16,10 +16,20 @@ export async function GET() {
   }
 
   const workflows = await getN8nStarterWorkflowStatus();
+  const milestoneWorkflows = workflows.filter((workflow) =>
+    workflow.slug === "milestone-second-touch" || workflow.slug === "milestone-third-touch-conversion"
+  );
   return NextResponse.json({
     success: true,
     configured: true,
     count: workflows.length,
+    defaultOperationalSlugs: [
+      "lead-intake-fanout",
+      "milestone-second-touch",
+      "milestone-third-touch-conversion",
+      "referral-activation-loop",
+    ],
+    milestoneWorkflowStatus: milestoneWorkflows,
     workflows,
   });
 }
