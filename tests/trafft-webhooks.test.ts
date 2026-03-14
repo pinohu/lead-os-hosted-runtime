@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resetRuntimeStore, getLeadRecord, getBookingJobs, getCanonicalEvents } from "../src/lib/runtime-store.ts";
+import {
+  resetRuntimeStore,
+  getLeadRecord,
+  getBookingJobs,
+  getCanonicalEvents,
+  upsertBookingJob,
+} from "../src/lib/runtime-store.ts";
 import {
   processTrafftWebhook,
   verifyTrafftWebhookAuthorization,
@@ -54,4 +60,22 @@ test("processTrafftWebhook records booked appointments into the runtime", async 
 
   const events = await getCanonicalEvents();
   assert.equal(events[0]?.eventType, "booking_completed");
+});
+
+test("upsertBookingJob generates an id when undefined is passed explicitly", async () => {
+  await resetRuntimeStore();
+
+  const job = await upsertBookingJob({
+    id: undefined,
+    leadKey: "email:undefined-id@test.com",
+    provider: "Trafft",
+    status: "booked",
+    detail: "Generated from regression test",
+  });
+
+  assert.match(job.id, /[0-9a-f-]{36}/i);
+
+  const bookingJobs = await getBookingJobs("email:undefined-id@test.com");
+  assert.equal(bookingJobs[0]?.id, job.id);
+  assert.equal(bookingJobs[0]?.status, "booked");
 });

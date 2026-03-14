@@ -597,9 +597,9 @@ export async function recordProviderExecution(record: Omit<ProviderExecutionReco
   createdAt?: string;
 }) {
   const normalizedRecord: ProviderExecutionRecord = {
+    ...record,
     id: record.id ?? crypto.randomUUID(),
     createdAt: record.createdAt ?? new Date().toISOString(),
-    ...record,
   };
   providerExecutionStore.unshift(normalizedRecord);
 
@@ -668,9 +668,9 @@ export async function recordWorkflowRun(record: Omit<WorkflowRunRecord, "id" | "
   createdAt?: string;
 }) {
   const normalizedRecord: WorkflowRunRecord = {
+    ...record,
     id: record.id ?? crypto.randomUUID(),
     createdAt: record.createdAt ?? new Date().toISOString(),
-    ...record,
   };
   workflowRunStore.unshift(normalizedRecord);
 
@@ -739,10 +739,10 @@ export async function upsertBookingJob(job: Omit<BookingJobRecord, "id" | "creat
   updatedAt?: string;
 }) {
   const normalizedJob: BookingJobRecord = {
+    ...job,
     id: job.id ?? crypto.randomUUID(),
     createdAt: job.createdAt ?? new Date().toISOString(),
     updatedAt: job.updatedAt ?? new Date().toISOString(),
-    ...job,
   };
   bookingJobStore.set(normalizedJob.id, normalizedJob);
 
@@ -815,10 +815,10 @@ export async function upsertDocumentJob(job: Omit<DocumentJobRecord, "id" | "cre
   updatedAt?: string;
 }) {
   const normalizedJob: DocumentJobRecord = {
+    ...job,
     id: job.id ?? crypto.randomUUID(),
     createdAt: job.createdAt ?? new Date().toISOString(),
     updatedAt: job.updatedAt ?? new Date().toISOString(),
-    ...job,
   };
   documentJobStore.set(normalizedJob.id, normalizedJob);
 
@@ -889,8 +889,8 @@ export async function upsertRuntimeConfig(
   config: Omit<RuntimeConfigRecord, "updatedAt"> & { updatedAt?: string },
 ) {
   const normalizedConfig: RuntimeConfigRecord = {
-    updatedAt: config.updatedAt ?? new Date().toISOString(),
     ...config,
+    updatedAt: config.updatedAt ?? new Date().toISOString(),
   };
   runtimeConfigStore.set(normalizedConfig.key, normalizedConfig);
 
@@ -926,9 +926,9 @@ export async function upsertWorkflowRegistry(
   },
 ) {
   const normalizedRecord: WorkflowRegistryRecord = {
+    ...record,
     updatedAt: record.updatedAt ?? new Date().toISOString(),
     lastProvisionedAt: record.lastProvisionedAt ?? record.updatedAt ?? new Date().toISOString(),
-    ...record,
   };
   workflowRegistryStore.set(normalizedRecord.slug, normalizedRecord);
 
