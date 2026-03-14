@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   const headers = buildCorsHeaders(request.headers.get("origin"));
   try {
     const payload = await request.json();
-    const result = persistLead(payload);
+    const result = await persistLead(payload);
     return NextResponse.json(result, { headers });
   } catch (error) {
     return NextResponse.json(

@@ -4,6 +4,7 @@ export type NicheDefinition = {
   summary: string;
   assessmentTitle: string;
   calculatorBias: "time" | "revenue" | "compliance" | "experience";
+  recommendedFunnels: string[];
 };
 
 export const nicheCatalog: Record<string, NicheDefinition> = {
@@ -13,6 +14,7 @@ export const nicheCatalog: Record<string, NicheDefinition> = {
     summary: "Automation and growth infrastructure for service businesses.",
     assessmentTitle: "Business Automation Assessment",
     calculatorBias: "time",
+    recommendedFunnels: ["lead-magnet", "qualification", "chat", "webinar"],
   },
   legal: {
     slug: "legal",
@@ -20,6 +22,7 @@ export const nicheCatalog: Record<string, NicheDefinition> = {
     summary: "Lead capture and intake optimization for law firms.",
     assessmentTitle: "Legal Intake Readiness Assessment",
     calculatorBias: "compliance",
+    recommendedFunnels: ["qualification", "authority", "webinar", "retention"],
   },
   "home-services": {
     slug: "home-services",
@@ -27,6 +30,7 @@ export const nicheCatalog: Record<string, NicheDefinition> = {
     summary: "Quote and booking acceleration for contractors and trades.",
     assessmentTitle: "Home Services Conversion Assessment",
     calculatorBias: "revenue",
+    recommendedFunnels: ["qualification", "chat", "checkout", "retention"],
   },
   coaching: {
     slug: "coaching",
@@ -34,6 +38,7 @@ export const nicheCatalog: Record<string, NicheDefinition> = {
     summary: "Qualification and appointment funnels for knowledge businesses.",
     assessmentTitle: "High-Ticket Coaching Funnel Assessment",
     calculatorBias: "experience",
+    recommendedFunnels: ["authority", "webinar", "qualification", "continuity"],
   },
 };
 

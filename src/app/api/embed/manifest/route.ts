@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { nicheCatalog } from "@/lib/catalog";
 import { buildCorsHeaders } from "@/lib/cors";
+import { getRecipeForFamily } from "@/lib/automation";
+import { buildDefaultFunnelGraphs } from "@/lib/funnel-library";
+import { getAutomationHealth } from "@/lib/providers";
 import { tenantConfig } from "@/lib/tenant";
 
 export async function OPTIONS(request: Request) {
@@ -11,6 +14,8 @@ export async function OPTIONS(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const graphs = buildDefaultFunnelGraphs(tenantConfig.tenantId);
+  const health = getAutomationHealth();
   return NextResponse.json({
     success: true,
     tenant: tenantConfig,
@@ -21,6 +26,15 @@ export async function GET(request: Request) {
       assessment: true,
       calculator: true,
     },
+    funnels: Object.values(graphs).map((graph) => ({
+      id: graph.id,
+      family: graph.family,
+      goal: graph.goal,
+      entryPoints: graph.entryPoints,
+      nodeCount: graph.nodes.length,
+      recipe: getRecipeForFamily(graph.family),
+    })),
+    health,
   }, {
     headers: buildCorsHeaders(request.headers.get("origin")),
   });

@@ -14,7 +14,15 @@ export async function POST(request: Request) {
   try {
     const signal = await request.json();
     const decision = decideNextStep(signal);
-    return NextResponse.json({ success: true, decision }, { headers });
+    return NextResponse.json(
+      {
+        success: true,
+        decision,
+        traceDefaults: decision.traceDefaults,
+        recipe: decision.recipe,
+      },
+      { headers },
+    );
   } catch {
     return NextResponse.json(
       { success: false, error: "Decision failed" },
