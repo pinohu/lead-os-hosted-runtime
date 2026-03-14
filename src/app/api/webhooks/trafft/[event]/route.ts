@@ -43,6 +43,12 @@ export async function POST(request: Request, context: { params: Promise<{ event:
   const result = await processTrafftWebhook(event, payload);
   return NextResponse.json({
     verified: true,
-    ...result,
+    success: result.success,
+    event: result.event,
+    leadKey: result.leadKey,
+    bookingStatus: result.bookingJob?.status ?? null,
+    eventType: result.canonicalEvent.eventType,
+    providerExecutionId: result.providerExecution.id,
+    bookingJobId: result.bookingJob?.id ?? null,
   });
 }
