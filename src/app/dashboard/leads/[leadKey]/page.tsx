@@ -2,7 +2,19 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { summarizeMilestoneProgress } from "@/lib/automation";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
-import { getCanonicalEvents, getLeadRecord } from "@/lib/runtime-store";
+import {
+  type BookingJobRecord,
+  type DocumentJobRecord,
+  getBookingJobs,
+  getCanonicalEvents,
+  getDocumentJobs,
+  getLeadRecord,
+  getProviderExecutions,
+  type ProviderExecutionRecord,
+  type WorkflowRunRecord,
+  getWorkflowRuns,
+} from "@/lib/runtime-store";
+import type { CanonicalEvent } from "@/lib/trace";
 
 type LeadDetailPageProps = {
   params: Promise<{ leadKey: string }>;
@@ -12,15 +24,26 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   await requireOperatorPageSession("/dashboard");
   const { leadKey } = await params;
   const decodedLeadKey = decodeURIComponent(leadKey);
-  const lead = getLeadRecord(decodedLeadKey);
+  const lead = await getLeadRecord(decodedLeadKey);
 
   if (!lead) {
     notFound();
   }
 
-  const events = getCanonicalEvents()
+  const [events, workflows, providerExecutions, bookingJobs, documentJobs] = await Promise.all([
+    getCanonicalEvents(),
+    getWorkflowRuns(decodedLeadKey),
+    getProviderExecutions(decodedLeadKey),
+    getBookingJobs(decodedLeadKey),
+    getDocumentJobs(decodedLeadKey),
+  ]);
+  const filteredEvents = (events as CanonicalEvent[])
     .filter((event) => event.leadKey === decodedLeadKey)
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    .sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
+  const workflowItems = workflows as WorkflowRunRecord[];
+  const providerItems = providerExecutions as ProviderExecutionRecord[];
+  const bookingItems = bookingJobs as BookingJobRecord[];
+  const documentItems = documentJobs as DocumentJobRecord[];
   const progress = summarizeMilestoneProgress(lead);
 
   return (
@@ -90,14 +113,94 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
         </article>
       </section>
 
+      <section className="grid two">
+        <article className="panel">
+          <p className="eyebrow">Workflow activity</p>
+          <h2>Automation runs</h2>
+          {workflowItems.length === 0 ? (
+            <p className="muted">No workflow runs recorded for this lead yet.</p>
+          ) : (
+            <div className="stack-grid">
+              {workflowItems.map((workflow) => (
+                <article key={workflow.id} className="stack-card">
+                  <p className="eyebrow">{workflow.provider}</p>
+                  <h3>{workflow.eventName}</h3>
+                  <p className="muted">{workflow.detail}</p>
+                  <p className="muted">{workflow.createdAt}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </article>
+
+        <article className="panel">
+          <p className="eyebrow">Provider executions</p>
+          <h2>Channel and service activity</h2>
+          {providerItems.length === 0 ? (
+            <p className="muted">No provider executions recorded for this lead yet.</p>
+          ) : (
+            <div className="stack-grid">
+              {providerItems.map((execution) => (
+                <article key={execution.id} className="stack-card">
+                  <p className="eyebrow">{execution.provider}</p>
+                  <h3>{execution.kind}</h3>
+                  <p className="muted">{execution.detail}</p>
+                  <p className="muted">{execution.createdAt}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </article>
+      </section>
+
+      <section className="grid two">
+        <article className="panel">
+          <p className="eyebrow">Booking jobs</p>
+          <h2>Scheduling state</h2>
+          {bookingItems.length === 0 ? (
+            <p className="muted">No booking jobs recorded yet.</p>
+          ) : (
+            <div className="stack-grid">
+              {bookingItems.map((job) => (
+                <article key={job.id} className="stack-card">
+                  <p className="eyebrow">{job.provider}</p>
+                  <h3>{job.status}</h3>
+                  <p className="muted">{job.detail}</p>
+                  <p className="muted">{job.updatedAt}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </article>
+
+        <article className="panel">
+          <p className="eyebrow">Document jobs</p>
+          <h2>Proposal and onboarding docs</h2>
+          {documentItems.length === 0 ? (
+            <p className="muted">No document jobs recorded yet.</p>
+          ) : (
+            <div className="stack-grid">
+              {documentItems.map((job) => (
+                <article key={job.id} className="stack-card">
+                  <p className="eyebrow">{job.provider}</p>
+                  <h3>{job.status}</h3>
+                  <p className="muted">{job.detail}</p>
+                  <p className="muted">{job.updatedAt}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </article>
+      </section>
+
       <section className="panel">
         <p className="eyebrow">Event timeline</p>
         <h2>Canonical history</h2>
-        {events.length === 0 ? (
+        {filteredEvents.length === 0 ? (
           <p className="muted">No events recorded for this lead yet.</p>
         ) : (
           <div className="stack-grid">
-            {events.map((event) => (
+            {filteredEvents.map((event) => (
               <article key={event.id} className="stack-card">
                 <p className="eyebrow">{event.channel}</p>
                 <h3>{event.eventType}</h3>

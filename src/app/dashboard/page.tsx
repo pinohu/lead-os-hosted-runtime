@@ -8,7 +8,7 @@ import { tenantConfig } from "@/lib/tenant";
 
 export default async function DashboardPage() {
   const session = await requireOperatorPageSession("/dashboard");
-  const snapshot = buildDashboardSnapshot(getLeadRecords(), getCanonicalEvents());
+  const snapshot = buildDashboardSnapshot(await getLeadRecords(), await getCanonicalEvents());
   const health = getAutomationHealth();
 
   return (
@@ -18,9 +18,9 @@ export default async function DashboardPage() {
           <p className="eyebrow">Operator command center</p>
           <h1>{tenantConfig.brandName} milestone dashboard</h1>
           <p className="lede">
-            LeadOS is now optimizing for milestone two and milestone three, not just the first
-            capture event. This console shows what is moving, what is leaking, and where the next
-            operator intervention belongs.
+            LeadOS is optimizing for milestone two and milestone three, not just the first capture
+            event. This console shows what is moving, what is leaking, and where the next operator
+            intervention belongs.
           </p>
           <div className="cta-row">
             <Link href="/dashboard/providers" className="primary">
@@ -35,7 +35,7 @@ export default async function DashboardPage() {
           <p className="eyebrow">Operator session</p>
           <h2>{session.email}</h2>
           <p className="muted">
-            Live mode: {health.liveMode ? "enabled" : "dry run"} • Total leads: {snapshot.totals.leads} • Hot leads: {snapshot.totals.hotLeads}
+            Live mode: {health.liveMode ? "enabled" : "dry run"} | Total leads: {snapshot.totals.leads} | Hot leads: {snapshot.totals.hotLeads}
           </p>
           <ul className="journey-rail">
             {THREE_VISIT_FRAMEWORK.lead.map((milestone) => (
@@ -50,22 +50,22 @@ export default async function DashboardPage() {
 
       <section className="metric-grid">
         <article className="metric-card">
-          <p className="eyebrow">Lead M1 → M2</p>
+          <p className="eyebrow">Lead M1 to M2</p>
           <h2>{snapshot.conversionRates.leadM1ToM2}%</h2>
           <p className="muted">Returning-engaged rate from captured leads.</p>
         </article>
         <article className="metric-card">
-          <p className="eyebrow">Lead M2 → M3</p>
+          <p className="eyebrow">Lead M2 to M3</p>
           <h2>{snapshot.conversionRates.leadM2ToM3}%</h2>
           <p className="muted">Booked or offered rate from returning leads.</p>
         </article>
         <article className="metric-card">
-          <p className="eyebrow">Customer M1 → M2</p>
+          <p className="eyebrow">Customer M1 to M2</p>
           <h2>{snapshot.conversionRates.customerM1ToM2}%</h2>
           <p className="muted">Activation rate from onboarded customers.</p>
         </article>
         <article className="metric-card">
-          <p className="eyebrow">Customer M2 → M3</p>
+          <p className="eyebrow">Customer M2 to M3</p>
           <h2>{snapshot.conversionRates.customerM2ToM3}%</h2>
           <p className="muted">Value-realized rate from activated customers.</p>
         </article>
@@ -136,7 +136,7 @@ export default async function DashboardPage() {
                 <article key={lead.leadKey} className="stack-card">
                   <p className="eyebrow">{lead.family}</p>
                   <h3>{lead.leadKey}</h3>
-                  <p className="muted">Stage: {lead.stage} • Visits: {lead.visitCount}</p>
+                  <p className="muted">Stage: {lead.stage} | Visits: {lead.visitCount}</p>
                   <p className="muted">Next lead milestone: {lead.nextLeadMilestone ?? "Complete"}</p>
                   <div className="cta-row">
                     <Link href={`/dashboard/leads/${encodeURIComponent(lead.leadKey)}`} className="secondary">
@@ -161,7 +161,7 @@ export default async function DashboardPage() {
                   <p className="eyebrow">{event.type}</p>
                   <h3>{event.milestoneId}</h3>
                   <p className="muted">{event.leadKey}</p>
-                  <p className="muted">Visit count: {event.visitCount} • Stage: {event.stage}</p>
+                  <p className="muted">Visit count: {event.visitCount} | Stage: {event.stage}</p>
                 </article>
               ))}
             </div>

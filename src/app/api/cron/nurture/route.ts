@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveNextNurtureStage } from "@/lib/automation";
 import { sendEmailAction, sendSmsAction, sendWhatsAppAction } from "@/lib/providers";
-import { getLeadRecords, markNurtureStageSent } from "@/lib/runtime-store";
-import { appendEvents } from "@/lib/runtime-store";
+import { appendEvents, getLeadRecords, markNurtureStageSent } from "@/lib/runtime-store";
 import { createCanonicalEvent } from "@/lib/trace";
 
 export async function GET(request: Request) {
@@ -14,7 +13,7 @@ export async function GET(request: Request) {
 
   const processed: Array<{ leadKey: string; stage: string; channels: string[] }> = [];
 
-  for (const lead of getLeadRecords()) {
+  for (const lead of await getLeadRecords()) {
     const stage = resolveNextNurtureStage(lead);
     if (!stage) continue;
 
@@ -43,8 +42,8 @@ export async function GET(request: Request) {
       channels.push("sms");
     }
 
-    markNurtureStageSent(lead.leadKey, stage.id);
-    appendEvents([
+    await markNurtureStageSent(lead.leadKey, stage.id);
+    await appendEvents([
       createCanonicalEvent(lead.trace, "retention_sequence_started", "internal", "NURTURED", {
         stageId: stage.id,
         label: stage.label,

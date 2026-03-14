@@ -11,7 +11,7 @@ test("validateLeadPayload requires a source and identity", () => {
 });
 
 test("persistLead stores normalized email-based identities and returns graph-aware decisioning", async () => {
-  resetRuntimeStore();
+  await resetRuntimeStore();
   const result = await persistLead({
     source: "chat",
     email: "Lead@Test.com",
@@ -29,7 +29,7 @@ test("persistLead stores normalized email-based identities and returns graph-awa
 });
 
 test("persistLead honors a preferred funnel family when one is supplied", async () => {
-  resetRuntimeStore();
+  await resetRuntimeStore();
   const result = await persistLead({
     source: "manual",
     email: "preferred@test.com",

@@ -53,7 +53,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const headerStore = await headers();
   const graphs = buildDefaultFunnelGraphs(tenantConfig.tenantId);
   const health = getAutomationHealth();
-  const snapshot = buildDashboardSnapshot(getLeadRecords(), getCanonicalEvents());
+  const snapshot = buildDashboardSnapshot(await getLeadRecords(), await getCanonicalEvents());
   const profile = resolveExperienceProfile({
     family: asFamily(params.family),
     niche,

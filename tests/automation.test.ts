@@ -11,10 +11,10 @@ test("automation recipes exist for every implemented family", () => {
   assert.equal(THREE_VISIT_FRAMEWORK.customer.length, 3);
 });
 
-test("nurture resolution picks the next unsent stage", () => {
-  resetRuntimeStore();
+test("nurture resolution picks the next unsent stage", async () => {
+  await resetRuntimeStore();
   const now = new Date();
-  const lead = upsertLeadRecord({
+  const lead = await upsertLeadRecord({
     leadKey: "email:test@example.com",
     trace: {
       visitorId: "visitor-1",

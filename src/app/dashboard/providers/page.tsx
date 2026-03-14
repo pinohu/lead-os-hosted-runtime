@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { getAutomationHealth } from "@/lib/providers";
+import { getRuntimePersistenceMode } from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
 
 export default async function ProviderHealthPage() {
   await requireOperatorPageSession("/dashboard/providers");
   const health = getAutomationHealth();
+  const persistenceMode = getRuntimePersistenceMode();
   const providerEntries = Object.entries(health.providers)
     .sort(([left], [right]) => left.localeCompare(right));
 
@@ -27,6 +29,7 @@ export default async function ProviderHealthPage() {
         </div>
         <aside className="hero-rail">
           <p className="eyebrow">Channel readiness</p>
+          <p className="muted">Persistence: {persistenceMode}</p>
           <ul className="journey-rail">
             {Object.entries(health.channels).map(([channel, ready]) => (
               <li key={channel}>
@@ -42,7 +45,13 @@ export default async function ProviderHealthPage() {
         {providerEntries.map(([provider, status]) => (
           <article key={provider} className="stack-card">
             <p className="eyebrow">{provider}</p>
-            <h2>{status.status === "configured" ? "Configured" : "Missing"}</h2>
+            <h2>
+              {status.status === "configured"
+                ? "Configured"
+                : status.status === "dry-run"
+                ? "Configured / dry-run"
+                : "Missing"}
+            </h2>
             <p className="muted">{status.live ? "Live" : "Prepared"}</p>
             <p className="muted">{status.owner}</p>
           </article>

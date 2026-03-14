@@ -2,16 +2,19 @@ import { NextResponse } from "next/server";
 import { getRecipeForFamily } from "@/lib/automation";
 import { buildDefaultFunnelGraphs } from "@/lib/funnel-library";
 import { getAutomationHealth } from "@/lib/providers";
-import { getCanonicalEvents, getLeadRecords } from "@/lib/runtime-store";
+import { getCanonicalEvents, getLeadRecords, getRuntimePersistenceMode } from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
 
 export async function GET() {
   const graphs = buildDefaultFunnelGraphs(tenantConfig.tenantId);
   const health = getAutomationHealth();
+  const leads = await getLeadRecords();
+  const events = await getCanonicalEvents();
   return NextResponse.json({
     success: true,
     tenantId: tenantConfig.tenantId,
     liveMode: health.liveMode,
+    persistenceMode: getRuntimePersistenceMode(),
     providers: health.providers,
     channels: health.channels,
     funnels: Object.values(graphs).map((graph) => ({
@@ -22,8 +25,8 @@ export async function GET() {
       edges: graph.edges.length,
     })),
     telemetry: {
-      leads: getLeadRecords().length,
-      events: getCanonicalEvents().length,
+      leads: leads.length,
+      events: events.length,
     },
   });
 }

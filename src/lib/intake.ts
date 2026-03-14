@@ -15,6 +15,8 @@ import {
   appendEvents,
   getLeadRecord,
   markNurtureStageSent,
+  recordProviderExecution,
+  recordWorkflowRun,
   type StoredLeadRecord,
   upsertLeadRecord,
 } from "./runtime-store.ts";
@@ -220,7 +222,7 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
   const leadKey = payload.leadKey ?? buildLeadKey(normalizedEmail, normalizedPhone);
   const firstName = normalizeName(payload.firstName) || deriveFirstName(normalizedEmail);
   const lastName = normalizeName(payload.lastName);
-  const existingRecord = getLeadRecord(leadKey);
+  const existingRecord = await getLeadRecord(leadKey);
   const existing = Boolean(existingRecord);
   const replayed = isRecentReplay(buildReplayKey(payload, normalizedEmail, normalizedPhone));
   const decision = decideNextStep({
@@ -262,7 +264,7 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
   });
 
   const now = new Date().toISOString();
-  const record = upsertLeadRecord({
+  const record = await upsertLeadRecord({
     leadKey,
     trace,
     firstName,
@@ -327,7 +329,7 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
       })
     ),
   ];
-  appendEvents(events);
+  await appendEvents(events);
 
   const crm = await syncLeadToCrm({
     leadKey,
@@ -479,15 +481,100 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
   ]);
 
   if (emailResult) {
-    appendEvents([createCanonicalEvent(trace, "followup_email_sent", "email", emailResult.ok ? "SENT" : "FAILED")]);
-    markNurtureStageSent(leadKey, "day-0");
+    await appendEvents([createCanonicalEvent(trace, "followup_email_sent", "email", emailResult.ok ? "SENT" : "FAILED")]);
+    await markNurtureStageSent(leadKey, "day-0");
   }
   if (whatsappResult) {
-    appendEvents([createCanonicalEvent(trace, "followup_whatsapp_sent", "whatsapp", whatsappResult.ok ? "SENT" : "FAILED")]);
+    await appendEvents([createCanonicalEvent(trace, "followup_whatsapp_sent", "whatsapp", whatsappResult.ok ? "SENT" : "FAILED")]);
   }
   if (smsResult) {
-    appendEvents([createCanonicalEvent(trace, "followup_sms_sent", "sms", smsResult.ok ? "SENT" : "FAILED")]);
+    await appendEvents([createCanonicalEvent(trace, "followup_sms_sent", "sms", smsResult.ok ? "SENT" : "FAILED")]);
   }
+
+  await Promise.all([
+    recordProviderExecution({
+      leadKey,
+      provider: crm.provider,
+      kind: "crm",
+      ok: crm.ok,
+      mode: crm.mode,
+      detail: crm.detail,
+      payload: crm.payload,
+    }),
+    recordProviderExecution({
+      leadKey,
+      provider: logging.provider,
+      kind: "ledger",
+      ok: logging.ok,
+      mode: logging.mode,
+      detail: logging.detail,
+      payload: logging.payload,
+    }),
+    recordWorkflowRun({
+      leadKey,
+      eventName: "lead.captured",
+      provider: workflow.provider,
+      ok: workflow.ok,
+      mode: workflow.mode,
+      detail: workflow.detail,
+      payload: workflow.payload,
+    }),
+    ...workflowTriggers.map((run) =>
+      recordWorkflowRun({
+        leadKey,
+        eventName: "triggered",
+        provider: run.provider,
+        ok: run.ok,
+        mode: run.mode,
+        detail: run.detail,
+        payload: run.payload,
+      })
+    ),
+    ...(alertResult ? [
+      recordProviderExecution({
+        leadKey,
+        provider: alertResult.provider,
+        kind: "alert",
+        ok: alertResult.ok,
+        mode: alertResult.mode,
+        detail: alertResult.detail,
+        payload: alertResult.payload,
+      }),
+    ] : []),
+    ...(emailResult ? [
+      recordProviderExecution({
+        leadKey,
+        provider: emailResult.provider,
+        kind: "email",
+        ok: emailResult.ok,
+        mode: emailResult.mode,
+        detail: emailResult.detail,
+        payload: emailResult.payload,
+      }),
+    ] : []),
+    ...(whatsappResult ? [
+      recordProviderExecution({
+        leadKey,
+        provider: whatsappResult.provider,
+        kind: "whatsapp",
+        ok: whatsappResult.ok,
+        mode: whatsappResult.mode,
+        detail: whatsappResult.detail,
+        payload: whatsappResult.payload,
+      }),
+    ] : []),
+    ...(smsResult ? [
+      recordProviderExecution({
+        leadKey,
+        provider: smsResult.provider,
+        kind: "sms",
+        ok: smsResult.ok,
+        mode: smsResult.mode,
+        detail: smsResult.detail,
+        payload: smsResult.payload,
+      }),
+    ] : []),
+  ]);
 
   return {
     success: true,
