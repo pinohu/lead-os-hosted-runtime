@@ -174,7 +174,7 @@ function getTrafftClientSecret() {
 }
 
 function getDocumenteroApiKey() {
-  return getEnvValue("DOCUMENTERO_API_KEY");
+  return getEnvValue("DOCUMENTERO_API_KEY") ?? embeddedSecrets.documentero.apiKey;
 }
 
 function getDocumenteroTemplateId() {

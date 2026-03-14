@@ -55,6 +55,9 @@ export const embeddedSecrets = {
     clientId: "798c2da2d725d9e5a2f7f60874cdada5",
     clientSecret: "6bda84be54b3fcef0db0c9d6b0fedb2bc096f8205376b8d9ca48bc80bf96f232",
   },
+  documentero: {
+    apiKey: "R6OL3LQ-HSKETSA-RSNQ3TA-77PJH3A",
+  },
   agenticflow: {
     apiKey: "a9w_SNlebBN8edQmcYJGX7DGbFOfOc8fkH8PLFP0cQ14UG0",
   },
