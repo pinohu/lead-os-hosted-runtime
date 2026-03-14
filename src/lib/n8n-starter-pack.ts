@@ -94,9 +94,16 @@ function setNode(id: string, name: string, fields: Array<{ name: string; value: 
     typeVersion: 3.4,
     position,
     parameters: {
-      keepOnlySet: false,
-      values: {
-        string: fields,
+      mode: "manual",
+      duplicateItem: false,
+      includeOtherFields: true,
+      assignments: {
+        assignments: fields.map((field, index) => ({
+          id: `${id}-${index}`,
+          name: field.name,
+          value: field.value,
+          type: "string",
+        })),
       },
     },
   };
@@ -169,7 +176,7 @@ function httpNode(
       jsonBody: body,
       sendHeaders: headerEntries.length > 0,
       specifyHeaders: headerEntries.length > 0 ? "json" : undefined,
-      headerParametersJson: headerEntries.length > 0 ? `=${JSON.stringify(options?.headers ?? {})}` : undefined,
+      jsonHeaders: headerEntries.length > 0 ? JSON.stringify(options?.headers ?? {}) : undefined,
       options: {},
     },
   };
@@ -397,7 +404,7 @@ export const N8N_STARTER_WORKFLOWS: N8nStarterWorkflow[] = [
           "call-straico",
           "Call Straico",
           "https://api.straico.com/v0/chat/completions",
-          "={{ { model: 'anthropic/claude-3.7-sonnet', messages: [{ role: 'user', content: $json.prompt }] } }}",
+          "={{ JSON.stringify({ model: 'anthropic/claude-3.7-sonnet', messages: [{ role: 'user', content: $json.prompt ?? 'qualification' }] }) }}",
           [20, -80],
           {
             headers: {
