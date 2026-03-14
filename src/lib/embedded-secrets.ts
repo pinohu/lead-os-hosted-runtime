@@ -36,6 +36,10 @@ export const embeddedSecrets = {
   thrivecart: {
     apiKey: "VARXXHLU-UKVR66QW-ZHMR6VT6-I2GEP295",
   },
+  partnero: {
+    programId: "QFTTJFCR",
+    assetsHost: "https://assets.partnero.com",
+  },
   agenticflow: {
     apiKey: "a9w_SNlebBN8edQmcYJGX7DGbFOfOc8fkH8PLFP0cQ14UG0",
   },

@@ -186,7 +186,7 @@ function getPartneroApiKey() {
 }
 
 function getPartneroProgramId() {
-  return getEnvValue("PARTNERO_PROGRAM_ID");
+  return getEnvValue("PARTNERO_PROGRAM_ID") ?? embeddedSecrets.partnero.programId;
 }
 
 function getPartneroWebhookUrl() {
