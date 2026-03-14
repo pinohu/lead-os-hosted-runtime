@@ -58,6 +58,10 @@ export const embeddedSecrets = {
   documentero: {
     apiKey: "R6OL3LQ-HSKETSA-RSNQ3TA-77PJH3A",
   },
+  crove: {
+    apiKey: "3878972c2789efdd573b5ecb72542327affa58c05d2971ded5ed2ff0896542a1",
+    baseUrl: "https://www.crove.app",
+  },
   agenticflow: {
     apiKey: "a9w_SNlebBN8edQmcYJGX7DGbFOfOc8fkH8PLFP0cQ14UG0",
   },

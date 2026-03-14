@@ -185,6 +185,22 @@ function getDocumenteroWebhookUrl() {
   return getEnvValue("DOCUMENTERO_WEBHOOK_URL");
 }
 
+function getCroveApiKey() {
+  return getEnvValue("CROVE_API_KEY") ?? embeddedSecrets.crove.apiKey;
+}
+
+function getCroveBaseUrl() {
+  return (getEnvValue("CROVE_BASE_URL", "CROVE_API_URL") ?? embeddedSecrets.crove.baseUrl)?.replace(/\/+$/, "");
+}
+
+function getCroveWebhookUrl() {
+  return getEnvValue("CROVE_WEBHOOK_URL");
+}
+
+function getCroveTemplateId() {
+  return getEnvValue("CROVE_TEMPLATE_ID");
+}
+
 function getThrivecartApiKey() {
   return getEnvValue("THRIVECART_API_KEY", "THRIVECART_API_KEY") ?? embeddedSecrets.thrivecart.apiKey;
 }
@@ -253,6 +269,7 @@ export const integrationMap = {
   thoughtly: integration(Boolean(getThoughtlyApiKey() || getThoughtlyWebhookUrl() || getThoughtlyAgentId()), "voice"),
   trafft: integration(Boolean((getTrafftClientId() && getTrafftClientSecret() && getTrafftApiUrl()) || getLunacalApiKey() || getLunacalBookingUrl()), "booking"),
   documentero: integration(Boolean(getDocumenteroApiKey() || getDocumenteroWebhookUrl() || getDocumenteroTemplateId()), "documents"),
+  crove: integration(Boolean((getCroveApiKey() && getCroveBaseUrl()) || getCroveWebhookUrl() || getCroveTemplateId()), "documents"),
   thrivecart: integration(Boolean(getThrivecartApiKey() || getThrivecartWebhookSecret() || getThrivecartCheckoutUrl() || getThrivecartWebhookUrl()), "commerce"),
   upviral: integration(Boolean(process.env.UPVIRAL_API_KEY ?? embeddedSecrets.upviral.apiKey), "referral"),
   partnero: integration(Boolean(getPartneroApiKey() || getPartneroWebhookUrl() || getPartneroProgramId()), "referral"),
@@ -664,12 +681,14 @@ export async function createBookingAction(payload: Record<string, unknown>) {
 
 export async function generateDocumentAction(payload: Record<string, unknown>) {
   const provider = integrationMap.documentero;
-  if (!provider.configured || !provider.live) {
-    return dryRunResult("Documentero", "Document generation prepared", payload);
+  const croveProvider = integrationMap.crove;
+  if ((!provider.configured || !provider.live) && (!croveProvider.configured || !croveProvider.live)) {
+    return dryRunResult("Document Provider", "Document generation prepared", payload);
   }
-  const webhookUrl = getDocumenteroWebhookUrl();
-  if (webhookUrl) {
-    const response = await postJson(webhookUrl, {
+
+  const documenteroWebhookUrl = getDocumenteroWebhookUrl();
+  if (provider.configured && provider.live && documenteroWebhookUrl) {
+    const response = await postJson(documenteroWebhookUrl, {
       templateId: getDocumenteroTemplateId(),
       payload,
     }, getDocumenteroApiKey() ? { Authorization: `Bearer ${getDocumenteroApiKey()}` } : {});
@@ -680,16 +699,46 @@ export async function generateDocumentAction(payload: Record<string, unknown>) {
       detail: response.ok ? "Document request sent" : `Document request failed: ${response.status}`,
     } satisfies ProviderResult;
   }
+
+  const croveWebhookUrl = getCroveWebhookUrl();
+  if (croveProvider.configured && croveProvider.live && croveWebhookUrl) {
+    const response = await postJson(croveWebhookUrl, {
+      templateId: getCroveTemplateId(),
+      payload,
+    }, getCroveApiKey() ? { Authorization: `Bearer ${getCroveApiKey()}` } : {});
+    return {
+      ok: response.ok,
+      provider: "Crove",
+      mode: "live",
+      detail: response.ok ? "Document request sent" : `Document request failed: ${response.status}`,
+    } satisfies ProviderResult;
+  }
+
+  if (provider.configured && provider.live) {
+    return {
+      ok: true,
+      provider: "Documentero",
+      mode: "prepared",
+      detail: getDocumenteroTemplateId()
+        ? "Documentero template detected; add webhook URL to render documents from the runtime"
+        : "Documentero adapter is wired and awaiting account-specific endpoint details",
+      payload: {
+        ...payload,
+        templateId: getDocumenteroTemplateId(),
+      },
+    } satisfies ProviderResult;
+  }
+
   return {
     ok: true,
-    provider: "Documentero",
+    provider: "Crove",
     mode: "prepared",
-    detail: getDocumenteroTemplateId()
-      ? "Documentero template detected; add webhook URL to render documents from the runtime"
-      : "Documentero adapter is wired and awaiting account-specific endpoint details",
+    detail: getCroveTemplateId()
+      ? "Crove template detected; add webhook URL to render documents from the runtime"
+      : "Crove adapter is wired and awaiting account-specific endpoint details",
     payload: {
       ...payload,
-      templateId: getDocumenteroTemplateId(),
+      templateId: getCroveTemplateId(),
     },
   } satisfies ProviderResult;
 }
