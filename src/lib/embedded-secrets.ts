@@ -15,7 +15,7 @@ export const embeddedSecrets = {
     instanceId: "12316",
   },
   easyTextMarketing: {
-    apiKey: "UTE899O3",
+    apiKey: "INS13175692173",
   },
   discord: {
     highValueWebhook: "https://discord.com/api/webhooks/1480429897263480962/e-vvArec6HCRc_HpzxmWOpz3GbJ7ncekeLBD7hSnKHm4v-zXTwt8fm6DjrY7TUBeo6Ct",
