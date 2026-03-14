@@ -113,6 +113,9 @@ test("dashboard snapshot summarizes milestone progress and recent events", () =>
   assert.equal(snapshot.milestones.lead.captured, 2);
   assert.equal(snapshot.milestones.lead.returnEngaged, 1);
   assert.equal(snapshot.milestones.customer.valueRealized, 1);
+  assert.equal(snapshot.totals.hotLeads, 1);
+  assert.equal(snapshot.conversionRates.leadM1ToM2, 50);
+  assert.equal(snapshot.topSources[0]?.label, "manual");
   assert.equal(snapshot.leadTimeline[0]?.leadKey, "email:two@example.com");
   assert.equal(snapshot.recentMilestoneEvents[0]?.milestoneId, "lead-m3-booked-or-offered");
 });

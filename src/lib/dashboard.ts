@@ -9,6 +9,18 @@ function countBy<T extends string>(values: T[]) {
   }, {});
 }
 
+function topBreakdown(values: string[]) {
+  return Object.entries(countBy(values))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([label, count]) => ({ label, count }));
+}
+
+function ratio(value: number, total: number) {
+  if (total <= 0) return 0;
+  return Number(((value / total) * 100).toFixed(1));
+}
+
 export function buildDashboardSnapshot(leads: StoredLeadRecord[], events: CanonicalEvent[]) {
   const leadMilestoneCounts = {
     captured: leads.filter((lead) => lead.milestones.leadMilestones.includes("lead-m1-captured")).length,
@@ -64,12 +76,21 @@ export function buildDashboardSnapshot(leads: StoredLeadRecord[], events: Canoni
     totals: {
       leads: leads.length,
       events: events.length,
+      hotLeads: leads.filter((lead) => lead.hot).length,
     },
     milestones: {
       lead: leadMilestoneCounts,
       customer: customerMilestoneCounts,
     },
+    conversionRates: {
+      leadM1ToM2: ratio(leadMilestoneCounts.returnEngaged, leadMilestoneCounts.captured),
+      leadM2ToM3: ratio(leadMilestoneCounts.bookedOrOffered, leadMilestoneCounts.returnEngaged),
+      customerM1ToM2: ratio(customerMilestoneCounts.activated, customerMilestoneCounts.onboarded),
+      customerM2ToM3: ratio(customerMilestoneCounts.valueRealized, customerMilestoneCounts.activated),
+    },
     topFamilies,
+    topSources: topBreakdown(leads.map((lead) => lead.source)),
+    topNiches: topBreakdown(leads.map((lead) => lead.niche)),
     recentMilestoneEvents,
     leadTimeline,
   };
