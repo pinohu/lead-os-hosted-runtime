@@ -37,6 +37,7 @@ const PROVIDER_CONFIGS: ProviderConfigDescriptor[] = [
   { key: "crove", label: "Crove", envKeys: ["CROVE_API_KEY", "CROVE_BASE_URL", "CROVE_TEMPLATE_PROPOSAL_ID", "CROVE_TEMPLATE_AGREEMENT_ID", "CROVE_TEMPLATE_ONBOARDING_ID"], embedded: Boolean(embeddedSecrets.crove.apiKey && embeddedSecrets.crove.baseUrl) },
   { key: "thrivecart", label: "ThriveCart", envKeys: ["THRIVECART_API_KEY", "THRIVECART_CHECKOUT_URL", "THRIVECART_WEBHOOK_URL"], embedded: Boolean(embeddedSecrets.thrivecart.apiKey) },
   { key: "upviral", label: "UpViral", envKeys: ["UPVIRAL_API_KEY"], embedded: Boolean(embeddedSecrets.upviral.apiKey) },
+  { key: "straico", label: "Straico", envKeys: ["STRAICO_API_KEY"], embedded: Boolean(embeddedSecrets.straico.apiKey) },
   { key: "partnero", label: "Partnero", envKeys: ["PARTNERO_API_KEY", "PARTNERO_PROGRAM_ID", "PARTNERO_ASSETS_HOST"], embedded: Boolean(embeddedSecrets.partnero.programId) },
   { key: "electroneek", label: "ElectroNeek", envKeys: ["ELECTRONEEK_API_KEY", "ELECTRONEEK_WEBHOOK_URL"], embedded: Boolean(embeddedSecrets.electroneek.apiKey) },
   { key: "auth", label: "Operator auth", envKeys: ["LEAD_OS_AUTH_SECRET", "LEAD_OS_OPERATOR_EMAILS"], embedded: Boolean(embeddedSecrets.cron.secret), notes: "The operator auth secret still falls back to an embedded value if env is absent." },

@@ -1,6 +1,14 @@
 import { createHash } from "node:crypto";
 import { embeddedSecrets } from "./embedded-secrets.ts";
 
+function getStraicoApiKey() {
+  const envValue = process.env.STRAICO_API_KEY;
+  if (typeof envValue === "string" && envValue.trim().length > 0) {
+    return envValue.trim();
+  }
+  return embeddedSecrets.straico.apiKey;
+}
+
 type N8nConnectionTarget = {
   node: string;
   type: string;
@@ -498,7 +506,7 @@ export const N8N_STARTER_WORKFLOWS: N8nStarterWorkflow[] = [
           [20, -80],
           {
             headers: {
-              Authorization: `Bearer ${embeddedSecrets.straico.apiKey}`,
+              Authorization: `Bearer ${getStraicoApiKey()}`,
               "Content-Type": "application/json",
             },
           },
