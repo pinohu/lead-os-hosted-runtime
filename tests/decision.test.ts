@@ -27,3 +27,16 @@ test("decision engine routes content engagement into webinar authority path", ()
   assert.equal(decision.family, "webinar");
   assert.match(decision.destination, /\/funnel\/webinar\?niche=coaching$/);
 });
+
+test("decision engine honors preferred family overrides from AI routing", () => {
+  const decision = decideNextStep({
+    source: "content",
+    niche: "coaching",
+    hasEmail: true,
+    contentEngaged: true,
+    preferredFamily: "chat",
+  });
+
+  assert.equal(decision.family, "chat");
+  assert.match(decision.destination, /\/calculator\?niche=coaching&mode=chat$/);
+});

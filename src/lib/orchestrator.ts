@@ -8,6 +8,7 @@ export type DecisionSignal = {
   source?: string;
   service?: string;
   niche?: string;
+  preferredFamily?: FunnelFamily;
   hasEmail?: boolean;
   hasPhone?: boolean;
   returning?: boolean;
@@ -49,6 +50,12 @@ function buildDestination(family: FunnelFamily, niche: string) {
 }
 
 function decideFamily(signal: DecisionSignal): { family: FunnelFamily; reason: string } {
+  if (signal.preferredFamily) {
+    return {
+      family: signal.preferredFamily,
+      reason: "AI routing override provided; honoring the preferred funnel family.",
+    };
+  }
   if (signal.wantsCheckout) {
     return { family: "checkout", reason: "Checkout intent detected; route directly into commerce flow." };
   }

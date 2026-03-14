@@ -1,6 +1,20 @@
 import { NextResponse } from "next/server";
 import { buildCorsHeaders } from "@/lib/cors";
 import { decideNextStep } from "@/lib/orchestrator";
+import type { FunnelFamily } from "@/lib/runtime-schema";
+
+const VALID_FAMILIES: FunnelFamily[] = [
+  "lead-magnet",
+  "qualification",
+  "chat",
+  "webinar",
+  "authority",
+  "checkout",
+  "retention",
+  "rescue",
+  "referral",
+  "continuity",
+];
 
 export async function OPTIONS(request: Request) {
   return new NextResponse(null, {
@@ -13,7 +27,9 @@ export async function POST(request: Request) {
   const headers = buildCorsHeaders(request.headers.get("origin"));
   try {
     const signal = await request.json();
-    const decision = decideNextStep(signal);
+    const preferredFamily = signal.preferredFamily ?? signal.routeSuggestion ?? signal.metadata?.routeSuggestion;
+    const normalizedSignal = VALID_FAMILIES.includes(preferredFamily) ? { ...signal, preferredFamily } : signal;
+    const decision = decideNextStep(normalizedSignal);
     return NextResponse.json(
       {
         success: true,

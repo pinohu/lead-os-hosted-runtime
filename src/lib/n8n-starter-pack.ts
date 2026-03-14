@@ -417,7 +417,13 @@ export const N8N_STARTER_WORKFLOWS: N8nStarterWorkflow[] = [
           { name: "leadKey", value: "={{ $('Shape Qualification Prompt').item.json.leadKey }}" },
           { name: "routeSuggestion", value: "={{ $json.choices?.[0]?.message?.content?.trim?.() ?? 'qualification' }}" },
         ], [280, -80]),
-        httpNode("post-route", "Post Back to LeadOS", "https://leados.yourdeputy.com/api/decision", "={{ { source: 'manual', service: 'lead-capture', niche: 'general', contentEngaged: true, score: 70, metadata: { routeSuggestion: $json.routeSuggestion, leadKey: $json.leadKey } } }}", [540, -80]),
+        httpNode(
+          "post-route",
+          "Post Back to LeadOS",
+          "https://leados.yourdeputy.com/api/decision",
+          "={{ { source: 'manual', service: 'lead-capture', niche: 'general', preferredFamily: $json.routeSuggestion, metadata: { routeSuggestion: $json.routeSuggestion, leadKey: $json.leadKey } } }}",
+          [540, -80],
+        ),
       ],
       mergeConnections(
         connection("Lead Qualifier Webhook", "Shape Qualification Prompt"),
