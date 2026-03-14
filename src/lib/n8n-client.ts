@@ -1,5 +1,15 @@
 import { embeddedSecrets } from "./embedded-secrets.ts";
-import { getN8nStarterWorkflow, resolveN8nStarterWorkflows, type N8nWorkflow } from "./n8n-starter-pack.ts";
+import {
+  getN8nStarterManifestVersion,
+  getN8nStarterWorkflow,
+  getN8nStarterWorkflowHash,
+  resolveN8nStarterWorkflows,
+  type N8nWorkflow,
+} from "./n8n-starter-pack.ts";
+import {
+  getWorkflowRegistryRecords,
+  upsertWorkflowRegistry,
+} from "./runtime-store.ts";
 
 type N8nWorkflowRecord = {
   id: string;
@@ -26,6 +36,15 @@ type ProvisionResult = {
   workflowId?: string;
   active?: boolean;
   detail: string;
+};
+
+type WorkflowRegistrySummary = {
+  manifestVersion: string;
+  manifestHash: string;
+  lastProvisionedAt?: string;
+  drifted: boolean;
+  status?: string;
+  detail?: string;
 };
 
 function getEnvValue(...keys: string[]) {
@@ -152,8 +171,10 @@ export async function provisionN8nStarterWorkflows(options: ProvisionOptions = {
   const replaceExisting = options.replaceExisting ?? true;
   const activate = options.activate ?? true;
   const results: ProvisionResult[] = [];
+  const manifestVersion = getN8nStarterManifestVersion();
 
   for (const starter of starterWorkflows) {
+    const manifestHash = getN8nStarterWorkflowHash(starter.slug) ?? "";
     try {
       let replacedCount = 0;
       if (replaceExisting) {
@@ -169,6 +190,18 @@ export async function provisionN8nStarterWorkflows(options: ProvisionOptions = {
           await activateN8nWorkflow(created.id);
           active = true;
         } catch (error) {
+          await upsertWorkflowRegistry({
+            slug: starter.slug,
+            provider: "n8n",
+            workflowName: starter.name,
+            workflowId: created.id,
+            active: false,
+            manifestHash,
+            manifestVersion,
+            status: replacedCount > 0 ? "replaced-needs-activation" : "created-needs-activation",
+            detail: error instanceof Error ? error.message : "Unknown activation error",
+            instances: [{ id: created.id, active: false }],
+          });
           results.push({
             slug: starter.slug,
             name: starter.name,
@@ -181,6 +214,21 @@ export async function provisionN8nStarterWorkflows(options: ProvisionOptions = {
         }
       }
 
+      await upsertWorkflowRegistry({
+        slug: starter.slug,
+        provider: "n8n",
+        workflowName: starter.name,
+        workflowId: created.id,
+        active,
+        manifestHash,
+        manifestVersion,
+        status: replacedCount > 0 ? "replaced" : "created",
+        detail: replacedCount > 0
+          ? `Replaced ${replacedCount} existing workflow(s) and provisioned successfully`
+          : "Provisioned successfully",
+        instances: [{ id: created.id, active }],
+      });
+
       results.push({
         slug: starter.slug,
         name: starter.name,
@@ -192,6 +240,17 @@ export async function provisionN8nStarterWorkflows(options: ProvisionOptions = {
           : "Provisioned successfully",
       });
     } catch (error) {
+      await upsertWorkflowRegistry({
+        slug: starter.slug,
+        provider: "n8n",
+        workflowName: starter.name,
+        active: false,
+        manifestHash,
+        manifestVersion,
+        status: "error",
+        detail: error instanceof Error ? error.message : "Unknown provisioning error",
+        instances: [],
+      });
       results.push({
         slug: starter.slug,
         name: starter.name,
@@ -204,20 +263,36 @@ export async function provisionN8nStarterWorkflows(options: ProvisionOptions = {
   return {
     success: results.every((result) => result.status !== "error"),
     count: results.length,
+    manifestVersion,
     results,
   };
 }
 
 export async function getN8nStarterWorkflowStatus() {
   const workflows = await listN8nWorkflows();
+  const registry = await getWorkflowRegistryRecords();
+  const manifestVersion = getN8nStarterManifestVersion();
 
   return resolveN8nStarterWorkflows().map((starter) => {
     const matches = workflows.filter((workflow) => workflow.name === starter.name);
+    const manifestHash = getN8nStarterWorkflowHash(starter.slug) ?? "";
+    const registryRecord = registry.find((record) => record.slug === starter.slug);
+    const registrySummary: WorkflowRegistrySummary = {
+      manifestVersion,
+      manifestHash,
+      lastProvisionedAt: registryRecord?.lastProvisionedAt,
+      drifted: Boolean(!registryRecord || registryRecord.manifestHash !== manifestHash || registryRecord.manifestVersion !== manifestVersion),
+      status: registryRecord?.status,
+      detail: registryRecord?.detail,
+    };
     return {
       slug: starter.slug,
       name: starter.name,
       provisioned: matches.length > 0,
       active: matches.some((workflow) => workflow.active),
+      manifestHash,
+      manifestVersion,
+      registry: registrySummary,
       instances: matches.map((workflow) => ({
         id: workflow.id,
         active: workflow.active,

@@ -30,6 +30,7 @@ interface HttpResult {
 }
 
 const LIVE_MODE = process.env.LEAD_OS_ENABLE_LIVE_SENDS !== "false";
+let trafftTokenCache: { token: string; expiresAt: number } | null = null;
 
 function getEnvValue(...keys: string[]) {
   for (const key of keys) {
@@ -423,6 +424,17 @@ async function postJson(url: string, body: unknown, headers: Record<string, stri
   });
 }
 
+async function postForm(url: string, fields: Record<string, string>, headers: Record<string, string> = {}) {
+  return request(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...headers,
+    },
+    body: new URLSearchParams(fields).toString(),
+  });
+}
+
 async function getJson(url: string, headers: Record<string, string> = {}) {
   return request(url, {
     method: "GET",
@@ -441,6 +453,126 @@ function buildTrafftApiUrl(path: string) {
   }
 
   return `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function getTrafftAuthEndpoints() {
+  return [
+    buildTrafftApiUrl("/api/v1/auth/token"),
+    buildTrafftApiUrl("/auth/token"),
+  ].filter((value): value is string => Boolean(value));
+}
+
+function extractTrafftAccessToken(value: unknown) {
+  const record = asRecord(value);
+  const nestedData = asRecord(record?.data);
+  return getStringValue(
+    record?.access_token,
+    record?.accessToken,
+    record?.token,
+    nestedData?.access_token,
+    nestedData?.accessToken,
+    nestedData?.token,
+  );
+}
+
+function buildTrafftBasicAuthHeader(clientId: string, clientSecret: string) {
+  return `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`;
+}
+
+async function requestTrafftBearerToken() {
+  const directToken = getTrafftBearerToken();
+  if (directToken) {
+    return {
+      token: directToken,
+      strategy: "env",
+      endpoint: "TRAFFT_BEARER_TOKEN",
+    };
+  }
+
+  if (trafftTokenCache && trafftTokenCache.expiresAt > Date.now()) {
+    return {
+      token: trafftTokenCache.token,
+      strategy: "cache",
+      endpoint: "cache",
+    };
+  }
+
+  const clientId = getTrafftClientId();
+  const clientSecret = getTrafftClientSecret();
+  if (!clientId || !clientSecret) {
+    return null;
+  }
+
+  const endpoints = getTrafftAuthEndpoints();
+  for (const endpoint of endpoints) {
+    const attempts = [
+      async () => ({
+        strategy: "oauth-json",
+        response: await postJson(endpoint, {
+          clientId,
+          clientSecret,
+          grantType: "client_credentials",
+        }),
+      }),
+      async () => ({
+        strategy: "oauth-json-snake",
+        response: await postJson(endpoint, {
+          client_id: clientId,
+          client_secret: clientSecret,
+          grant_type: "client_credentials",
+        }),
+      }),
+      async () => ({
+        strategy: "oauth-form",
+        response: await postForm(endpoint, {
+          client_id: clientId,
+          client_secret: clientSecret,
+          grant_type: "client_credentials",
+        }),
+      }),
+      async () => ({
+        strategy: "oauth-basic",
+        response: await postForm(
+          endpoint,
+          { grant_type: "client_credentials" },
+          { Authorization: buildTrafftBasicAuthHeader(clientId, clientSecret) },
+        ),
+      }),
+    ];
+
+    for (const attempt of attempts) {
+      try {
+        const { strategy, response } = await attempt();
+        const token = extractTrafftAccessToken(response.json);
+        if (!response.ok || !token) {
+          continue;
+        }
+
+        const tokenTtlSeconds = Number(
+          getStringValue(
+            asRecord(response.json)?.expires_in,
+            asRecord(response.json)?.expiresIn,
+            asRecord(asRecord(response.json)?.data)?.expires_in,
+            asRecord(asRecord(response.json)?.data)?.expiresIn,
+          ) ?? "2700",
+        );
+        trafftTokenCache = {
+          token,
+          expiresAt: Date.now() + Math.max(300, tokenTtlSeconds) * 1000,
+        };
+
+        return {
+          token,
+          strategy,
+          endpoint,
+        };
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  return null;
 }
 
 function buildTrafftBookingUrl(
@@ -967,7 +1099,8 @@ export async function createBookingAction(payload: Record<string, unknown>) {
   const runtimeConfig = await getOperationalRuntimeConfig();
   const trafftUrl = getTrafftApiUrl();
   const bookingUrl = buildTrafftBookingUrl(payload, runtimeConfig.trafft);
-  const authToken = getTrafftBearerToken();
+  const authResolution = await requestTrafftBearerToken();
+  const authToken = authResolution?.token;
 
   if (trafftUrl) {
     const tenantDataResponse = await getJson(buildTrafftApiUrl("/api/v1/common/tenant-data") ?? "");
@@ -1010,6 +1143,8 @@ export async function createBookingAction(payload: Record<string, unknown>) {
           ...payload,
           tenantId: tenantData?.tenantId,
           bookingUrl,
+          authStrategy: authResolution?.strategy,
+          authEndpoint: authResolution?.endpoint,
           response: appointmentResponse.json ?? appointmentResponse.text,
         },
       } satisfies ProviderResult;
@@ -1037,7 +1172,7 @@ export async function createBookingAction(payload: Record<string, unknown>) {
       const availabilityPreview = flattenTrafftAvailability(availabilityResponse.json, desiredDate);
 
       return {
-        ok: availabilityResponse.ok && availabilityPreview.length > 0,
+        ok: (availabilityResponse.ok && availabilityPreview.length > 0) || Boolean(bookingUrl?.startsWith("http")),
         provider: "Trafft",
         mode: "live",
         detail: availabilityResponse.ok
@@ -1045,7 +1180,11 @@ export async function createBookingAction(payload: Record<string, unknown>) {
             ? desiredTime
               ? `Trafft availability loaded${availabilityPreview.some((slot) => slot.date === desiredDate && slot.time === desiredTime) ? "; desired slot is present" : "; desired slot was not in the first availability window"}`
               : `Trafft availability loaded with ${availabilityPreview.length} candidate slots`
+            : bookingUrl?.startsWith("http")
+            ? "Trafft availability returned no public slots in the first window; booking handoff ready"
             : "Trafft availability loaded but no open slots were returned for the requested window"
+          : bookingUrl?.startsWith("http")
+          ? `Trafft availability lookup failed: ${availabilityResponse.status}; booking handoff ready`
           : `Trafft availability lookup failed: ${availabilityResponse.status}`,
         payload: {
           ...payload,
@@ -1057,7 +1196,31 @@ export async function createBookingAction(payload: Record<string, unknown>) {
           desiredDate,
           desiredTime,
           bookingUrl,
+          authStrategy: authResolution?.strategy,
+          authEndpoint: authResolution?.endpoint,
           availabilityPreview,
+        },
+      } satisfies ProviderResult;
+    }
+
+    if (bookingUrl?.startsWith("http")) {
+      return {
+        ok: true,
+        provider: "Trafft",
+        mode: "live",
+        detail: "Trafft tenant verified; booking handoff ready",
+        payload: {
+          ...payload,
+          tenantId: tenantData?.tenantId,
+          tenantName: tenantData?.tenantName,
+          bookingUrl,
+          apiUrl: trafftUrl,
+          authStrategy: authResolution?.strategy,
+          authEndpoint: authResolution?.endpoint,
+          clientIdPresent: Boolean(getTrafftClientId()),
+          clientSecretPresent: Boolean(getTrafftClientSecret()),
+          authTokenPresent: Boolean(authToken),
+          runtimeConfig,
         },
       } satisfies ProviderResult;
     }
@@ -1076,6 +1239,8 @@ export async function createBookingAction(payload: Record<string, unknown>) {
         clientIdPresent: Boolean(getTrafftClientId()),
         clientSecretPresent: Boolean(getTrafftClientSecret()),
         authTokenPresent: Boolean(authToken),
+        authStrategy: authResolution?.strategy,
+        authEndpoint: authResolution?.endpoint,
         runtimeConfig,
       },
     } satisfies ProviderResult;

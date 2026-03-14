@@ -1,11 +1,17 @@
 import Link from "next/link";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
-import { getLeadRecord, getWorkflowRuns, type WorkflowRunRecord } from "@/lib/runtime-store";
+import {
+  getLeadRecord,
+  getWorkflowRegistryRecords,
+  getWorkflowRuns,
+  type WorkflowRunRecord,
+} from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
 
 export default async function WorkflowRunsPage() {
   await requireOperatorPageSession("/dashboard/workflows");
   const runs = (await getWorkflowRuns()) as WorkflowRunRecord[];
+  const registry = await getWorkflowRegistryRecords();
   const runsWithLead = await Promise.all(
     runs.map(async (run) => ({
       run,
@@ -47,8 +53,31 @@ export default async function WorkflowRunsPage() {
               <strong>Failed</strong>
               <span>{runs.filter((run) => !run.ok).length}</span>
             </li>
+            <li>
+              <strong>Provisioned starters</strong>
+              <span>{registry.length}</span>
+            </li>
           </ul>
         </aside>
+      </section>
+
+      <section className="stack-grid">
+        {registry.length === 0 ? null : registry.map((workflow) => (
+          <article key={workflow.slug} className="stack-card">
+            <p className="eyebrow">Starter workflow</p>
+            <h2>{workflow.workflowName}</h2>
+            <p className="muted">
+              Status: {workflow.status} | Active: {workflow.active ? "yes" : "no"}
+            </p>
+            <p className="muted">
+              Manifest: {workflow.manifestVersion.slice(0, 12)} | Hash: {workflow.manifestHash.slice(0, 12)}
+            </p>
+            <p className="muted">
+              Last provisioned: {workflow.lastProvisionedAt}
+            </p>
+            {workflow.detail ? <p className="muted">{workflow.detail}</p> : null}
+          </article>
+        ))}
       </section>
 
       <section className="stack-grid">

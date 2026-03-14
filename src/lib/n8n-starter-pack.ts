@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { embeddedSecrets } from "./embedded-secrets.ts";
 
 type N8nConnectionTarget = {
@@ -535,4 +536,33 @@ export function resolveN8nStarterWorkflows(slugs?: string[]) {
 
   const requested = new Set(slugs);
   return N8N_STARTER_WORKFLOWS.filter((workflow) => requested.has(workflow.slug));
+}
+
+function hashValue(value: unknown) {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+export function getN8nStarterWorkflowHash(slug: string) {
+  const starter = getN8nStarterWorkflow(slug);
+  if (!starter) {
+    return undefined;
+  }
+
+  return hashValue({
+    slug: starter.slug,
+    name: starter.name,
+    family: starter.family,
+    workflow: starter.workflow,
+  });
+}
+
+export function getN8nStarterManifestVersion() {
+  return hashValue(
+    N8N_STARTER_WORKFLOWS.map((starter) => ({
+      slug: starter.slug,
+      name: starter.name,
+      family: starter.family,
+      workflow: starter.workflow,
+    })),
+  );
 }

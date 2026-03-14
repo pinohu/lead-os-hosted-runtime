@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getN8nStarterManifestVersion } from "@/lib/n8n-starter-pack";
 import { requireOperatorApiSession } from "@/lib/operator-auth";
 import { buildStarterProvisionPayload, canProvisionToN8n, provisionN8nStarterWorkflows } from "@/lib/n8n-client";
 
@@ -20,6 +21,7 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
   return NextResponse.json({
     success: true,
     canProvision: canProvisionToN8n(),
+    manifestVersion: getN8nStarterManifestVersion(),
     workflow: {
       slug: workflow.slug,
       name: workflow.name,

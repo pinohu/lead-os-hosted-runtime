@@ -81,6 +81,24 @@ export interface DocumentJobRecord {
   updatedAt: string;
 }
 
+export interface WorkflowRegistryRecord {
+  slug: string;
+  provider: string;
+  workflowName: string;
+  manifestHash: string;
+  manifestVersion: string;
+  status: string;
+  active: boolean;
+  workflowId?: string;
+  detail?: string;
+  instances?: Array<{
+    id: string;
+    active: boolean;
+  }>;
+  lastProvisionedAt: string;
+  updatedAt: string;
+}
+
 export interface RuntimeConfigRecord {
   key: string;
   value: Record<string, unknown>;
@@ -94,6 +112,7 @@ const providerExecutionStore: ProviderExecutionRecord[] = [];
 const workflowRunStore: WorkflowRunRecord[] = [];
 const bookingJobStore = new Map<string, BookingJobRecord>();
 const documentJobStore = new Map<string, DocumentJobRecord>();
+const workflowRegistryStore = new Map<string, WorkflowRegistryRecord>();
 const runtimeConfigStore = new Map<string, RuntimeConfigRecord>();
 
 let pool: Pool | null = null;
@@ -109,6 +128,7 @@ type AitableRuntimeKind =
   | "workflow-run"
   | "booking-job"
   | "document-job"
+  | "workflow-registry"
   | "runtime-config";
 
 type AitableRuntimeEntry = {
@@ -121,6 +141,7 @@ type AitableRuntimeEntry = {
     | WorkflowRunRecord
     | BookingJobRecord
     | DocumentJobRecord
+    | WorkflowRegistryRecord
     | RuntimeConfigRecord;
 };
 
@@ -212,6 +233,13 @@ async function ensureSchema() {
       CREATE TABLE IF NOT EXISTS lead_os_document_jobs (
         id TEXT PRIMARY KEY,
         lead_key TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL,
+        payload JSONB NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS lead_os_workflow_registry (
+        slug TEXT PRIMARY KEY,
         provider TEXT NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL,
         payload JSONB NOT NULL
@@ -856,6 +884,104 @@ export async function upsertRuntimeConfig(
   return normalizedConfig;
 }
 
+export async function upsertWorkflowRegistry(
+  record: Omit<WorkflowRegistryRecord, "updatedAt" | "lastProvisionedAt"> & {
+    updatedAt?: string;
+    lastProvisionedAt?: string;
+  },
+) {
+  const normalizedRecord: WorkflowRegistryRecord = {
+    updatedAt: record.updatedAt ?? new Date().toISOString(),
+    lastProvisionedAt: record.lastProvisionedAt ?? record.updatedAt ?? new Date().toISOString(),
+    ...record,
+  };
+  workflowRegistryStore.set(normalizedRecord.slug, normalizedRecord);
+
+  const activePool = getPool();
+  if (!activePool && runtimeMode() === "aitable") {
+    await appendAitableRuntimeEntry("workflow-registry", normalizedRecord.slug, normalizedRecord);
+    return normalizedRecord;
+  }
+  if (!activePool) {
+    return normalizedRecord;
+  }
+
+  await ensureSchema();
+  await activePool.query(
+    `
+      INSERT INTO lead_os_workflow_registry (slug, provider, updated_at, payload)
+      VALUES ($1, $2, $3::timestamptz, $4::jsonb)
+      ON CONFLICT (slug) DO UPDATE SET
+        provider = EXCLUDED.provider,
+        payload = EXCLUDED.payload,
+        updated_at = EXCLUDED.updated_at
+    `,
+    [
+      normalizedRecord.slug,
+      normalizedRecord.provider,
+      normalizedRecord.updatedAt,
+      JSON.stringify(normalizedRecord),
+    ],
+  );
+  return normalizedRecord;
+}
+
+export async function getWorkflowRegistryRecord(slug: string) {
+  if (!getPool() && runtimeMode() === "aitable") {
+    const records = await getWorkflowRegistryRecords();
+    return records.find((record) => record.slug === slug);
+  }
+  if (!getPool()) {
+    return workflowRegistryStore.get(slug);
+  }
+
+  await ensureSchema();
+  const result = await getPool()!.query<{ payload: WorkflowRegistryRecord }>(
+    "SELECT payload FROM lead_os_workflow_registry WHERE slug = $1 LIMIT 1",
+    [slug],
+  );
+  const record = result.rows[0]?.payload;
+  if (record) {
+    workflowRegistryStore.set(record.slug, record);
+  }
+  return record;
+}
+
+export async function getWorkflowRegistryRecords() {
+  if (!getPool() && runtimeMode() === "aitable") {
+    const entries = await getAitableRuntimeEntries();
+    const latestBySlug = new Map<string, WorkflowRegistryRecord>();
+    for (const entry of entries) {
+      if (entry.kind !== "workflow-registry") continue;
+      const record = entry.payload as WorkflowRegistryRecord;
+      const existing = latestBySlug.get(record.slug);
+      if (!existing || new Date(record.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
+        latestBySlug.set(record.slug, record);
+      }
+    }
+    const values = sortByUpdatedAt([...latestBySlug.values()]);
+    workflowRegistryStore.clear();
+    for (const value of values) {
+      workflowRegistryStore.set(value.slug, value);
+    }
+    return values;
+  }
+  if (!getPool()) {
+    return sortByUpdatedAt([...workflowRegistryStore.values()]);
+  }
+
+  await ensureSchema();
+  const result = await getPool()!.query<{ payload: WorkflowRegistryRecord }>(
+    "SELECT payload FROM lead_os_workflow_registry ORDER BY updated_at DESC",
+  );
+  const records = result.rows.map((row) => row.payload);
+  workflowRegistryStore.clear();
+  for (const record of records) {
+    workflowRegistryStore.set(record.slug, record);
+  }
+  return records;
+}
+
 export async function getRuntimeConfig(key: string) {
   if (!getPool() && runtimeMode() === "aitable") {
     const configs = await getRuntimeConfigs();
@@ -919,6 +1045,7 @@ export async function resetRuntimeStore() {
   workflowRunStore.length = 0;
   bookingJobStore.clear();
   documentJobStore.clear();
+  workflowRegistryStore.clear();
   runtimeConfigStore.clear();
   invalidateAitableCache();
 
@@ -936,6 +1063,7 @@ export async function resetRuntimeStore() {
     TRUNCATE TABLE
       lead_os_document_jobs,
       lead_os_booking_jobs,
+      lead_os_workflow_registry,
       lead_os_runtime_config,
       lead_os_workflow_runs,
       lead_os_provider_executions,

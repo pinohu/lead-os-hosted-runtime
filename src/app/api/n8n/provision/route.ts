@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getN8nStarterManifestVersion } from "@/lib/n8n-starter-pack";
 import { requireOperatorApiSession } from "@/lib/operator-auth";
 import { canProvisionToN8n, getN8nStarterWorkflowStatus, provisionN8nStarterWorkflows } from "@/lib/n8n-client";
 
@@ -25,10 +26,12 @@ export async function GET(request: Request) {
   const milestoneWorkflows = workflows.filter((workflow) =>
     workflow.slug === "milestone-second-touch" || workflow.slug === "milestone-third-touch-conversion"
   );
+  const manifestVersion = getN8nStarterManifestVersion();
   return NextResponse.json({
     success: true,
     configured: true,
     count: workflows.length,
+    manifestVersion,
     defaultOperationalSlugs: [
       "lead-intake-fanout",
       "milestone-second-touch",

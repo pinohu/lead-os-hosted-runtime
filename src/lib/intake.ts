@@ -236,6 +236,9 @@ function resolveBookingJobStatus(result: Awaited<ReturnType<typeof createBooking
   if (detail.includes("submitted")) {
     return "booked";
   }
+  if (detail.includes("handoff ready")) {
+    return "handoff-ready";
+  }
   if (detail.includes("availability")) {
     return "availability-found";
   }
