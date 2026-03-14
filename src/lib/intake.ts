@@ -392,6 +392,50 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
           metadata: payload.metadata,
         })
       : Promise.resolve(null),
+    leadMilestones.includes("lead-m2-return-engaged")
+      ? emitWorkflowAction("lead.milestone.2", {
+          leadKey,
+          trace,
+          score,
+          stage,
+          family: decision.family,
+          visitCount,
+          milestones: leadMilestones,
+        })
+      : Promise.resolve(null),
+    leadMilestones.includes("lead-m3-booked-or-offered")
+      ? emitWorkflowAction("lead.milestone.3", {
+          leadKey,
+          trace,
+          score,
+          stage,
+          family: decision.family,
+          visitCount,
+          milestones: leadMilestones,
+        })
+      : Promise.resolve(null),
+    customerMilestones.includes("customer-m2-activated")
+      ? emitWorkflowAction("customer.milestone.2", {
+          leadKey,
+          trace,
+          score,
+          stage,
+          family: decision.family,
+          visitCount,
+          milestones: customerMilestones,
+        })
+      : Promise.resolve(null),
+    customerMilestones.includes("customer-m3-value-realized")
+      ? emitWorkflowAction("customer.milestone.3", {
+          leadKey,
+          trace,
+          score,
+          stage,
+          family: decision.family,
+          visitCount,
+          milestones: customerMilestones,
+        })
+      : Promise.resolve(null),
   ])).filter(Boolean) as Array<Awaited<ReturnType<typeof emitWorkflowAction>>>;
 
   const immediatePlan = buildImmediateFollowupPlan({

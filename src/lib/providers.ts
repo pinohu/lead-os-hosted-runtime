@@ -96,6 +96,19 @@ function getN8nMappedWebhookUrl(eventName: string, payload: Record<string, unkno
     case "customer_activated":
       path = "leados/customer-activated";
       break;
+    case "lead.milestone.2":
+      path = "leados/lead-milestone-2";
+      break;
+    case "lead.milestone.3":
+      path = "leados/lead-milestone-3";
+      break;
+    case "customer.milestone.2":
+      path = "leados/customer-milestone-2";
+      break;
+    case "customer.milestone.3":
+    case "customer.value.realized":
+      path = "leados/customer-milestone-3";
+      break;
     case "lead.qualify.ai":
       path = "leados/ai-qualifier";
       break;

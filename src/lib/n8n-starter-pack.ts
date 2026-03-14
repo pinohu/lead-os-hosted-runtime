@@ -191,7 +191,22 @@ function connection(from: string, to: string, type = "main", index = 0): Record<
 }
 
 function mergeConnections(...groups: Array<Record<string, Record<string, N8nConnectionTarget[][]>>>) {
-  return Object.assign({}, ...groups);
+  const merged: Record<string, Record<string, N8nConnectionTarget[][]>> = {};
+
+  for (const group of groups) {
+    for (const [nodeName, nodeConnections] of Object.entries(group)) {
+      merged[nodeName] ??= {};
+      for (const [connectionType, branches] of Object.entries(nodeConnections)) {
+        merged[nodeName][connectionType] ??= [];
+        merged[nodeName][connectionType] = [
+          ...merged[nodeName][connectionType],
+          ...branches,
+        ];
+      }
+    }
+  }
+
+  return merged;
 }
 
 function baseWorkflow(name: string, nodes: N8nNode[], connections: Record<string, Record<string, N8nConnectionTarget[][]>>): N8nWorkflow {
@@ -369,6 +384,80 @@ export const N8N_STARTER_WORKFLOWS: N8nStarterWorkflow[] = [
         connection("Prepare Referral Payload", "Wait 10 Days"),
         connection("Wait 7 Days", "Start Referral Flow"),
         connection("Wait 10 Days", "Request Review"),
+      ),
+    ),
+  },
+  {
+    slug: "milestone-second-touch",
+    name: "LeadOS Milestone Second Touch",
+    summary: "Responds to milestone two by creating a deliberate second trust event before the main ask.",
+    family: "authority",
+    sources: [
+      "Second-touch nurture patterns",
+      "Return-visit trust building",
+      "Milestone-driven escalation",
+    ],
+    repos: [
+      "Zie619/n8n-workflows",
+      "wassupjay/n8n-free-templates",
+    ],
+    workflow: baseWorkflow(
+      "LeadOS Milestone Second Touch",
+      [
+        stickyNote("note-m2", "Overview", "This workflow is designed for the restaurant principle translated into LeadOS: once a lead returns and engages again, create a specific second trust event instead of jumping straight to a hard close.", [-760, -220]),
+        webhookNode("webhook-m2", "Lead Milestone 2 Webhook", "leados/lead-milestone-2", [-520, 0]),
+        setNode("set-m2", "Prepare Milestone 2 Payload", [
+          { name: "leadKey", value: "={{ $json.payload?.leadKey ?? $json.leadKey ?? '' }}" },
+          { name: "email", value: "={{ $json.payload?.email ?? $json.email ?? '' }}" },
+          { name: "phone", value: "={{ $json.payload?.phone ?? $json.phone ?? '' }}" },
+          { name: "family", value: "={{ $json.payload?.family ?? $json.family ?? 'authority' }}" },
+        ], [-260, 0]),
+        httpNode("trigger-second-touch", "Trigger Second-Touch Offer", "https://leados.yourdeputy.com/api/intake", "={{ { source: 'manual', leadKey: $json.leadKey, email: $json.email, phone: $json.phone, returning: true, contentEngaged: true, metadata: { origin: 'n8n-milestone-2', milestone: 'lead-m2-return-engaged' } } }}", [20, 0]),
+        respondNode("respond-m2", "Respond", [280, 0]),
+      ],
+      mergeConnections(
+        connection("Lead Milestone 2 Webhook", "Prepare Milestone 2 Payload"),
+        connection("Prepare Milestone 2 Payload", "Trigger Second-Touch Offer"),
+        connection("Trigger Second-Touch Offer", "Respond"),
+      ),
+    ),
+  },
+  {
+    slug: "milestone-third-touch-conversion",
+    name: "LeadOS Milestone Third Touch Conversion",
+    summary: "Uses milestone three to push booking, proposals, documents, and referrals at the point habit and trust are strongest.",
+    family: "retention",
+    sources: [
+      "Third-touch conversion patterns",
+      "Activation and referral loops",
+      "Proposal and onboarding triggers",
+    ],
+    repos: [
+      "growchief/growchief",
+      "Zie619/n8n-workflows",
+    ],
+    workflow: baseWorkflow(
+      "LeadOS Milestone Third Touch Conversion",
+      [
+        stickyNote("note-m3", "Overview", "Milestone three is where LeadOS should stop treating the interaction as tentative. This workflow escalates into booking, docs, onboarding, and referral actions.", [-760, -260]),
+        webhookNode("webhook-m3", "Lead Milestone 3 Webhook", "leados/lead-milestone-3", [-520, -80]),
+        webhookNode("webhook-c3", "Customer Milestone 3 Webhook", "leados/customer-milestone-3", [-520, 120]),
+        setNode("set-m3", "Prepare Conversion Payload", [
+          { name: "leadKey", value: "={{ $json.payload?.leadKey ?? $json.leadKey ?? '' }}" },
+          { name: "email", value: "={{ $json.payload?.email ?? $json.email ?? '' }}" },
+          { name: "phone", value: "={{ $json.payload?.phone ?? $json.phone ?? '' }}" },
+          { name: "family", value: "={{ $json.payload?.family ?? $json.family ?? 'qualification' }}" },
+        ], [-240, 20]),
+        httpNode("trigger-offer", "Trigger Conversion Action", "https://leados.yourdeputy.com/api/intake", "={{ { source: 'manual', leadKey: $json.leadKey, email: $json.email, phone: $json.phone, wantsBooking: true, metadata: { origin: 'n8n-milestone-3', milestone: 'third-touch' } } }}", [20, -60]),
+        httpNode("trigger-referral", "Trigger Referral/Value Loop", "https://leados.yourdeputy.com/api/intake", "={{ { source: 'manual', leadKey: $json.leadKey, email: $json.email, phone: $json.phone, metadata: { origin: 'n8n-milestone-3', activationMilestone: true, valueRealized: true, referralReady: true } } }}", [20, 120]),
+        respondNode("respond-m3", "Respond", [280, 20]),
+      ],
+      mergeConnections(
+        connection("Lead Milestone 3 Webhook", "Prepare Conversion Payload"),
+        connection("Customer Milestone 3 Webhook", "Prepare Conversion Payload"),
+        connection("Prepare Conversion Payload", "Trigger Conversion Action"),
+        connection("Prepare Conversion Payload", "Trigger Referral/Value Loop"),
+        connection("Trigger Conversion Action", "Respond"),
       ),
     ),
   },

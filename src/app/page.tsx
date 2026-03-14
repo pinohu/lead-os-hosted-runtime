@@ -1,11 +1,14 @@
 import { HostedHero } from "@/components/HostedHero";
+import { buildDashboardSnapshot } from "@/lib/dashboard";
 import { buildDefaultFunnelGraphs } from "@/lib/funnel-library";
 import { getAutomationHealth } from "@/lib/providers";
+import { getCanonicalEvents, getLeadRecords } from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
 
 export default function HomePage() {
   const graphs = buildDefaultFunnelGraphs(tenantConfig.tenantId);
   const health = getAutomationHealth();
+  const snapshot = buildDashboardSnapshot(getLeadRecords(), getCanonicalEvents());
   return (
     <main>
       <HostedHero />
@@ -47,6 +50,24 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+      <div className="grid two">
+        <section className="panel">
+          <h2>Milestone Snapshot</h2>
+          <p className="muted">Lead M1 captured: {snapshot.milestones.lead.captured}</p>
+          <p className="muted">Lead M2 return engaged: {snapshot.milestones.lead.returnEngaged}</p>
+          <p className="muted">Lead M3 booked or offered: {snapshot.milestones.lead.bookedOrOffered}</p>
+          <p className="muted">Customer M1 onboarded: {snapshot.milestones.customer.onboarded}</p>
+          <p className="muted">Customer M2 activated: {snapshot.milestones.customer.activated}</p>
+          <p className="muted">Customer M3 value realized: {snapshot.milestones.customer.valueRealized}</p>
+        </section>
+        <section className="panel">
+          <h2>Operator Visibility</h2>
+          <p className="muted">Recent leads tracked: {snapshot.leadTimeline.length}</p>
+          <p className="muted">Recent milestone events: {snapshot.recentMilestoneEvents.length}</p>
+          <p className="muted">Top funnel families: {snapshot.topFamilies.map((entry) => `${entry.family} (${entry.count})`).join(", ") || "No traffic yet"}</p>
+          <p className="muted">Full dashboard: /dashboard</p>
+        </section>
+      </div>
     </main>
   );
 }
