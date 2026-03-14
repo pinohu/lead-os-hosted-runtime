@@ -49,6 +49,14 @@ function getN8nBaseUrl() {
   return value?.replace(/\/+$/, "");
 }
 
+function getN8nMcpUrl() {
+  return getEnvValue("N8N_MCP_URL", "N8N_MCP_SERVER_URL")?.replace(/\/+$/, "");
+}
+
+function getN8nMcpAccessToken() {
+  return getEnvValue("N8N_MCP_ACCESS_TOKEN", "N8N_INSTANCE_MCP_ACCESS_TOKEN");
+}
+
 function getEasyTextMarketingApiKey() {
   return getEnvValue("EASY_TEXT_MARKETING_API_KEY", "EASYTEXTMARKETING_API_KEY");
 }
@@ -147,7 +155,11 @@ export const integrationMap = {
   suitedash: integration(Boolean((process.env.SUITEDASH_PUBLIC_ID ?? embeddedSecrets.suitedash.publicId) && (process.env.SUITEDASH_SECRET_KEY ?? embeddedSecrets.suitedash.secretKey)), "crm"),
   aitable: integration(Boolean((process.env.AITABLE_API_TOKEN ?? embeddedSecrets.aitable.apiToken) && (process.env.AITABLE_DATASHEET_ID ?? embeddedSecrets.aitable.datasheetId)), "ledger"),
   agenticflow: integration(Boolean(process.env.AGENTICFLOW_API_KEY ?? embeddedSecrets.agenticflow.apiKey), "intelligence"),
-  n8n: integration(Boolean(getN8nWebhookUrl() || (getN8nApiKey() && getN8nBaseUrl())), "orchestration"),
+  n8n: integration(Boolean(
+    getN8nWebhookUrl() ||
+    (getN8nApiKey() && getN8nBaseUrl()) ||
+    (getN8nMcpAccessToken() && getN8nMcpUrl())
+  ), "orchestration"),
   boost: integration(Boolean((process.env.BOOST_SPACE_API_KEY ?? embeddedSecrets.boost.apiKey) || (process.env.BOOST_SPACE_MAKE_TOKEN ?? embeddedSecrets.boost.makeApiToken)), "orchestration"),
   emailit: integration(Boolean(process.env.EMAILIT_API_KEY ?? embeddedSecrets.emailit.apiKey), "email"),
   wbiztool: integration(Boolean((process.env.WBIZTOOL_API_KEY ?? embeddedSecrets.wbiztool.apiKey) && (process.env.WBIZTOOL_INSTANCE_ID ?? embeddedSecrets.wbiztool.instanceId)), "whatsapp"),
@@ -411,11 +423,14 @@ export async function emitWorkflowAction(eventName: string, payload: Record<stri
       ok: true,
       provider: "n8n",
       mode: "prepared",
-      detail: "n8n API credentials detected; add a workflow webhook URL to emit runtime events",
+      detail: getN8nMcpAccessToken() && getN8nMcpUrl()
+        ? "n8n MCP credentials detected; add a workflow webhook URL if you want direct event emission from the runtime"
+        : "n8n API credentials detected; add a workflow webhook URL to emit runtime events",
       payload: {
         eventName,
         payload,
         baseUrl: getN8nBaseUrl(),
+        mcpUrl: getN8nMcpUrl(),
       },
     } satisfies ProviderResult;
   }
