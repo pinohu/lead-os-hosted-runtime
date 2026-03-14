@@ -1,5 +1,5 @@
 import { embeddedSecrets } from "./embedded-secrets.ts";
-import { getN8nStarterWorkflow, resolveN8nStarterWorkflows, type N8nStarterWorkflow, type N8nWorkflow } from "./n8n-starter-pack.ts";
+import { getN8nStarterWorkflow, resolveN8nStarterWorkflows, type N8nWorkflow } from "./n8n-starter-pack.ts";
 
 type N8nWorkflowRecord = {
   id: string;
@@ -108,9 +108,16 @@ export async function listN8nWorkflows() {
 }
 
 async function createN8nWorkflow(workflow: N8nWorkflow) {
+  const createPayload = {
+    name: workflow.name,
+    nodes: workflow.nodes,
+    connections: workflow.connections,
+    settings: workflow.settings,
+  };
+
   return n8nRequest<N8nWorkflowRecord>("/workflows", {
     method: "POST",
-    body: JSON.stringify(workflow),
+    body: JSON.stringify(createPayload),
   });
 }
 
