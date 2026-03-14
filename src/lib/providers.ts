@@ -20,7 +20,7 @@ interface IntegrationConfig {
   responsibility: string;
 }
 
-const LIVE_MODE = process.env.LEAD_OS_ENABLE_LIVE_SENDS === "true";
+const LIVE_MODE = process.env.LEAD_OS_ENABLE_LIVE_SENDS !== "false";
 
 function integration(configured: boolean, ownerKey: keyof typeof TOOL_OWNERSHIP_MAP): IntegrationConfig {
   const owner = TOOL_OWNERSHIP_MAP[ownerKey];
