@@ -40,4 +40,7 @@ export const embeddedSecrets = {
     apiKey: "299d6ec856d6df794a547361dfb6a4dbcf56c9ed019d94804fc3125bd719226e",
     makeApiToken: "24595d5e-9b7f-48f9-ab61-9644c46ed7f9",
   },
+  straico: {
+    apiKey: "rO-DAfFvLzjA9vgOjxwx7Oq1nGRmWH4TSisnKxvScasvp0RDtnG",
+  },
 } as const;

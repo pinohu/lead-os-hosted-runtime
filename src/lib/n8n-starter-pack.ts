@@ -1,3 +1,5 @@
+import { embeddedSecrets } from "./embedded-secrets.ts";
+
 type N8nConnectionTarget = {
   node: string;
   type: string;
@@ -139,7 +141,20 @@ function ifNode(
   };
 }
 
-function httpNode(id: string, name: string, url: string, body: string, position: [number, number]): N8nNode {
+function httpNode(
+  id: string,
+  name: string,
+  url: string,
+  body: string,
+  position: [number, number],
+  options?: {
+    headers?: Record<string, string>;
+  },
+): N8nNode {
+  const headerEntries = options?.headers
+    ? Object.entries(options.headers).map(([name, value]) => ({ name, value }))
+    : [];
+
   return {
     id,
     name,
@@ -152,6 +167,9 @@ function httpNode(id: string, name: string, url: string, body: string, position:
       sendBody: true,
       specifyBody: "json",
       jsonBody: body,
+      sendHeaders: headerEntries.length > 0,
+      specifyHeaders: headerEntries.length > 0 ? "json" : undefined,
+      headerParametersJson: headerEntries.length > 0 ? `=${JSON.stringify(options?.headers ?? {})}` : undefined,
       options: {},
     },
   };
@@ -369,19 +387,35 @@ export const N8N_STARTER_WORKFLOWS: N8nStarterWorkflow[] = [
         webhookNode("webhook-ai", "Lead Qualifier Webhook", "leados/ai-qualifier", [-520, 0]),
         setNode("set-ai", "Shape Qualification Prompt", [
           { name: "leadKey", value: "={{ $json.payload?.leadKey ?? $json.leadKey ?? '' }}" },
-          { name: "prompt", value: "={{ `Classify this lead for LeadOS routing: ${JSON.stringify($json.payload ?? $json)}` }}" },
+          {
+            name: "prompt",
+            value:
+              "={{ `Classify this lead for LeadOS routing. Reply with exactly one funnel family slug from this set: lead-magnet, qualification, chat, webinar, authority, checkout, retention, rescue, referral, continuity. Lead context: ${JSON.stringify($json.payload ?? $json)}` }}",
+          },
         ], [-260, 0]),
-        httpNode("call-openai", "Call LLM", "https://api.openai.com/v1/responses", "={{ { model: 'gpt-4.1-mini', input: $json.prompt } }}", [20, -80]),
+        httpNode(
+          "call-straico",
+          "Call Straico",
+          "https://api.straico.com/v0/chat/completions",
+          "={{ { model: 'anthropic/claude-3.7-sonnet', messages: [{ role: 'user', content: $json.prompt }] } }}",
+          [20, -80],
+          {
+            headers: {
+              Authorization: `Bearer ${embeddedSecrets.straico.apiKey}`,
+              "Content-Type": "application/json",
+            },
+          },
+        ),
         setNode("set-route", "Extract Route Suggestion", [
           { name: "leadKey", value: "={{ $('Shape Qualification Prompt').item.json.leadKey }}" },
-          { name: "routeSuggestion", value: "={{ $json.output_text ?? 'qualification' }}" },
+          { name: "routeSuggestion", value: "={{ $json.choices?.[0]?.message?.content?.trim?.() ?? 'qualification' }}" },
         ], [280, -80]),
         httpNode("post-route", "Post Back to LeadOS", "https://leados.yourdeputy.com/api/decision", "={{ { source: 'manual', service: 'lead-capture', niche: 'general', contentEngaged: true, score: 70, metadata: { routeSuggestion: $json.routeSuggestion, leadKey: $json.leadKey } } }}", [540, -80]),
       ],
       mergeConnections(
         connection("Lead Qualifier Webhook", "Shape Qualification Prompt"),
-        connection("Shape Qualification Prompt", "Call LLM"),
-        connection("Call LLM", "Extract Route Suggestion"),
+        connection("Shape Qualification Prompt", "Call Straico"),
+        connection("Call Straico", "Extract Route Suggestion"),
         connection("Extract Route Suggestion", "Post Back to LeadOS"),
       ),
     ),
