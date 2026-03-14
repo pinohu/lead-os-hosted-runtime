@@ -65,7 +65,7 @@ function webhookNode(id: string, name: string, path: string, position: [number, 
     parameters: {
       httpMethod: "POST",
       path,
-      responseMode: "responseNode",
+      responseMode: "onReceived",
     },
   };
 }
@@ -212,19 +212,17 @@ export const N8N_STARTER_WORKFLOWS: N8nStarterWorkflow[] = [
         httpNode("ledger-log", "AITable Ledger Hook", "https://leados.yourdeputy.com/api/automations/smoke", "={{ { dryRun: false, source: 'lead-intake-fanout', leadKey: $json.leadKey } }}", [20, 20]),
         ifNode("if-hot", "Hot Lead?", "={{ Number($json.score || 0) >= 80 ? 'hot' : '' }}", [20, 180]),
         httpNode("ops-alert", "Ops Alert Hook", "https://leados.yourdeputy.com/api/decision", "={{ { source: 'manual', service: 'lead-capture', niche: 'general', hasEmail: !!$json.email, hasPhone: !!$json.phone, score: Number($json.score || 0), wantsBooking: true } }}", [280, 180]),
-        respondNode("respond-intake", "Webhook Response", [280, 20]),
       ],
       mergeConnections(
         connection("LeadOS Intake Webhook", "Normalize Lead Event"),
         connection("Normalize Lead Event", "SuiteDash Sync Hook"),
         connection("Normalize Lead Event", "AITable Ledger Hook"),
         connection("Normalize Lead Event", "Hot Lead?"),
-        connection("AITable Ledger Hook", "Webhook Response"),
         {
           "Hot Lead?": {
             main: [
               [{ node: "Ops Alert Hook", type: "main", index: 0 }],
-              [{ node: "Webhook Response", type: "main", index: 0 }],
+              [],
             ],
           },
         },
@@ -259,13 +257,11 @@ export const N8N_STARTER_WORKFLOWS: N8nStarterWorkflow[] = [
         httpNode("send-booking", "Send Booking Prompt", "https://leados.yourdeputy.com/api/intake", "={{ { source: 'manual', leadKey: $json.leadKey, email: $json.email, phone: $json.phone, wantsBooking: true, metadata: { origin: 'n8n-hot-lead-booking' } } }}", [20, -120]),
         waitNode("wait-booking", "Wait 2 Hours", 2, "hours", [20, 40]),
         httpNode("followup-booking", "Booking Recovery Follow-Up", "https://leados.yourdeputy.com/api/intake", "={{ { source: 'manual', leadKey: $json.leadKey, email: $json.email, phone: $json.phone, returning: true, wantsBooking: true, metadata: { origin: 'n8n-booking-recovery' } } }}", [280, 40]),
-        respondNode("respond-booking", "Webhook Response", [280, -120]),
       ],
       mergeConnections(
         connection("Hot Lead Webhook", "Prepare Booking Payload"),
         connection("Prepare Booking Payload", "Send Booking Prompt"),
         connection("Prepare Booking Payload", "Wait 2 Hours"),
-        connection("Send Booking Prompt", "Webhook Response"),
         connection("Wait 2 Hours", "Booking Recovery Follow-Up"),
       ),
     ),
@@ -301,7 +297,6 @@ export const N8N_STARTER_WORKFLOWS: N8nStarterWorkflow[] = [
         httpNode("recover-24h", "Recovery Touch 2", "https://leados.yourdeputy.com/api/intake", "={{ { source: 'checkout', leadKey: $json.leadKey, email: $json.email, phone: $json.phone, wantsCheckout: true, metadata: { recoveryStage: '24h' } } }}", [280, 20]),
         waitNode("wait-48h", "Wait 2 Days", 2, "days", [20, 160]),
         httpNode("recover-48h", "Recovery Touch 3", "https://leados.yourdeputy.com/api/intake", "={{ { source: 'checkout', leadKey: $json.leadKey, email: $json.email, phone: $json.phone, wantsCheckout: true, metadata: { recoveryStage: '48h' } } }}", [280, 160]),
-        respondNode("respond-checkout", "Webhook Response", [280, 300]),
       ],
       mergeConnections(
         connection("Checkout Started Webhook", "Prepare Recovery Payload"),
@@ -311,7 +306,6 @@ export const N8N_STARTER_WORKFLOWS: N8nStarterWorkflow[] = [
         connection("Wait 1 Hour", "Recovery Touch 1"),
         connection("Wait 1 Day", "Recovery Touch 2"),
         connection("Wait 2 Days", "Recovery Touch 3"),
-        connection("Recovery Touch 3", "Webhook Response"),
       ),
     ),
   },
@@ -343,7 +337,6 @@ export const N8N_STARTER_WORKFLOWS: N8nStarterWorkflow[] = [
         httpNode("start-referral", "Start Referral Flow", "https://leados.yourdeputy.com/api/intake", "={{ { source: 'manual', leadKey: $json.leadKey, email: $json.email, phone: $json.phone, metadata: { origin: 'n8n-referral-loop', goal: 'referral' } } }}", [280, -80]),
         waitNode("wait-review", "Wait 10 Days", 10, "days", [20, 80]),
         httpNode("request-review", "Request Review", "https://leados.yourdeputy.com/api/intake", "={{ { source: 'manual', leadKey: $json.leadKey, email: $json.email, phone: $json.phone, metadata: { origin: 'n8n-referral-loop', goal: 'review' } } }}", [280, 80]),
-        respondNode("respond-referral", "Webhook Response", [280, 220]),
       ],
       mergeConnections(
         connection("Activation Webhook", "Prepare Referral Payload"),
@@ -351,7 +344,6 @@ export const N8N_STARTER_WORKFLOWS: N8nStarterWorkflow[] = [
         connection("Prepare Referral Payload", "Wait 10 Days"),
         connection("Wait 7 Days", "Start Referral Flow"),
         connection("Wait 10 Days", "Request Review"),
-        connection("Request Review", "Webhook Response"),
       ),
     ),
   },
@@ -385,14 +377,12 @@ export const N8N_STARTER_WORKFLOWS: N8nStarterWorkflow[] = [
           { name: "routeSuggestion", value: "={{ $json.output_text ?? 'qualification' }}" },
         ], [280, -80]),
         httpNode("post-route", "Post Back to LeadOS", "https://leados.yourdeputy.com/api/decision", "={{ { source: 'manual', service: 'lead-capture', niche: 'general', contentEngaged: true, score: 70, metadata: { routeSuggestion: $json.routeSuggestion, leadKey: $json.leadKey } } }}", [540, -80]),
-        respondNode("respond-ai", "Webhook Response", [540, 80]),
       ],
       mergeConnections(
         connection("Lead Qualifier Webhook", "Shape Qualification Prompt"),
         connection("Shape Qualification Prompt", "Call LLM"),
         connection("Call LLM", "Extract Route Suggestion"),
         connection("Extract Route Suggestion", "Post Back to LeadOS"),
-        connection("Post Back to LeadOS", "Webhook Response"),
       ),
     ),
   },
