@@ -122,7 +122,7 @@ function getEasyTextMarketingWebhookUrl() {
 }
 
 function getInsightoApiKey() {
-  return getEnvValue("INSIGHTO_API_KEY");
+  return getEnvValue("INSIGHTO_API_KEY") ?? embeddedSecrets.insighto.apiKey;
 }
 
 function getInsightoWebhookUrl() {
@@ -134,7 +134,7 @@ function getInsightoAgentId() {
 }
 
 function getThoughtlyApiKey() {
-  return getEnvValue("THOUGHTLY_API_KEY");
+  return getEnvValue("THOUGHTLY_API_KEY") ?? embeddedSecrets.thoughtly.apiKey;
 }
 
 function getThoughtlyWebhookUrl() {
@@ -163,6 +163,10 @@ function getDocumenteroTemplateId() {
 
 function getDocumenteroWebhookUrl() {
   return getEnvValue("DOCUMENTERO_WEBHOOK_URL");
+}
+
+function getThrivecartApiKey() {
+  return getEnvValue("THRIVECART_API_KEY", "THRIVECART_API_KEY") ?? embeddedSecrets.thrivecart.apiKey;
 }
 
 function getThrivecartWebhookSecret() {
@@ -224,7 +228,7 @@ export const integrationMap = {
   thoughtly: integration(Boolean(getThoughtlyApiKey() || getThoughtlyWebhookUrl() || getThoughtlyAgentId()), "voice"),
   lunacal: integration(Boolean(getLunacalApiKey() || getLunacalBookingUrl()), "booking"),
   documentero: integration(Boolean(getDocumenteroApiKey() || getDocumenteroWebhookUrl() || getDocumenteroTemplateId()), "documents"),
-  thrivecart: integration(Boolean(getThrivecartWebhookSecret() || getThrivecartCheckoutUrl() || getThrivecartWebhookUrl()), "commerce"),
+  thrivecart: integration(Boolean(getThrivecartApiKey() || getThrivecartWebhookSecret() || getThrivecartCheckoutUrl() || getThrivecartWebhookUrl()), "commerce"),
   upviral: integration(Boolean(process.env.UPVIRAL_API_KEY ?? embeddedSecrets.upviral.apiKey), "referral"),
   partnero: integration(Boolean(getPartneroApiKey() || getPartneroWebhookUrl() || getPartneroProgramId()), "referral"),
   activepieces: integration(Boolean(getActivepiecesWebhookUrl()), "fallbackAutomation"),
@@ -698,9 +702,12 @@ export async function startCommerceAction(payload: Record<string, unknown>) {
     mode: "prepared",
     detail: getThrivecartWebhookSecret()
       ? "ThriveCart webhook secret detected; add checkout or webhook URL to activate runtime commerce handoff"
+      : getThrivecartApiKey()
+      ? "ThriveCart API key detected; add checkout or webhook URL to activate runtime commerce handoff"
       : "ThriveCart adapter is wired and awaiting account-specific endpoint details",
     payload: {
       ...payload,
+      apiKeyPresent: Boolean(getThrivecartApiKey()),
       checkoutUrl,
     },
   } satisfies ProviderResult;

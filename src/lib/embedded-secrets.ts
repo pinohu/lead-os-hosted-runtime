@@ -27,6 +27,15 @@ export const embeddedSecrets = {
   upviral: {
     apiKey: "bG4ds99OjXvzAduIQ7x+pqyxb/goS7niK6dc2xE0aLg=",
   },
+  insighto: {
+    apiKey: "in-6xVkk7OP2fYc7IoFhCjK6gAVwzkz7KEAdxWyVoV5jxs",
+  },
+  thoughtly: {
+    apiKey: "0dy3971e2bgvrk3y6j1cs9l",
+  },
+  thrivecart: {
+    apiKey: "VARXXHLU-UKVR66QW-ZHMR6VT6-I2GEP295",
+  },
   agenticflow: {
     apiKey: "a9w_SNlebBN8edQmcYJGX7DGbFOfOc8fkH8PLFP0cQ14UG0",
   },
