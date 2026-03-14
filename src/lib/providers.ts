@@ -22,6 +22,108 @@ interface IntegrationConfig {
 
 const LIVE_MODE = process.env.LEAD_OS_ENABLE_LIVE_SENDS !== "false";
 
+function getEnvValue(...keys: string[]) {
+  for (const key of keys) {
+    const value = process.env[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function hasAnyEnv(...keys: string[]) {
+  return Boolean(getEnvValue(...keys));
+}
+
+function getN8nWebhookUrl() {
+  return getEnvValue("N8N_WEBHOOK_URL", "N8N_LEADOS_WEBHOOK_URL", "LEAD_OS_N8N_WEBHOOK_URL", "N8N_WEBHOOK");
+}
+
+function getEasyTextMarketingApiKey() {
+  return getEnvValue("EASY_TEXT_MARKETING_API_KEY", "EASYTEXTMARKETING_API_KEY");
+}
+
+function getEasyTextMarketingWebhookUrl() {
+  return getEnvValue("EASY_TEXT_MARKETING_WEBHOOK_URL", "EASYTEXTMARKETING_WEBHOOK_URL");
+}
+
+function getInsightoApiKey() {
+  return getEnvValue("INSIGHTO_API_KEY");
+}
+
+function getInsightoWebhookUrl() {
+  return getEnvValue("INSIGHTO_WEBHOOK_URL", "INSIGHTO_AGENT_WEBHOOK_URL");
+}
+
+function getInsightoAgentId() {
+  return getEnvValue("INSIGHTO_AGENT_ID", "INSIGHTO_BOT_ID");
+}
+
+function getThoughtlyApiKey() {
+  return getEnvValue("THOUGHTLY_API_KEY");
+}
+
+function getThoughtlyWebhookUrl() {
+  return getEnvValue("THOUGHTLY_WEBHOOK_URL", "THOUGHTLY_AGENT_WEBHOOK_URL");
+}
+
+function getThoughtlyAgentId() {
+  return getEnvValue("THOUGHTLY_AGENT_ID", "THOUGHTLY_FLOW_ID");
+}
+
+function getLunacalApiKey() {
+  return getEnvValue("LUNACAL_API_KEY");
+}
+
+function getLunacalBookingUrl() {
+  return getEnvValue("LUNACAL_BOOKING_URL", "LUNACAL_EVENT_LINK", "LUNACAL_WEBHOOK_URL");
+}
+
+function getDocumenteroApiKey() {
+  return getEnvValue("DOCUMENTERO_API_KEY");
+}
+
+function getDocumenteroTemplateId() {
+  return getEnvValue("DOCUMENTERO_TEMPLATE_ID");
+}
+
+function getDocumenteroWebhookUrl() {
+  return getEnvValue("DOCUMENTERO_WEBHOOK_URL");
+}
+
+function getThrivecartWebhookSecret() {
+  return getEnvValue("THRIVECART_WEBHOOK_SECRET");
+}
+
+function getThrivecartCheckoutUrl() {
+  return getEnvValue("THRIVECART_CHECKOUT_URL", "THRIVECART_PRODUCT_URL");
+}
+
+function getThrivecartWebhookUrl() {
+  return getEnvValue("THRIVECART_WEBHOOK_URL");
+}
+
+function getPartneroApiKey() {
+  return getEnvValue("PARTNERO_API_KEY");
+}
+
+function getPartneroProgramId() {
+  return getEnvValue("PARTNERO_PROGRAM_ID");
+}
+
+function getPartneroWebhookUrl() {
+  return getEnvValue("PARTNERO_WEBHOOK_URL");
+}
+
+function getActivepiecesWebhookUrl() {
+  return getEnvValue("ACTIVEPIECES_WEBHOOK_URL", "ACTIVEPIECES_FLOW_WEBHOOK_URL");
+}
+
+function getElectroneekWebhookUrl() {
+  return getEnvValue("ELECTRONEEK_WEBHOOK_URL", "ELECTRONEEK_BOT_WEBHOOK_URL");
+}
+
 function integration(configured: boolean, ownerKey: keyof typeof TOOL_OWNERSHIP_MAP): IntegrationConfig {
   const owner = TOOL_OWNERSHIP_MAP[ownerKey];
   return {
@@ -36,20 +138,20 @@ export const integrationMap = {
   suitedash: integration(Boolean((process.env.SUITEDASH_PUBLIC_ID ?? embeddedSecrets.suitedash.publicId) && (process.env.SUITEDASH_SECRET_KEY ?? embeddedSecrets.suitedash.secretKey)), "crm"),
   aitable: integration(Boolean((process.env.AITABLE_API_TOKEN ?? embeddedSecrets.aitable.apiToken) && (process.env.AITABLE_DATASHEET_ID ?? embeddedSecrets.aitable.datasheetId)), "ledger"),
   agenticflow: integration(Boolean(process.env.AGENTICFLOW_API_KEY ?? embeddedSecrets.agenticflow.apiKey), "intelligence"),
-  n8n: integration(Boolean(process.env.N8N_WEBHOOK_URL), "orchestration"),
+  n8n: integration(Boolean(getN8nWebhookUrl()), "orchestration"),
   boost: integration(Boolean((process.env.BOOST_SPACE_API_KEY ?? embeddedSecrets.boost.apiKey) || (process.env.BOOST_SPACE_MAKE_TOKEN ?? embeddedSecrets.boost.makeApiToken)), "orchestration"),
   emailit: integration(Boolean(process.env.EMAILIT_API_KEY ?? embeddedSecrets.emailit.apiKey), "email"),
   wbiztool: integration(Boolean((process.env.WBIZTOOL_API_KEY ?? embeddedSecrets.wbiztool.apiKey) && (process.env.WBIZTOOL_INSTANCE_ID ?? embeddedSecrets.wbiztool.instanceId)), "whatsapp"),
-  easyTextMarketing: integration(Boolean(process.env.EASY_TEXT_MARKETING_API_KEY), "sms"),
-  insighto: integration(Boolean(process.env.INSIGHTO_API_KEY), "chat"),
-  thoughtly: integration(Boolean(process.env.THOUGHTLY_API_KEY), "voice"),
-  lunacal: integration(Boolean(process.env.LUNACAL_API_KEY), "booking"),
-  documentero: integration(Boolean(process.env.DOCUMENTERO_API_KEY), "documents"),
-  thrivecart: integration(Boolean(process.env.THRIVECART_WEBHOOK_SECRET), "commerce"),
+  easyTextMarketing: integration(Boolean(getEasyTextMarketingApiKey() || getEasyTextMarketingWebhookUrl()), "sms"),
+  insighto: integration(Boolean(getInsightoApiKey() || getInsightoWebhookUrl() || getInsightoAgentId()), "chat"),
+  thoughtly: integration(Boolean(getThoughtlyApiKey() || getThoughtlyWebhookUrl() || getThoughtlyAgentId()), "voice"),
+  lunacal: integration(Boolean(getLunacalApiKey() || getLunacalBookingUrl()), "booking"),
+  documentero: integration(Boolean(getDocumenteroApiKey() || getDocumenteroWebhookUrl() || getDocumenteroTemplateId()), "documents"),
+  thrivecart: integration(Boolean(getThrivecartWebhookSecret() || getThrivecartCheckoutUrl() || getThrivecartWebhookUrl()), "commerce"),
   upviral: integration(Boolean(process.env.UPVIRAL_API_KEY ?? embeddedSecrets.upviral.apiKey), "referral"),
-  partnero: integration(Boolean(process.env.PARTNERO_API_KEY), "referral"),
-  activepieces: integration(Boolean(process.env.ACTIVEPIECES_WEBHOOK_URL), "fallbackAutomation"),
-  electroneek: integration(Boolean(process.env.ELECTRONEEK_WEBHOOK_URL), "fallbackAutomation"),
+  partnero: integration(Boolean(getPartneroApiKey() || getPartneroWebhookUrl() || getPartneroProgramId()), "referral"),
+  activepieces: integration(Boolean(getActivepiecesWebhookUrl()), "fallbackAutomation"),
+  electroneek: integration(Boolean(getElectroneekWebhookUrl()), "fallbackAutomation"),
 };
 
 async function postJson(url: string, body: unknown, headers: Record<string, string> = {}) {
@@ -227,11 +329,26 @@ export async function sendSmsAction(payload: { phone: string; body: string }) {
   if (!provider.configured || !provider.live) {
     return dryRunResult("Easy Text Marketing", "SMS prepared", { to: payload.phone });
   }
+  const webhookUrl = getEasyTextMarketingWebhookUrl();
+  if (webhookUrl) {
+    const response = await postJson(webhookUrl, {
+      to: payload.phone,
+      body: payload.body,
+      provider: "easy-text-marketing",
+      apiKey: getEasyTextMarketingApiKey(),
+    });
+    return {
+      ok: response.ok,
+      provider: "Easy Text Marketing",
+      mode: "live",
+      detail: response.ok ? "SMS request sent" : `SMS failed: ${response.status}`,
+    } satisfies ProviderResult;
+  }
   return {
     ok: true,
     provider: "Easy Text Marketing",
     mode: "prepared",
-    detail: "SMS provider configured; request prepared for live adapter",
+    detail: "SMS provider configured; direct API credentials detected without webhook bridge",
     payload,
   } satisfies ProviderResult;
 }
@@ -279,7 +396,7 @@ export async function emitWorkflowAction(eventName: string, payload: Record<stri
     return dryRunResult("n8n", `${eventName} workflow prepared`, payload);
   }
 
-  const response = await postJson(process.env.N8N_WEBHOOK_URL ?? "", {
+  const response = await postJson(getN8nWebhookUrl() ?? "", {
     eventName,
     payload,
   });
@@ -297,12 +414,30 @@ export async function startChatAction(payload: Record<string, unknown>) {
   if (!provider.configured || !provider.live) {
     return dryRunResult("Insighto.ai", "Chat workflow prepared", payload);
   }
+  const webhookUrl = getInsightoWebhookUrl();
+  if (webhookUrl) {
+    const response = await postJson(webhookUrl, {
+      agentId: getInsightoAgentId(),
+      payload,
+    }, getInsightoApiKey() ? { Authorization: `Bearer ${getInsightoApiKey()}` } : {});
+    return {
+      ok: response.ok,
+      provider: "Insighto.ai",
+      mode: "live",
+      detail: response.ok ? "Chat workflow started" : `Chat workflow failed: ${response.status}`,
+    } satisfies ProviderResult;
+  }
   return {
     ok: true,
     provider: "Insighto.ai",
     mode: "prepared",
-    detail: "Insighto adapter is wired and awaiting account-specific endpoint details",
-    payload,
+    detail: getInsightoAgentId()
+      ? "Insighto configured with agent metadata; add webhook to trigger live chat workflows"
+      : "Insighto adapter is wired and awaiting account-specific endpoint details",
+    payload: {
+      ...payload,
+      agentId: getInsightoAgentId(),
+    },
   } satisfies ProviderResult;
 }
 
@@ -311,12 +446,30 @@ export async function startVoiceAction(payload: Record<string, unknown>) {
   if (!provider.configured || !provider.live) {
     return dryRunResult("Thoughtly", "Voice workflow prepared", payload);
   }
+  const webhookUrl = getThoughtlyWebhookUrl();
+  if (webhookUrl) {
+    const response = await postJson(webhookUrl, {
+      agentId: getThoughtlyAgentId(),
+      payload,
+    }, getThoughtlyApiKey() ? { Authorization: `Bearer ${getThoughtlyApiKey()}` } : {});
+    return {
+      ok: response.ok,
+      provider: "Thoughtly",
+      mode: "live",
+      detail: response.ok ? "Voice workflow started" : `Voice workflow failed: ${response.status}`,
+    } satisfies ProviderResult;
+  }
   return {
     ok: true,
     provider: "Thoughtly",
     mode: "prepared",
-    detail: "Thoughtly adapter is wired and awaiting account-specific endpoint details",
-    payload,
+    detail: getThoughtlyAgentId()
+      ? "Thoughtly configured with agent metadata; add webhook to trigger live voice workflows"
+      : "Thoughtly adapter is wired and awaiting account-specific endpoint details",
+    payload: {
+      ...payload,
+      agentId: getThoughtlyAgentId(),
+    },
   } satisfies ProviderResult;
 }
 
@@ -325,12 +478,30 @@ export async function createBookingAction(payload: Record<string, unknown>) {
   if (!provider.configured || !provider.live) {
     return dryRunResult("Lunacal", "Booking request prepared", payload);
   }
+  const bookingUrl = getLunacalBookingUrl();
+  if (bookingUrl?.startsWith("http")) {
+    return {
+      ok: true,
+      provider: "Lunacal",
+      mode: "live",
+      detail: "Booking destination resolved",
+      payload: {
+        ...payload,
+        bookingUrl,
+      },
+    } satisfies ProviderResult;
+  }
   return {
     ok: true,
     provider: "Lunacal",
     mode: "prepared",
-    detail: "Lunacal adapter is wired and awaiting account-specific endpoint details",
-    payload,
+    detail: getLunacalApiKey()
+      ? "Lunacal API key detected; add booking or webhook URL to activate runtime handoff"
+      : "Lunacal adapter is wired and awaiting account-specific endpoint details",
+    payload: {
+      ...payload,
+      bookingUrl,
+    },
   } satisfies ProviderResult;
 }
 
@@ -339,12 +510,30 @@ export async function generateDocumentAction(payload: Record<string, unknown>) {
   if (!provider.configured || !provider.live) {
     return dryRunResult("Documentero", "Document generation prepared", payload);
   }
+  const webhookUrl = getDocumenteroWebhookUrl();
+  if (webhookUrl) {
+    const response = await postJson(webhookUrl, {
+      templateId: getDocumenteroTemplateId(),
+      payload,
+    }, getDocumenteroApiKey() ? { Authorization: `Bearer ${getDocumenteroApiKey()}` } : {});
+    return {
+      ok: response.ok,
+      provider: "Documentero",
+      mode: "live",
+      detail: response.ok ? "Document request sent" : `Document request failed: ${response.status}`,
+    } satisfies ProviderResult;
+  }
   return {
     ok: true,
     provider: "Documentero",
     mode: "prepared",
-    detail: "Documentero adapter is wired and awaiting account-specific endpoint details",
-    payload,
+    detail: getDocumenteroTemplateId()
+      ? "Documentero template detected; add webhook URL to render documents from the runtime"
+      : "Documentero adapter is wired and awaiting account-specific endpoint details",
+    payload: {
+      ...payload,
+      templateId: getDocumenteroTemplateId(),
+    },
   } satisfies ProviderResult;
 }
 
@@ -353,12 +542,30 @@ export async function startReferralAction(payload: Record<string, unknown>) {
   if (!provider.configured || !provider.live) {
     return dryRunResult("Partnero", "Referral workflow prepared", payload);
   }
+  const webhookUrl = getPartneroWebhookUrl();
+  if (webhookUrl) {
+    const response = await postJson(webhookUrl, {
+      programId: getPartneroProgramId(),
+      payload,
+    }, getPartneroApiKey() ? { Authorization: `Bearer ${getPartneroApiKey()}` } : {});
+    return {
+      ok: response.ok,
+      provider: "Partnero",
+      mode: "live",
+      detail: response.ok ? "Referral workflow started" : `Referral workflow failed: ${response.status}`,
+    } satisfies ProviderResult;
+  }
   return {
     ok: true,
     provider: "Partnero",
     mode: "prepared",
-    detail: "Partnero adapter is wired and awaiting account-specific endpoint details",
-    payload,
+    detail: getPartneroProgramId()
+      ? "Partnero program detected; add webhook URL to activate referral enrollment"
+      : "Partnero adapter is wired and awaiting account-specific endpoint details",
+    payload: {
+      ...payload,
+      programId: getPartneroProgramId(),
+    },
   } satisfies ProviderResult;
 }
 
@@ -367,12 +574,43 @@ export async function startCommerceAction(payload: Record<string, unknown>) {
   if (!provider.configured || !provider.live) {
     return dryRunResult("ThriveCart", "Commerce workflow prepared", payload);
   }
+  const webhookUrl = getThrivecartWebhookUrl();
+  if (webhookUrl) {
+    const response = await postJson(webhookUrl, {
+      webhookSecret: getThrivecartWebhookSecret(),
+      payload,
+    });
+    return {
+      ok: response.ok,
+      provider: "ThriveCart",
+      mode: "live",
+      detail: response.ok ? "Commerce workflow started" : `Commerce workflow failed: ${response.status}`,
+    } satisfies ProviderResult;
+  }
+  const checkoutUrl = getThrivecartCheckoutUrl();
+  if (checkoutUrl) {
+    return {
+      ok: true,
+      provider: "ThriveCart",
+      mode: "live",
+      detail: "Checkout destination resolved",
+      payload: {
+        ...payload,
+        checkoutUrl,
+      },
+    } satisfies ProviderResult;
+  }
   return {
     ok: true,
     provider: "ThriveCart",
     mode: "prepared",
-    detail: "ThriveCart adapter is wired and awaiting account-specific endpoint details",
-    payload,
+    detail: getThrivecartWebhookSecret()
+      ? "ThriveCart webhook secret detected; add checkout or webhook URL to activate runtime commerce handoff"
+      : "ThriveCart adapter is wired and awaiting account-specific endpoint details",
+    payload: {
+      ...payload,
+      checkoutUrl,
+    },
   } satisfies ProviderResult;
 }
 
@@ -381,7 +619,7 @@ export async function emitSecondaryWorkflowAction(payload: Record<string, unknow
   if (!provider.configured || !provider.live) {
     return dryRunResult("Activepieces", "Secondary workflow prepared", payload);
   }
-  const response = await postJson(process.env.ACTIVEPIECES_WEBHOOK_URL ?? "", payload);
+  const response = await postJson(getActivepiecesWebhookUrl() ?? "", payload);
   return {
     ok: response.ok,
     provider: "Activepieces",
@@ -395,7 +633,7 @@ export async function emitRpaFallbackAction(payload: Record<string, unknown>) {
   if (!provider.configured || !provider.live) {
     return dryRunResult("ElectroNeek", "RPA fallback prepared", payload);
   }
-  const response = await postJson(process.env.ELECTRONEEK_WEBHOOK_URL ?? "", payload);
+  const response = await postJson(getElectroneekWebhookUrl() ?? "", payload);
   return {
     ok: response.ok,
     provider: "ElectroNeek",

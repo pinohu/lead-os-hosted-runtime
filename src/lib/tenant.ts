@@ -24,6 +24,13 @@ function splitCsv(value?: string) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
+function hasAnyEnv(...keys: string[]) {
+  return keys.some((key) => {
+    const value = process.env[key];
+    return typeof value === "string" && value.trim().length > 0;
+  });
+}
+
 export const tenantConfig: TenantConfig = {
   tenantId: process.env.LEAD_OS_TENANT_ID ?? "default-tenant",
   brandName: process.env.NEXT_PUBLIC_BRAND_NAME ?? "Lead OS Hosted",
@@ -39,9 +46,9 @@ export const tenantConfig: TenantConfig = {
   channels: {
     email: true,
     whatsapp: (process.env.WBIZTOOL_API_KEY ?? embeddedSecrets.wbiztool.apiKey) != null,
-    sms: process.env.EASY_TEXT_MARKETING_API_KEY != null,
-    chat: true,
-    voice: process.env.THOUGHTLY_API_KEY != null,
+    sms: hasAnyEnv("EASY_TEXT_MARKETING_API_KEY", "EASYTEXTMARKETING_API_KEY", "EASY_TEXT_MARKETING_WEBHOOK_URL", "EASYTEXTMARKETING_WEBHOOK_URL"),
+    chat: hasAnyEnv("INSIGHTO_API_KEY", "INSIGHTO_WEBHOOK_URL", "INSIGHTO_AGENT_WEBHOOK_URL", "INSIGHTO_AGENT_ID", "INSIGHTO_BOT_ID"),
+    voice: hasAnyEnv("THOUGHTLY_API_KEY", "THOUGHTLY_WEBHOOK_URL", "THOUGHTLY_AGENT_WEBHOOK_URL", "THOUGHTLY_AGENT_ID", "THOUGHTLY_FLOW_ID"),
   },
 };
 
