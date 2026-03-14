@@ -40,6 +40,15 @@ function getN8nWebhookUrl() {
   return getEnvValue("N8N_WEBHOOK_URL", "N8N_LEADOS_WEBHOOK_URL", "LEAD_OS_N8N_WEBHOOK_URL", "N8N_WEBHOOK");
 }
 
+function getN8nApiKey() {
+  return getEnvValue("N8N_API_KEY");
+}
+
+function getN8nBaseUrl() {
+  const value = getEnvValue("N8N_BASE_URL", "N8N_API_URL", "N8N_URL");
+  return value?.replace(/\/+$/, "");
+}
+
 function getEasyTextMarketingApiKey() {
   return getEnvValue("EASY_TEXT_MARKETING_API_KEY", "EASYTEXTMARKETING_API_KEY");
 }
@@ -138,7 +147,7 @@ export const integrationMap = {
   suitedash: integration(Boolean((process.env.SUITEDASH_PUBLIC_ID ?? embeddedSecrets.suitedash.publicId) && (process.env.SUITEDASH_SECRET_KEY ?? embeddedSecrets.suitedash.secretKey)), "crm"),
   aitable: integration(Boolean((process.env.AITABLE_API_TOKEN ?? embeddedSecrets.aitable.apiToken) && (process.env.AITABLE_DATASHEET_ID ?? embeddedSecrets.aitable.datasheetId)), "ledger"),
   agenticflow: integration(Boolean(process.env.AGENTICFLOW_API_KEY ?? embeddedSecrets.agenticflow.apiKey), "intelligence"),
-  n8n: integration(Boolean(getN8nWebhookUrl()), "orchestration"),
+  n8n: integration(Boolean(getN8nWebhookUrl() || (getN8nApiKey() && getN8nBaseUrl())), "orchestration"),
   boost: integration(Boolean((process.env.BOOST_SPACE_API_KEY ?? embeddedSecrets.boost.apiKey) || (process.env.BOOST_SPACE_MAKE_TOKEN ?? embeddedSecrets.boost.makeApiToken)), "orchestration"),
   emailit: integration(Boolean(process.env.EMAILIT_API_KEY ?? embeddedSecrets.emailit.apiKey), "email"),
   wbiztool: integration(Boolean((process.env.WBIZTOOL_API_KEY ?? embeddedSecrets.wbiztool.apiKey) && (process.env.WBIZTOOL_INSTANCE_ID ?? embeddedSecrets.wbiztool.instanceId)), "whatsapp"),
@@ -396,10 +405,22 @@ export async function emitWorkflowAction(eventName: string, payload: Record<stri
     return dryRunResult("n8n", `${eventName} workflow prepared`, payload);
   }
 
-  const response = await postJson(getN8nWebhookUrl() ?? "", {
-    eventName,
-    payload,
-  });
+  const webhookUrl = getN8nWebhookUrl();
+  if (!webhookUrl) {
+    return {
+      ok: true,
+      provider: "n8n",
+      mode: "prepared",
+      detail: "n8n API credentials detected; add a workflow webhook URL to emit runtime events",
+      payload: {
+        eventName,
+        payload,
+        baseUrl: getN8nBaseUrl(),
+      },
+    } satisfies ProviderResult;
+  }
+
+  const response = await postJson(webhookUrl, { eventName, payload });
 
   return {
     ok: response.ok,
