@@ -42,6 +42,9 @@ export default async function DashboardPage() {
             <Link href="/dashboard/workflows" className="secondary">
               Workflow runs
             </Link>
+            <Link href="/dashboard/experiments" className="secondary">
+              Experiments
+            </Link>
             <a href="/auth/sign-out" className="secondary">
               Sign out
             </a>
@@ -116,6 +119,14 @@ export default async function DashboardPage() {
                 Open workflow history
               </Link>
             </article>
+            <article className="stack-card">
+              <p className="eyebrow">Experiments</p>
+              <h3>{snapshot.experimentPerformance.length}</h3>
+              <p className="muted">Active experiment buckets currently represented in lead traffic.</p>
+              <Link href="/dashboard/experiments" className="secondary">
+                Open experiment view
+              </Link>
+            </article>
           </div>
         </article>
 
@@ -127,6 +138,7 @@ export default async function DashboardPage() {
             <li><Link href="/dashboard/bookings">Scheduling requests and availability lookups</Link></li>
             <li><Link href="/dashboard/documents">Proposal, agreement, and onboarding document jobs</Link></li>
             <li><Link href="/dashboard/workflows">Workflow emissions and execution outcomes</Link></li>
+            <li><Link href="/dashboard/experiments">Variant and milestone performance by experiment</Link></li>
           </ul>
         </article>
       </section>

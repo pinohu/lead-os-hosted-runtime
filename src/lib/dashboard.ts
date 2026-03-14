@@ -72,6 +72,51 @@ export function buildDashboardSnapshot(leads: StoredLeadRecord[], events: Canoni
       };
     });
 
+  const experimentPerformance = Object.entries(
+    leads.reduce<Record<string, {
+      experimentId: string;
+      entries: number;
+      hot: number;
+      m2: number;
+      m3: number;
+      converted: number;
+      variants: Record<string, number>;
+    }>>((acc, lead) => {
+      const experimentId = lead.trace.experimentId ?? "default";
+      const variantId = lead.trace.variantId ?? "default";
+      const entry = acc[experimentId] ?? {
+        experimentId,
+        entries: 0,
+        hot: 0,
+        m2: 0,
+        m3: 0,
+        converted: 0,
+        variants: {},
+      };
+      entry.entries += 1;
+      entry.hot += lead.hot ? 1 : 0;
+      entry.m2 += lead.milestones.leadMilestones.includes("lead-m2-return-engaged") ? 1 : 0;
+      entry.m3 += lead.milestones.leadMilestones.includes("lead-m3-booked-or-offered") ? 1 : 0;
+      entry.converted += ["converted", "onboarding", "active", "retention-risk", "referral-ready"].includes(lead.stage) ? 1 : 0;
+      entry.variants[variantId] = (entry.variants[variantId] ?? 0) + 1;
+      acc[experimentId] = entry;
+      return acc;
+    }, {}),
+  )
+    .map(([, experiment]) => ({
+      experimentId: experiment.experimentId,
+      entries: experiment.entries,
+      hotRate: ratio(experiment.hot, experiment.entries),
+      m1ToM2: ratio(experiment.m2, experiment.entries),
+      m1ToM3: ratio(experiment.m3, experiment.entries),
+      conversionRate: ratio(experiment.converted, experiment.entries),
+      topVariants: Object.entries(experiment.variants)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([variantId, count]) => ({ variantId, count })),
+    }))
+    .sort((a, b) => b.entries - a.entries);
+
   return {
     totals: {
       leads: leads.length,
@@ -93,5 +138,6 @@ export function buildDashboardSnapshot(leads: StoredLeadRecord[], events: Canoni
     topNiches: topBreakdown(leads.map((lead) => lead.niche)),
     recentMilestoneEvents,
     leadTimeline,
+    experimentPerformance,
   };
 }

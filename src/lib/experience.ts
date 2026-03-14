@@ -38,6 +38,7 @@ export type ExperienceProfile = {
   family: FunnelFamily;
   mode: ExperienceMode;
   device: "mobile" | "desktop";
+  experimentId: string;
   variantId: string;
   heroTitle: string;
   heroSummary: string;
@@ -298,6 +299,7 @@ export function resolveExperienceProfile(input: ExperienceInput): ExperienceProf
     family,
     mode,
     device,
+    experimentId: `${input.niche.slug}:${family}:${device}`,
     variantId: `${input.niche.slug}:${family}:${mode}:${device}`,
     heroTitle:
       input.returning
