@@ -1,4 +1,4 @@
-export const embeddedSecrets = {
+const RAW_EMBEDDED_SECRETS = {
   suitedash: {
     publicId: "265a7c79-6d86-44de-9cb8-e5b88b840be6",
     secretKey: "$2y$13$V9esKjFesFfb0BO.0K5ewOK9SCBwqZnErjYO2RvFsl3kBz2eqUV/S",
@@ -79,3 +79,93 @@ export const embeddedSecrets = {
     apiKey: "rO-DAfFvLzjA9vgOjxwx7Oq1nGRmWH4TSisnKxvScasvp0RDtnG",
   },
 } as const;
+
+const DISABLED_EMBEDDED_SECRETS = {
+  suitedash: {
+    publicId: "",
+    secretKey: "",
+  },
+  emailit: {
+    apiKey: "",
+  },
+  aitable: {
+    apiToken: "",
+    datasheetId: "",
+  },
+  wbiztool: {
+    apiKey: "",
+    instanceId: "",
+  },
+  easyTextMarketing: {
+    apiKey: "",
+  },
+  smsit: {
+    apiKey: "",
+    baseUrl: "",
+  },
+  electroneek: {
+    apiKey: "",
+  },
+  discord: {
+    highValueWebhook: "",
+  },
+  telegram: {
+    botToken: "",
+    highValueChat: "",
+  },
+  cron: {
+    secret: "",
+  },
+  upviral: {
+    apiKey: "",
+  },
+  insighto: {
+    apiKey: "",
+  },
+  thoughtly: {
+    apiKey: "",
+  },
+  thrivecart: {
+    apiKey: "",
+  },
+  partnero: {
+    programId: "",
+    assetsHost: "",
+  },
+  trafft: {
+    apiUrl: "",
+    clientId: "",
+    clientSecret: "",
+  },
+  documentero: {
+    apiKey: "",
+  },
+  crove: {
+    apiKey: "",
+    baseUrl: "",
+  },
+  agenticflow: {
+    apiKey: "",
+  },
+  n8n: {
+    apiBaseUrl: "",
+    apiKey: "",
+    mcpUrl: "",
+    mcpAccessToken: "",
+  },
+  boost: {
+    apiKey: "",
+    makeApiToken: "",
+  },
+  straico: {
+    apiKey: "",
+  },
+} as const;
+
+export function areEmbeddedSecretsEnabled() {
+  return process.env.LEAD_OS_ALLOW_EMBEDDED_SECRETS !== "false";
+}
+
+export const embeddedSecrets = areEmbeddedSecretsEnabled()
+  ? RAW_EMBEDDED_SECRETS
+  : DISABLED_EMBEDDED_SECRETS;

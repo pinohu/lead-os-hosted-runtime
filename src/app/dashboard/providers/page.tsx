@@ -27,6 +27,9 @@ export default async function ProviderHealthPage() {
             <Link href="/dashboard" className="secondary">
               Back to dashboard
             </Link>
+            <Link href="/dashboard/settings" className="secondary">
+              Runtime settings
+            </Link>
           </div>
         </div>
         <aside className="hero-rail">
@@ -42,6 +45,10 @@ export default async function ProviderHealthPage() {
             <li>
               <strong>Env-only ready</strong>
               <span>{configSummary.envOnlyReady ? "yes" : "no"}</span>
+            </li>
+            <li>
+              <strong>Embedded secrets</strong>
+              <span>{configSummary.embeddedSecretsEnabled ? "enabled" : "disabled"}</span>
             </li>
           </ul>
         </aside>

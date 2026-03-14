@@ -81,12 +81,20 @@ export interface DocumentJobRecord {
   updatedAt: string;
 }
 
+export interface RuntimeConfigRecord {
+  key: string;
+  value: Record<string, unknown>;
+  updatedAt: string;
+  updatedBy?: string;
+}
+
 const leadStore = new Map<string, StoredLeadRecord>();
 const eventStore: CanonicalEvent[] = [];
 const providerExecutionStore: ProviderExecutionRecord[] = [];
 const workflowRunStore: WorkflowRunRecord[] = [];
 const bookingJobStore = new Map<string, BookingJobRecord>();
 const documentJobStore = new Map<string, DocumentJobRecord>();
+const runtimeConfigStore = new Map<string, RuntimeConfigRecord>();
 
 let pool: Pool | null = null;
 let schemaReady: Promise<void> | null = null;
@@ -100,7 +108,8 @@ type AitableRuntimeKind =
   | "provider-execution"
   | "workflow-run"
   | "booking-job"
-  | "document-job";
+  | "document-job"
+  | "runtime-config";
 
 type AitableRuntimeEntry = {
   kind: AitableRuntimeKind;
@@ -111,7 +120,8 @@ type AitableRuntimeEntry = {
     | ProviderExecutionRecord
     | WorkflowRunRecord
     | BookingJobRecord
-    | DocumentJobRecord;
+    | DocumentJobRecord
+    | RuntimeConfigRecord;
 };
 
 function getDatabaseUrl() {
@@ -203,6 +213,12 @@ async function ensureSchema() {
         id TEXT PRIMARY KEY,
         lead_key TEXT NOT NULL,
         provider TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL,
+        payload JSONB NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS lead_os_runtime_config (
+        key TEXT PRIMARY KEY,
         updated_at TIMESTAMPTZ NOT NULL,
         payload JSONB NOT NULL
       );
@@ -806,6 +822,96 @@ export async function getDocumentJobs(leadKey?: string) {
   return result.rows.map((row) => row.payload);
 }
 
+export async function upsertRuntimeConfig(
+  config: Omit<RuntimeConfigRecord, "updatedAt"> & { updatedAt?: string },
+) {
+  const normalizedConfig: RuntimeConfigRecord = {
+    updatedAt: config.updatedAt ?? new Date().toISOString(),
+    ...config,
+  };
+  runtimeConfigStore.set(normalizedConfig.key, normalizedConfig);
+
+  const activePool = getPool();
+  if (!activePool && runtimeMode() === "aitable") {
+    await appendAitableRuntimeEntry("runtime-config", normalizedConfig.key, normalizedConfig);
+    return normalizedConfig;
+  }
+  if (!activePool) {
+    return normalizedConfig;
+  }
+
+  await ensureSchema();
+  await activePool.query(
+    `
+      INSERT INTO lead_os_runtime_config (key, updated_at, payload)
+      VALUES ($1, $2::timestamptz, $3::jsonb)
+      ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, updated_at = EXCLUDED.updated_at
+    `,
+    [
+      normalizedConfig.key,
+      normalizedConfig.updatedAt,
+      JSON.stringify(normalizedConfig),
+    ],
+  );
+  return normalizedConfig;
+}
+
+export async function getRuntimeConfig(key: string) {
+  if (!getPool() && runtimeMode() === "aitable") {
+    const configs = await getRuntimeConfigs();
+    return configs.find((entry) => entry.key === key);
+  }
+  if (!getPool()) {
+    return runtimeConfigStore.get(key);
+  }
+
+  await ensureSchema();
+  const result = await getPool()!.query<{ payload: RuntimeConfigRecord }>(
+    "SELECT payload FROM lead_os_runtime_config WHERE key = $1 LIMIT 1",
+    [key],
+  );
+  const config = result.rows[0]?.payload;
+  if (config) {
+    runtimeConfigStore.set(config.key, config);
+  }
+  return config;
+}
+
+export async function getRuntimeConfigs() {
+  if (!getPool() && runtimeMode() === "aitable") {
+    const entries = await getAitableRuntimeEntries();
+    const latestByKey = new Map<string, RuntimeConfigRecord>();
+    for (const entry of entries) {
+      if (entry.kind !== "runtime-config") continue;
+      const record = entry.payload as RuntimeConfigRecord;
+      const existing = latestByKey.get(record.key);
+      if (!existing || new Date(record.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
+        latestByKey.set(record.key, record);
+      }
+    }
+    const values = sortByUpdatedAt([...latestByKey.values()]);
+    runtimeConfigStore.clear();
+    for (const value of values) {
+      runtimeConfigStore.set(value.key, value);
+    }
+    return values;
+  }
+  if (!getPool()) {
+    return sortByUpdatedAt([...runtimeConfigStore.values()]);
+  }
+
+  await ensureSchema();
+  const result = await getPool()!.query<{ payload: RuntimeConfigRecord }>(
+    "SELECT payload FROM lead_os_runtime_config ORDER BY updated_at DESC",
+  );
+  const configs = result.rows.map((row) => row.payload);
+  runtimeConfigStore.clear();
+  for (const config of configs) {
+    runtimeConfigStore.set(config.key, config);
+  }
+  return configs;
+}
+
 export async function resetRuntimeStore() {
   leadStore.clear();
   eventStore.length = 0;
@@ -813,6 +919,7 @@ export async function resetRuntimeStore() {
   workflowRunStore.length = 0;
   bookingJobStore.clear();
   documentJobStore.clear();
+  runtimeConfigStore.clear();
   invalidateAitableCache();
 
   const activePool = getPool();
@@ -829,6 +936,7 @@ export async function resetRuntimeStore() {
     TRUNCATE TABLE
       lead_os_document_jobs,
       lead_os_booking_jobs,
+      lead_os_runtime_config,
       lead_os_workflow_runs,
       lead_os_provider_executions,
       lead_os_events,

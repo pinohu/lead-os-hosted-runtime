@@ -33,6 +33,9 @@ export default async function DashboardPage() {
             <Link href="/dashboard/providers" className="primary">
               Provider health
             </Link>
+            <Link href="/dashboard/settings" className="secondary">
+              Runtime settings
+            </Link>
             <Link href="/dashboard/bookings" className="secondary">
               Booking jobs
             </Link>
@@ -135,6 +138,7 @@ export default async function DashboardPage() {
           <h2>Fast links for intervention</h2>
           <ul className="check-list">
             <li><Link href="/dashboard/providers">Provider health and channel readiness</Link></li>
+            <li><Link href="/dashboard/settings">Runtime settings for provider mappings and template IDs</Link></li>
             <li><Link href="/dashboard/bookings">Scheduling requests and availability lookups</Link></li>
             <li><Link href="/dashboard/documents">Proposal, agreement, and onboarding document jobs</Link></li>
             <li><Link href="/dashboard/workflows">Workflow emissions and execution outcomes</Link></li>

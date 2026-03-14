@@ -1,4 +1,5 @@
 import { embeddedSecrets } from "./embedded-secrets.ts";
+import { getOperationalRuntimeConfig } from "./runtime-config.ts";
 import { TOOL_OWNERSHIP_MAP } from "./runtime-schema.ts";
 import { createContact } from "./suitedash.ts";
 import type { CanonicalEvent, TraceContext } from "./trace.ts";
@@ -442,7 +443,10 @@ function buildTrafftApiUrl(path: string) {
   return `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-function buildTrafftBookingUrl(payload?: Record<string, unknown>) {
+function buildTrafftBookingUrl(
+  payload: Record<string, unknown> | undefined,
+  runtimeConfig?: Awaited<ReturnType<typeof getOperationalRuntimeConfig>>["trafft"],
+) {
   const directBookingUrl = getTrafftBookingUrl();
   if (directBookingUrl) {
     return directBookingUrl;
@@ -455,10 +459,14 @@ function buildTrafftBookingUrl(payload?: Record<string, unknown>) {
     metadata?.bookingUrl,
     metadata?.publicBookingUrl,
     metadata?.bookingLink,
+    runtimeConfig?.publicBookingUrl,
   );
 }
 
-function resolveTrafftServiceId(payload: Record<string, unknown>) {
+function resolveTrafftServiceId(
+  payload: Record<string, unknown>,
+  runtimeConfig?: Awaited<ReturnType<typeof getOperationalRuntimeConfig>>["trafft"],
+) {
   const metadata = getNestedRecord(payload, "metadata");
   const explicitId = getStringValue(
     payload.serviceId,
@@ -472,11 +480,11 @@ function resolveTrafftServiceId(payload: Record<string, unknown>) {
 
   const serviceName = getStringValue(payload.service, metadata?.service)?.toLowerCase();
   if (!serviceName) {
-    return getTrafftDefaultServiceId();
+    return getTrafftDefaultServiceId() ?? runtimeConfig?.defaultServiceId;
   }
 
   const serviceMap = getTrafftServiceMap();
-  return serviceMap[serviceName] ?? getTrafftDefaultServiceId();
+  return serviceMap[serviceName] ?? runtimeConfig?.serviceMap[serviceName] ?? getTrafftDefaultServiceId() ?? runtimeConfig?.defaultServiceId;
 }
 
 function buildTrafftCalendarWindow(payload: Record<string, unknown>) {
@@ -537,7 +545,11 @@ function resolveDocumentType(payload: Record<string, unknown>) {
   ) ?? "proposal";
 }
 
-function resolveDocumentTemplateId(payload: Record<string, unknown>, documentType: string) {
+function resolveDocumentTemplateId(
+  payload: Record<string, unknown>,
+  documentType: string,
+  runtimeConfig?: Awaited<ReturnType<typeof getOperationalRuntimeConfig>>["documentero"],
+) {
   const metadata = getNestedRecord(payload, "metadata");
   const explicitId = getStringValue(
     payload.templateId,
@@ -552,17 +564,21 @@ function resolveDocumentTemplateId(payload: Record<string, unknown>, documentTyp
   switch (documentType) {
     case "agreement":
     case "service-agreement":
-      return getDocumenteroAgreementTemplateId() ?? getDocumenteroTemplateId();
+      return getDocumenteroAgreementTemplateId() ?? runtimeConfig?.agreementTemplateId ?? getDocumenteroTemplateId();
     case "onboarding":
     case "onboarding-pack":
-      return getDocumenteroOnboardingTemplateId() ?? getDocumenteroTemplateId();
+      return getDocumenteroOnboardingTemplateId() ?? runtimeConfig?.onboardingTemplateId ?? getDocumenteroTemplateId();
     case "proposal":
     default:
-      return getDocumenteroProposalTemplateId() ?? getDocumenteroTemplateId();
+      return getDocumenteroProposalTemplateId() ?? runtimeConfig?.proposalTemplateId ?? getDocumenteroTemplateId();
   }
 }
 
-function resolveCroveTemplateId(payload: Record<string, unknown>, documentType: string) {
+function resolveCroveTemplateId(
+  payload: Record<string, unknown>,
+  documentType: string,
+  runtimeConfig?: Awaited<ReturnType<typeof getOperationalRuntimeConfig>>["crove"],
+) {
   const metadata = getNestedRecord(payload, "metadata");
   const explicitId = getStringValue(
     payload.croveTemplateId,
@@ -575,13 +591,13 @@ function resolveCroveTemplateId(payload: Record<string, unknown>, documentType: 
   switch (documentType) {
     case "agreement":
     case "service-agreement":
-      return getCroveAgreementTemplateId() ?? getCroveTemplateId();
+      return getCroveAgreementTemplateId() ?? runtimeConfig?.agreementTemplateId ?? getCroveTemplateId();
     case "onboarding":
     case "onboarding-pack":
-      return getCroveOnboardingTemplateId() ?? getCroveTemplateId();
+      return getCroveOnboardingTemplateId() ?? runtimeConfig?.onboardingTemplateId ?? getCroveTemplateId();
     case "proposal":
     default:
-      return getCroveProposalTemplateId() ?? getCroveTemplateId();
+      return getCroveProposalTemplateId() ?? runtimeConfig?.proposalTemplateId ?? getCroveTemplateId();
   }
 }
 
@@ -948,8 +964,9 @@ export async function createBookingAction(payload: Record<string, unknown>) {
   if (payload.dryRun || !provider.configured || !provider.live) {
     return dryRunResult("Trafft", "Booking request prepared", payload);
   }
+  const runtimeConfig = await getOperationalRuntimeConfig();
   const trafftUrl = getTrafftApiUrl();
-  const bookingUrl = buildTrafftBookingUrl(payload);
+  const bookingUrl = buildTrafftBookingUrl(payload, runtimeConfig.trafft);
   const authToken = getTrafftBearerToken();
 
   if (trafftUrl) {
@@ -969,7 +986,7 @@ export async function createBookingAction(payload: Record<string, unknown>) {
     }
 
     const tenantData = asRecord(tenantDataResponse.json);
-    const serviceId = resolveTrafftServiceId(payload);
+    const serviceId = resolveTrafftServiceId(payload, runtimeConfig.trafft);
     const metadata = getNestedRecord(payload, "metadata");
     const employeeId = getStringValue(payload.employeeId, metadata?.employeeId);
     const locationId = getStringValue(payload.locationId, metadata?.locationId);
@@ -1059,6 +1076,7 @@ export async function createBookingAction(payload: Record<string, unknown>) {
         clientIdPresent: Boolean(getTrafftClientId()),
         clientSecretPresent: Boolean(getTrafftClientSecret()),
         authTokenPresent: Boolean(authToken),
+        runtimeConfig,
       },
     } satisfies ProviderResult;
   }
@@ -1113,11 +1131,12 @@ export async function generateDocumentAction(payload: Record<string, unknown>) {
     return dryRunResult("Document Provider", "Document generation prepared", payload);
   }
 
+  const runtimeConfig = await getOperationalRuntimeConfig();
   const documentType = resolveDocumentType(payload);
   const documentData = buildDocumentData(payload);
-  const templateId = resolveDocumentTemplateId(payload, documentType);
+  const templateId = resolveDocumentTemplateId(payload, documentType, runtimeConfig.documentero);
   if (provider.configured && provider.live && getDocumenteroApiKey() && templateId) {
-    const format = getStringValue(payload.documentFormat, payload.format) ?? getDocumenteroDefaultFormat();
+    const format = getStringValue(payload.documentFormat, payload.format) ?? runtimeConfig.documentero.defaultFormat ?? getDocumenteroDefaultFormat();
     const response = await postJson(
       "https://app.documentero.com/api",
       {
@@ -1165,8 +1184,8 @@ export async function generateDocumentAction(payload: Record<string, unknown>) {
     } satisfies ProviderResult;
   }
 
-  const croveTemplateId = resolveCroveTemplateId(payload, documentType);
-  const croveWebhookUrl = getCroveWebhookUrl();
+  const croveTemplateId = resolveCroveTemplateId(payload, documentType, runtimeConfig.crove);
+  const croveWebhookUrl = getCroveWebhookUrl() ?? runtimeConfig.crove.webhookUrl;
   if (croveProvider.configured && croveProvider.live && croveWebhookUrl) {
     const response = await postJson(croveWebhookUrl, {
       templateId: croveTemplateId,

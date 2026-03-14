@@ -1,4 +1,4 @@
-import { embeddedSecrets } from "./embedded-secrets.ts";
+import { areEmbeddedSecretsEnabled, embeddedSecrets } from "./embedded-secrets.ts";
 
 export type ConfigSource = "env" | "embedded" | "mixed" | "missing";
 
@@ -81,6 +81,7 @@ export function getProviderConfigStatuses(): ProviderConfigStatus[] {
 export function getConfigStatusSummary() {
   const providers = getProviderConfigStatuses();
   return {
+    embeddedSecretsEnabled: areEmbeddedSecretsEnabled(),
     envOnlyReady: providers.every((provider) => provider.source === "env" || provider.source === "missing"),
     embeddedFallbacks: providers.filter((provider) => provider.usesEmbeddedFallback).map((provider) => provider.key),
     missingEnvBackedProviders: providers
