@@ -1,5 +1,11 @@
-import type { LeadStage } from "./runtime-schema.ts";
+import type { CustomerMilestoneId, LeadMilestoneId, LeadStage } from "./runtime-schema.ts";
 import type { CanonicalEvent, TraceContext } from "./trace.ts";
+
+export interface LeadMilestoneState {
+  visitCount: number;
+  leadMilestones: LeadMilestoneId[];
+  customerMilestones: CustomerMilestoneId[];
+}
 
 export interface StoredLeadRecord {
   leadKey: string;
@@ -23,6 +29,7 @@ export interface StoredLeadRecord {
   updatedAt: string;
   status: string;
   sentNurtureStages: string[];
+  milestones: LeadMilestoneState;
   metadata: Record<string, unknown>;
 }
 

@@ -24,6 +24,8 @@ test("persistLead stores normalized email-based identities and returns graph-awa
   assert.equal(result.decision.family, "chat");
   assert.equal(result.trace.tenant, tenantConfig.tenantId);
   assert.equal(result.followup.email?.mode, "dry-run");
+  assert.deepEqual(result.record.milestones.leadMilestones, ["lead-m1-captured"]);
+  assert.equal(result.record.milestones.visitCount, 1);
 });
 
 test("default funnel graphs exist for canonical families", () => {

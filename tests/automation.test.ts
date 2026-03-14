@@ -1,12 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AUTOMATION_RECIPES, NURTURE_SEQUENCE, resolveNextNurtureStage } from "../src/lib/automation.ts";
+import { AUTOMATION_RECIPES, NURTURE_SEQUENCE, THREE_VISIT_FRAMEWORK, resolveNextNurtureStage } from "../src/lib/automation.ts";
 import { resetRuntimeStore, upsertLeadRecord } from "../src/lib/runtime-store.ts";
 
 test("automation recipes exist for every implemented family", () => {
   assert.equal(Object.keys(AUTOMATION_RECIPES).length, 10);
   assert.equal(NURTURE_SEQUENCE[0]?.day, 0);
   assert.equal(NURTURE_SEQUENCE.at(-1)?.day, 30);
+  assert.equal(THREE_VISIT_FRAMEWORK.lead.length, 3);
+  assert.equal(THREE_VISIT_FRAMEWORK.customer.length, 3);
 });
 
 test("nurture resolution picks the next unsent stage", () => {
@@ -44,6 +46,11 @@ test("nurture resolution picks the next unsent stage", () => {
     updatedAt: now.toISOString(),
     status: "LEAD-CAPTURED",
     sentNurtureStages: ["day-0", "day-2"],
+    milestones: {
+      visitCount: 1,
+      leadMilestones: ["lead-m1-captured"],
+      customerMilestones: [],
+    },
     metadata: {},
   });
 

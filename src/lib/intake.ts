@@ -10,10 +10,12 @@ import {
   syncLeadToCrm,
 } from "./providers.ts";
 import type { LeadStage } from "./runtime-schema.ts";
+import type { CustomerMilestoneId, LeadMilestoneId } from "./runtime-schema.ts";
 import {
   appendEvents,
   getLeadRecord,
   markNurtureStageSent,
+  type StoredLeadRecord,
   upsertLeadRecord,
 } from "./runtime-store.ts";
 import {
@@ -66,6 +68,7 @@ export interface IntakeResult {
   success: boolean;
   leadKey: string;
   existing: boolean;
+  record: StoredLeadRecord;
   decision: ReturnType<typeof decideNextStep>;
   trace: ReturnType<typeof ensureTraceContext>;
   score: number;
@@ -135,6 +138,45 @@ function resolveLeadStage(payload: HostedLeadPayload): LeadStage {
   return "captured";
 }
 
+function resolveVisitCount(payload: HostedLeadPayload, existingRecord?: { milestones?: { visitCount: number } }) {
+  const priorCount = existingRecord?.milestones?.visitCount ?? 0;
+  if (priorCount > 0) {
+    return payload.returning ? priorCount + 1 : priorCount;
+  }
+  return payload.returning ? 2 : 1;
+}
+
+function resolveLeadMilestones(stage: LeadStage, visitCount: number): LeadMilestoneId[] {
+  const milestones: LeadMilestoneId[] = [];
+  if (stage !== "anonymous" && stage !== "engaged") {
+    milestones.push("lead-m1-captured");
+  }
+  if (visitCount >= 2) {
+    milestones.push("lead-m2-return-engaged");
+  }
+  if (["qualified", "booked", "offered", "converted", "onboarding", "active", "referral-ready"].includes(stage)) {
+    milestones.push("lead-m3-booked-or-offered");
+  }
+  return milestones;
+}
+
+function resolveCustomerMilestones(
+  stage: LeadStage,
+  metadata?: Record<string, unknown>,
+): CustomerMilestoneId[] {
+  const milestones: CustomerMilestoneId[] = [];
+  if (["converted", "onboarding", "active", "retention-risk", "referral-ready"].includes(stage)) {
+    milestones.push("customer-m1-onboarded");
+  }
+  if (metadata?.activationMilestone === true || ["active", "retention-risk", "referral-ready"].includes(stage)) {
+    milestones.push("customer-m2-activated");
+  }
+  if (metadata?.valueRealized === true || metadata?.referralReady === true || stage === "referral-ready") {
+    milestones.push("customer-m3-value-realized");
+  }
+  return milestones;
+}
+
 function buildReplayKey(payload: HostedLeadPayload, normalizedEmail?: string, normalizedPhone?: string) {
   return [
     payload.source,
@@ -196,6 +238,9 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
   const score = computeLeadScore(payload);
   const hot = score >= 80 || Boolean(payload.wantsBooking || payload.askingForQuote);
   const stage = resolveLeadStage(payload);
+  const visitCount = resolveVisitCount(payload, existingRecord);
+  const leadMilestones = resolveLeadMilestones(stage, visitCount);
+  const customerMilestones = resolveCustomerMilestones(stage, payload.metadata);
   const trace = ensureTraceContext({
     visitorId: payload.visitorId,
     sessionId: payload.sessionId,
@@ -214,7 +259,7 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
   });
 
   const now = new Date().toISOString();
-  upsertLeadRecord({
+  const record = upsertLeadRecord({
     leadKey,
     trace,
     firstName,
@@ -236,6 +281,11 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     updatedAt: now,
     status: replayed ? "LEAD-DEDUPED" : "LEAD-CAPTURED",
     sentNurtureStages: existingRecord?.sentNurtureStages ?? [],
+    milestones: {
+      visitCount,
+      leadMilestones,
+      customerMilestones,
+    },
     metadata: payload.metadata ?? {},
   });
 
@@ -259,6 +309,20 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
       destination: decision.destination,
       ctaLabel: decision.ctaLabel,
     }),
+    ...leadMilestones.map((milestoneId) =>
+      createCanonicalEvent(trace, "lead_milestone_reached", "internal", "MILESTONE", {
+        milestoneId,
+        visitCount,
+        stage,
+      })
+    ),
+    ...customerMilestones.map((milestoneId) =>
+      createCanonicalEvent(trace, "customer_milestone_reached", "internal", "MILESTONE", {
+        milestoneId,
+        visitCount,
+        stage,
+      })
+    ),
   ];
   appendEvents(events);
 
@@ -382,6 +446,7 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     success: true,
     leadKey,
     existing: existing || replayed,
+    record,
     decision,
     trace,
     score,

@@ -25,6 +25,18 @@ export type LeadStage =
   | "referral-ready"
   | "churned";
 
+export type LeadMilestoneId =
+  | "lead-m1-captured"
+  | "lead-m2-return-engaged"
+  | "lead-m3-booked-or-offered";
+
+export type CustomerMilestoneId =
+  | "customer-m1-onboarded"
+  | "customer-m2-activated"
+  | "customer-m3-value-realized";
+
+export type MilestoneTrack = "lead" | "customer";
+
 export type NodeType =
   | "landing_page"
   | "bridge_page"
@@ -206,7 +218,9 @@ export type CanonicalEventType =
   | "retention_sequence_started"
   | "refund_risk_detected"
   | "referral_invite_sent"
-  | "review_requested";
+  | "review_requested"
+  | "lead_milestone_reached"
+  | "customer_milestone_reached";
 
 export interface TriggerDefinition {
   event: TriggerEvent;
@@ -306,6 +320,15 @@ export interface FunnelDefinition {
   defaults: FunnelDefaults;
 }
 
+export interface MilestoneDefinition<TId extends string = string> {
+  id: TId;
+  track: MilestoneTrack;
+  ordinal: 1 | 2 | 3;
+  label: string;
+  description: string;
+  targetOutcome: string;
+}
+
 export interface ToolOwnership {
   primary: string;
   responsibility: string;
@@ -313,6 +336,60 @@ export interface ToolOwnership {
 }
 
 export const DEFAULT_NURTURE_DAYS = [0, 2, 5, 10, 14, 21, 30];
+
+export const LEAD_MILESTONES: MilestoneDefinition<LeadMilestoneId>[] = [
+  {
+    id: "lead-m1-captured",
+    track: "lead",
+    ordinal: 1,
+    label: "Captured",
+    description: "The first meaningful conversion event. The visitor becomes a known lead.",
+    targetOutcome: "Create identity and deliver the first value moment.",
+  },
+  {
+    id: "lead-m2-return-engaged",
+    track: "lead",
+    ordinal: 2,
+    label: "Return Engagement",
+    description: "The lead comes back or takes a second meaningful action that proves interest.",
+    targetOutcome: "Earn a second trust event and deepen intent.",
+  },
+  {
+    id: "lead-m3-booked-or-offered",
+    track: "lead",
+    ordinal: 3,
+    label: "Booked or Offered",
+    description: "The lead reaches the third meaningful action: booking, proposal, checkout, or comparable commitment.",
+    targetOutcome: "Turn interest into a habit-forming conversion pattern.",
+  },
+];
+
+export const CUSTOMER_MILESTONES: MilestoneDefinition<CustomerMilestoneId>[] = [
+  {
+    id: "customer-m1-onboarded",
+    track: "customer",
+    ordinal: 1,
+    label: "Onboarded",
+    description: "The customer has received welcome, access, and a clear next step.",
+    targetOutcome: "Reduce uncertainty immediately after the sale.",
+  },
+  {
+    id: "customer-m2-activated",
+    track: "customer",
+    ordinal: 2,
+    label: "Activated",
+    description: "The customer completes a meaningful setup or usage milestone.",
+    targetOutcome: "Create the second success moment that drives retention.",
+  },
+  {
+    id: "customer-m3-value-realized",
+    track: "customer",
+    ordinal: 3,
+    label: "Value Realized",
+    description: "The customer experiences a result worth repeating, renewing, or referring.",
+    targetOutcome: "Open the door to continuity, expansion, and referrals.",
+  },
+];
 
 export const TOOL_OWNERSHIP_MAP: Record<string, ToolOwnership> = {
   runtime: { primary: "LeadOS runtime", responsibility: "capture, routing, trace, graph execution" },

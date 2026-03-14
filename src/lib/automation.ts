@@ -1,4 +1,12 @@
-import type { FunnelFamily } from "./runtime-schema.ts";
+import {
+  CUSTOMER_MILESTONES,
+  LEAD_MILESTONES,
+} from "./runtime-schema.ts";
+import type {
+  CustomerMilestoneId,
+  FunnelFamily,
+  LeadMilestoneId,
+} from "./runtime-schema.ts";
 import type { StoredLeadRecord } from "./runtime-store.ts";
 
 export interface AutomationRecipe {
@@ -6,6 +14,10 @@ export interface AutomationRecipe {
   summary: string;
   trigger: string;
   actions: string[];
+  milestoneStrategy: {
+    lead: LeadMilestoneId[];
+    customer: CustomerMilestoneId[];
+  };
 }
 
 export interface NurtureStage {
@@ -32,9 +44,14 @@ export const AUTOMATION_RECIPES: Record<FunnelFamily, AutomationRecipe> = {
     trigger: "Opt-in submitted",
     actions: [
       "Send immediate value delivery",
+      "Engineer a second return action before the direct ask",
       "Start day 2, 5, 10, 14, 21, 30 nurture cadence",
-      "Escalate hot leads to booking",
+      "Escalate hot leads to booking once the third milestone is in reach",
     ],
+    milestoneStrategy: {
+      lead: ["lead-m1-captured", "lead-m2-return-engaged", "lead-m3-booked-or-offered"],
+      customer: [],
+    },
   },
   qualification: {
     family: "qualification",
@@ -42,9 +59,14 @@ export const AUTOMATION_RECIPES: Record<FunnelFamily, AutomationRecipe> = {
     trigger: "Assessment or application completed",
     actions: [
       "Calculate readiness score",
+      "Create a second trust event with personalized follow-up",
       "Assign owner for hot leads",
-      "Send consult invite or educational follow-up",
+      "Send consult invite or educational follow-up tied to milestone three",
     ],
+    milestoneStrategy: {
+      lead: ["lead-m1-captured", "lead-m2-return-engaged", "lead-m3-booked-or-offered"],
+      customer: [],
+    },
   },
   chat: {
     family: "chat",
@@ -53,8 +75,12 @@ export const AUTOMATION_RECIPES: Record<FunnelFamily, AutomationRecipe> = {
     actions: [
       "Summarize conversation",
       "Classify objection and persona",
-      "Route to assessment, webinar, booking, or direct offer",
+      "Route to assessment, webinar, booking, or direct offer based on the next milestone",
     ],
+    milestoneStrategy: {
+      lead: ["lead-m1-captured", "lead-m2-return-engaged", "lead-m3-booked-or-offered"],
+      customer: [],
+    },
   },
   webinar: {
     family: "webinar",
@@ -62,29 +88,41 @@ export const AUTOMATION_RECIPES: Record<FunnelFamily, AutomationRecipe> = {
     trigger: "Webinar registration",
     actions: [
       "Send confirmation and reminders",
-      "Track attendance",
-      "Send replay or pitch follow-up",
+      "Track attendance as the second trust event",
+      "Send replay or pitch follow-up to push milestone three",
     ],
+    milestoneStrategy: {
+      lead: ["lead-m1-captured", "lead-m2-return-engaged", "lead-m3-booked-or-offered"],
+      customer: [],
+    },
   },
   authority: {
     family: "authority",
     summary: "Warm skeptical visitors with proof, then route to consult or offer.",
     trigger: "Content or documentary engagement",
     actions: [
-      "Score content engagement",
+      "Score content engagement and repeat consumption",
       "Classify objection",
-      "Route to consult, webinar, or offer",
+      "Route to consult, webinar, or offer when the third milestone is primed",
     ],
+    milestoneStrategy: {
+      lead: ["lead-m1-captured", "lead-m2-return-engaged", "lead-m3-booked-or-offered"],
+      customer: [],
+    },
   },
   checkout: {
     family: "checkout",
     summary: "Push toward purchase, then recover abandonments on 1h, 24h, and 48h intervals.",
     trigger: "Checkout started",
     actions: [
-      "Track checkout start and completion",
+      "Track checkout start as the high-intent third milestone signal",
       "Trigger onboarding on success",
       "Run abandonment recovery sequence on failure",
     ],
+    milestoneStrategy: {
+      lead: ["lead-m1-captured", "lead-m2-return-engaged", "lead-m3-booked-or-offered"],
+      customer: ["customer-m1-onboarded"],
+    },
   },
   retention: {
     family: "retention",
@@ -92,9 +130,13 @@ export const AUTOMATION_RECIPES: Record<FunnelFamily, AutomationRecipe> = {
     trigger: "Conversion completed",
     actions: [
       "Send welcome and portal invite",
-      "Drive checklist and kickoff",
-      "Detect activation and invite referrals",
+      "Drive checklist and kickoff toward activation milestone two",
+      "Detect value realization and invite referrals after milestone three",
     ],
+    milestoneStrategy: {
+      lead: [],
+      customer: ["customer-m1-onboarded", "customer-m2-activated", "customer-m3-value-realized"],
+    },
   },
   rescue: {
     family: "rescue",
@@ -105,6 +147,10 @@ export const AUTOMATION_RECIPES: Record<FunnelFamily, AutomationRecipe> = {
       "Send save-path response",
       "Alert owner and branch to retain or churn",
     ],
+    milestoneStrategy: {
+      lead: [],
+      customer: ["customer-m1-onboarded", "customer-m2-activated", "customer-m3-value-realized"],
+    },
   },
   referral: {
     family: "referral",
@@ -112,9 +158,13 @@ export const AUTOMATION_RECIPES: Record<FunnelFamily, AutomationRecipe> = {
     trigger: "Happy customer or referral campaign start",
     actions: [
       "Send referral invite",
-      "Track milestones",
+      "Track milestone completion before asking for shares",
       "Write attribution back to lead record",
     ],
+    milestoneStrategy: {
+      lead: [],
+      customer: ["customer-m2-activated", "customer-m3-value-realized"],
+    },
   },
   continuity: {
     family: "continuity",
@@ -122,11 +172,22 @@ export const AUTOMATION_RECIPES: Record<FunnelFamily, AutomationRecipe> = {
     trigger: "Membership or subscription start",
     actions: [
       "Welcome and activate the member",
-      "Monitor renewal and churn risk",
-      "Promote continuity and retention offers",
+      "Monitor renewal and churn risk across milestones two and three",
+      "Promote continuity and retention offers after value is realized",
     ],
+    milestoneStrategy: {
+      lead: [],
+      customer: ["customer-m1-onboarded", "customer-m2-activated", "customer-m3-value-realized"],
+    },
   },
 };
+
+export const THREE_VISIT_FRAMEWORK = {
+  principle:
+    "LeadOS should optimize for the third meaningful interaction, not just the first conversion event.",
+  lead: LEAD_MILESTONES,
+  customer: CUSTOMER_MILESTONES,
+} as const;
 
 export function getRecipeForFamily(family: FunnelFamily) {
   return AUTOMATION_RECIPES[family];
@@ -154,4 +215,16 @@ export function resolveNextNurtureStage(lead: StoredLeadRecord, now = new Date()
     ageDays >= stage.day &&
     !lead.sentNurtureStages.includes(stage.id),
   );
+}
+
+export function summarizeMilestoneProgress(lead: StoredLeadRecord) {
+  return {
+    visitCount: lead.milestones.visitCount,
+    leadCompleted: lead.milestones.leadMilestones,
+    customerCompleted: lead.milestones.customerMilestones,
+    nextLeadMilestone:
+      LEAD_MILESTONES.find((milestone) => !lead.milestones.leadMilestones.includes(milestone.id)) ?? null,
+    nextCustomerMilestone:
+      CUSTOMER_MILESTONES.find((milestone) => !lead.milestones.customerMilestones.includes(milestone.id)) ?? null,
+  };
 }
