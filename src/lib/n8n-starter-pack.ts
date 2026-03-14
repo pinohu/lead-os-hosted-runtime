@@ -4,7 +4,7 @@ type N8nConnectionTarget = {
   index: number;
 };
 
-type N8nNode = {
+export type N8nNode = {
   id: string;
   name: string;
   type: string;
@@ -13,7 +13,7 @@ type N8nNode = {
   parameters: Record<string, unknown>;
 };
 
-type N8nWorkflow = {
+export type N8nWorkflow = {
   name: string;
   nodes: N8nNode[];
   connections: Record<string, Record<string, N8nConnectionTarget[][]>>;
@@ -398,4 +398,13 @@ export const N8N_STARTER_WORKFLOWS: N8nStarterWorkflow[] = [
 
 export function getN8nStarterWorkflow(slug: string) {
   return N8N_STARTER_WORKFLOWS.find((workflow) => workflow.slug === slug);
+}
+
+export function resolveN8nStarterWorkflows(slugs?: string[]) {
+  if (!slugs || slugs.length === 0) {
+    return N8N_STARTER_WORKFLOWS;
+  }
+
+  const requested = new Set(slugs);
+  return N8N_STARTER_WORKFLOWS.filter((workflow) => requested.has(workflow.slug));
 }

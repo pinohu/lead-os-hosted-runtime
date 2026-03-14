@@ -31,6 +31,8 @@ export const embeddedSecrets = {
     apiKey: "a9w_SNlebBN8edQmcYJGX7DGbFOfOc8fkH8PLFP0cQ14UG0",
   },
   n8n: {
+    apiBaseUrl: "https://n8n.audreysplace.place",
+    apiKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4NzAyYjQzYS1lNjAyLTQ1NzgtOTgyYy1kNTI4YWVhMDY0ZDciLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiZTlhNTc5NzMtOTk4Zi00MDI4LTg2MjMtNGI0N2U4NGQzZWY1IiwiaWF0IjoxNzczNDU2MzM4fQ.c-gnwCRji-d_zx3brR9JtScHD5Of2ILFv5x9oMEpRS8",
     mcpUrl: "https://n8n.audreysplace.place/mcp-server/http",
     mcpAccessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4NzAyYjQzYS1lNjAyLTQ1NzgtOTgyYy1kNTI4YWVhMDY0ZDciLCJpc3MiOiJuOG4iLCJhdWQiOiJtY3Atc2VydmVyLWFwaSIsImp0aSI6IjdmYmI2M2QwLWQxZDAtNDczYy04M2E3LTU2OGMxZjk4MzQ5OSIsImlhdCI6MTc3MzQ1NjQ5MH0.JE9ttijO9cwV-DuHJ6S8dVNOTa_i5mPWMJIhKIUsy7Y",
   },

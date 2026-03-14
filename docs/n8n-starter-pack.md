@@ -25,6 +25,7 @@ This hosted runtime now ships with a curated n8n starter pack instead of a rando
 LeadOS now exposes a curated manifest at:
 
 - `/api/n8n/manifest`
+- `/api/n8n/provision`
 
 And importable workflow JSON at:
 
@@ -33,6 +34,15 @@ And importable workflow JSON at:
 - `/api/n8n/workflows/checkout-recovery-ladder`
 - `/api/n8n/workflows/referral-activation-loop`
 - `/api/n8n/workflows/ai-lead-qualifier-rag`
+
+And one-click provisioning endpoints at:
+
+- `/api/n8n/provision`
+- `/api/n8n/provision/lead-intake-fanout`
+- `/api/n8n/provision/hot-lead-booking-rescue`
+- `/api/n8n/provision/checkout-recovery-ladder`
+- `/api/n8n/provision/referral-activation-loop`
+- `/api/n8n/provision/ai-lead-qualifier-rag`
 
 ## Workflow map
 
@@ -60,8 +70,8 @@ And importable workflow JSON at:
 
 ## Recommended usage
 
-1. Import the JSON into n8n.
-2. Replace placeholder URLs and credentials.
-3. Point webhook paths to your real LeadOS event sources.
-4. Validate workflows before activating them.
-5. Test in development before production.
+1. Use `/api/n8n/provision` to create or replace the full starter pack in n8n.
+2. Use `/api/n8n/provision/<slug>` when you only want one workflow refreshed.
+3. Use `/api/n8n/workflows/<slug>` when you want the raw JSON export instead.
+4. Replace any placeholder URLs or model settings that need tenant-specific behavior.
+5. Validate workflows in n8n before connecting them to production traffic.
