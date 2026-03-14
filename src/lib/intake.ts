@@ -273,6 +273,7 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     niche: trace.niche,
     score,
     stage,
+    dryRun: payload.dryRun,
   });
   const logging = await logEventsToLedger(events);
   const workflow = await emitWorkflowAction("lead.captured", {
@@ -337,7 +338,7 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
   });
 
   const [emailResult, whatsappResult, smsResult, alertResult] = await Promise.all([
-    immediatePlan.sendEmail && normalizedEmail
+    !payload.dryRun && immediatePlan.sendEmail && normalizedEmail
       ? sendEmailAction({
           to: normalizedEmail,
           subject: `${tenantConfig.brandName}: your next step`,
@@ -345,19 +346,19 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
           trace,
         })
       : Promise.resolve(null),
-    immediatePlan.sendWhatsApp && normalizedPhone
+    !payload.dryRun && immediatePlan.sendWhatsApp && normalizedPhone
       ? sendWhatsAppAction({
           phone: normalizedPhone,
           body: `Hi ${firstName}, ${tenantConfig.brandName} received your request. Next step: ${tenantConfig.siteUrl}${decision.destination}`,
         })
       : Promise.resolve(null),
-    immediatePlan.sendSms && normalizedPhone
+    !payload.dryRun && immediatePlan.sendSms && normalizedPhone
       ? sendSmsAction({
           phone: normalizedPhone,
           body: `${tenantConfig.brandName}: continue here ${tenantConfig.siteUrl}${decision.destination}`,
         })
       : Promise.resolve(null),
-    immediatePlan.alertOps
+    !payload.dryRun && immediatePlan.alertOps
       ? sendAlertAction({
           title: "Hot Lead Captured",
           body: `${firstName} ${lastName}`.trim() || leadKey,

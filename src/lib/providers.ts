@@ -280,7 +280,7 @@ export function getAutomationHealth() {
 
 export async function syncLeadToCrm(payload: Record<string, unknown>) {
   const provider = integrationMap.suitedash;
-  if (!provider.configured || !provider.live) {
+  if (payload.dryRun || !provider.configured || !provider.live) {
     return dryRunResult("SuiteDash", "CRM sync prepared", payload);
   }
   const firstName = String(payload.firstName ?? "Lead");
