@@ -121,6 +121,14 @@ function getEasyTextMarketingWebhookUrl() {
   return getEnvValue("EASY_TEXT_MARKETING_WEBHOOK_URL", "EASYTEXTMARKETING_WEBHOOK_URL");
 }
 
+function getSmsitApiKey() {
+  return getEnvValue("SMSIT_API_KEY") ?? embeddedSecrets.smsit.apiKey;
+}
+
+function getSmsitBaseUrl() {
+  return (getEnvValue("SMSIT_BASE_URL", "SMSIT_API_URL") ?? embeddedSecrets.smsit.baseUrl)?.replace(/\/+$/, "");
+}
+
 function getInsightoApiKey() {
   return getEnvValue("INSIGHTO_API_KEY") ?? embeddedSecrets.insighto.apiKey;
 }
@@ -236,6 +244,7 @@ export const integrationMap = {
   emailit: integration(Boolean(process.env.EMAILIT_API_KEY ?? embeddedSecrets.emailit.apiKey), "email"),
   wbiztool: integration(Boolean((process.env.WBIZTOOL_API_KEY ?? embeddedSecrets.wbiztool.apiKey) && (process.env.WBIZTOOL_INSTANCE_ID ?? embeddedSecrets.wbiztool.instanceId)), "whatsapp"),
   easyTextMarketing: integration(Boolean(getEasyTextMarketingApiKey() || getEasyTextMarketingWebhookUrl()), "sms"),
+  smsit: integration(Boolean(getSmsitApiKey() && getSmsitBaseUrl()), "sms"),
   insighto: integration(Boolean(getInsightoApiKey() || getInsightoWebhookUrl() || getInsightoAgentId()), "chat"),
   thoughtly: integration(Boolean(getThoughtlyApiKey() || getThoughtlyWebhookUrl() || getThoughtlyAgentId()), "voice"),
   trafft: integration(Boolean((getTrafftClientId() && getTrafftClientSecret() && getTrafftApiUrl()) || getLunacalApiKey() || getLunacalBookingUrl()), "booking"),
@@ -287,7 +296,7 @@ export function getAutomationHealth() {
     channels: {
       email: providers.emailit.live,
       whatsapp: providers.wbiztool.live,
-      sms: providers.easyTextMarketing.live,
+      sms: providers.easyTextMarketing.live || providers.smsit.live,
       chat: providers.insighto.live,
       voice: providers.thoughtly.live,
     },
@@ -443,6 +452,24 @@ export async function sendSmsAction(payload: { phone: string; body: string }) {
     mode: "prepared",
     detail: "SMS provider configured; direct API credentials detected without webhook bridge",
     payload,
+  } satisfies ProviderResult;
+}
+
+export async function sendSmsFallbackAction(payload: { phone: string; body: string }) {
+  const provider = integrationMap.smsit;
+  if (!provider.configured || !provider.live) {
+    return dryRunResult("SMS-IT", "SMS fallback prepared", { to: payload.phone });
+  }
+
+  return {
+    ok: true,
+    provider: "SMS-IT",
+    mode: "prepared",
+    detail: "SMS-IT credentials detected; direct endpoint mapping still needs account-specific send-route confirmation",
+    payload: {
+      ...payload,
+      baseUrl: getSmsitBaseUrl(),
+    },
   } satisfies ProviderResult;
 }
 

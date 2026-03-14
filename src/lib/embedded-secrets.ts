@@ -17,6 +17,10 @@ export const embeddedSecrets = {
   easyTextMarketing: {
     apiKey: "INS13175692173",
   },
+  smsit: {
+    apiKey: "SMSIT_dc3797bd2257eb3589d6c59822d4e8d9e72be5a91396bd2ecf29afdc2cf707d9",
+    baseUrl: "https://aicpanel.smsit.ai",
+  },
   discord: {
     highValueWebhook: "https://discord.com/api/webhooks/1480429897263480962/e-vvArec6HCRc_HpzxmWOpz3GbJ7ncekeLBD7hSnKHm4v-zXTwt8fm6DjrY7TUBeo6Ct",
   },

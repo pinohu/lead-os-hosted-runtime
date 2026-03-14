@@ -322,7 +322,7 @@ export const TOOL_OWNERSHIP_MAP: Record<string, ToolOwnership> = {
   orchestration: { primary: "n8n", responsibility: "workflow execution", support: ["Boost.space"] },
   email: { primary: "Emailit", responsibility: "transactional and nurture email" },
   whatsapp: { primary: "WbizTool", responsibility: "WhatsApp follow-up" },
-  sms: { primary: "Easy Text Marketing", responsibility: "SMS reminders and reactivation" },
+  sms: { primary: "Easy Text Marketing", responsibility: "SMS reminders and reactivation", support: ["SMS-IT"] },
   chat: { primary: "Insighto.ai", responsibility: "conversational qualification" },
   voice: { primary: "Thoughtly", responsibility: "phone callbacks and call-heavy flows" },
   popup: { primary: "ConvertBox", responsibility: "micro-segmentation and exit-intent capture" },
