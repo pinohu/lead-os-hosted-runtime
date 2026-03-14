@@ -11,6 +11,7 @@ export type N8nNode = {
   typeVersion: number;
   position: [number, number];
   parameters: Record<string, unknown>;
+  webhookId?: string;
 };
 
 export type N8nWorkflow = {
@@ -60,6 +61,7 @@ function webhookNode(id: string, name: string, path: string, position: [number, 
     type: "n8n-nodes-base.webhook",
     typeVersion: 2,
     position,
+    webhookId: path.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, ""),
     parameters: {
       httpMethod: "POST",
       path,
