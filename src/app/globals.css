@@ -574,6 +574,103 @@ button[disabled] {
   margin-top: -2px;
 }
 
+.settings-section {
+  display: grid;
+  gap: 16px;
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(20, 33, 29, 0.1);
+}
+
+.settings-section__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.settings-section__header h3 {
+  margin-bottom: 0.25rem;
+  font-size: 1.15rem;
+}
+
+.settings-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(34, 95, 84, 0.1);
+  color: #194439;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.settings-search {
+  display: grid;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.settings-search input {
+  width: 100%;
+  min-height: 52px;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(20, 33, 29, 0.14);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+}
+
+.catalog-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.catalog-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(20, 33, 29, 0.1);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.catalog-card__header {
+  display: grid;
+  gap: 6px;
+}
+
+.catalog-card__header strong {
+  font-size: 1rem;
+}
+
+.catalog-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mapping-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.mapping-row {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(20, 33, 29, 0.1);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.mapping-row__actions {
+  display: flex;
+  align-items: flex-end;
+}
+
 .stack-grid {
   display: grid;
   gap: 14px;
@@ -620,6 +717,15 @@ button[disabled] {
   .stack-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .catalog-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mapping-row {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.1fr) auto;
+    align-items: start;
+  }
 }
 
 @media (max-width: 719px) {
@@ -641,6 +747,10 @@ button[disabled] {
 
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .mapping-row__actions {
+    justify-content: flex-start;
   }
 }
 

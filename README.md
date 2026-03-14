@@ -15,6 +15,13 @@ The hosted runtime owns:
 - hosted assessments and calculators
 - shared tenant and niche manifests
 
+## Key docs
+
+- [AGENTS.md](./AGENTS.md)
+- [docs/runtime-operator-setup.md](./docs/runtime-operator-setup.md)
+- [docs/n8n-starter-pack.md](./docs/n8n-starter-pack.md)
+- [docs/three-visit-milestone-framework.md](./docs/three-visit-milestone-framework.md)
+
 ## Intended architecture
 
 ```text
