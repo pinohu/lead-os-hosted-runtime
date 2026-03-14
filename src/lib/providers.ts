@@ -221,6 +221,10 @@ function getElectroneekWebhookUrl() {
   return getEnvValue("ELECTRONEEK_WEBHOOK_URL", "ELECTRONEEK_BOT_WEBHOOK_URL");
 }
 
+function getElectroneekApiKey() {
+  return getEnvValue("ELECTRONEEK_API_KEY") ?? embeddedSecrets.electroneek.apiKey;
+}
+
 function integration(configured: boolean, ownerKey: keyof typeof TOOL_OWNERSHIP_MAP): IntegrationConfig {
   const owner = TOOL_OWNERSHIP_MAP[ownerKey];
   return {
@@ -253,7 +257,7 @@ export const integrationMap = {
   upviral: integration(Boolean(process.env.UPVIRAL_API_KEY ?? embeddedSecrets.upviral.apiKey), "referral"),
   partnero: integration(Boolean(getPartneroApiKey() || getPartneroWebhookUrl() || getPartneroProgramId()), "referral"),
   activepieces: integration(Boolean(getActivepiecesWebhookUrl()), "fallbackAutomation"),
-  electroneek: integration(Boolean(getElectroneekWebhookUrl()), "fallbackAutomation"),
+  electroneek: integration(Boolean(getElectroneekWebhookUrl() || getElectroneekApiKey()), "fallbackAutomation"),
 };
 
 async function postJson(url: string, body: unknown, headers: Record<string, string> = {}) {
@@ -789,7 +793,17 @@ export async function emitRpaFallbackAction(payload: Record<string, unknown>) {
   if (!provider.configured || !provider.live) {
     return dryRunResult("ElectroNeek", "RPA fallback prepared", payload);
   }
-  const response = await postJson(getElectroneekWebhookUrl() ?? "", payload);
+  const webhookUrl = getElectroneekWebhookUrl();
+  if (!webhookUrl) {
+    return {
+      ok: true,
+      provider: "ElectroNeek",
+      mode: "prepared",
+      detail: "ElectroNeek API key detected; add webhook URL to activate runtime fallback emission",
+      payload,
+    } satisfies ProviderResult;
+  }
+  const response = await postJson(webhookUrl, payload, getElectroneekApiKey() ? { Authorization: `Bearer ${getElectroneekApiKey()}` } : {});
   return {
     ok: response.ok,
     provider: "ElectroNeek",
