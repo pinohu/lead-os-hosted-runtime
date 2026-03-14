@@ -5,6 +5,7 @@ import {
   emitWorkflowAction,
   generateDocumentAction,
   logEventsToLedger,
+  type ProviderResult,
   sendAlertAction,
   sendEmailAction,
   sendSmsAction,
@@ -224,6 +225,36 @@ function normalizeDocumentTypes(stage: LeadStage, metadata: Record<string, unkno
   return [...requested];
 }
 
+function failedProviderResult(
+  provider: string,
+  detail: string,
+  payload?: Record<string, unknown>,
+): ProviderResult {
+  return {
+    ok: false,
+    provider,
+    mode: "live",
+    detail,
+    payload,
+  };
+}
+
+async function safelyRunProviderAction(
+  provider: string,
+  action: () => Promise<ProviderResult>,
+  payload?: Record<string, unknown>,
+) {
+  try {
+    return await action();
+  } catch (error) {
+    return failedProviderResult(
+      provider,
+      error instanceof Error ? error.message : `${provider} action failed`,
+      payload,
+    );
+  }
+}
+
 function resolveBookingJobStatus(result: Awaited<ReturnType<typeof createBookingAction>>) {
   if (result.mode === "dry-run") {
     return "prepared";
@@ -398,7 +429,7 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
   ];
   await appendEvents(events);
 
-  const crm = await syncLeadToCrm({
+  const crmPayload = {
     leadKey,
     firstName,
     lastName,
@@ -410,105 +441,143 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     score,
     stage,
     dryRun: payload.dryRun,
+  };
+  const crm = await safelyRunProviderAction("SuiteDash", () => syncLeadToCrm(crmPayload), crmPayload);
+  const logging = await safelyRunProviderAction("AITable", () => logEventsToLedger(events), {
+    leadKey,
+    eventCount: events.length,
   });
-  const logging = await logEventsToLedger(events);
-  const workflow = await emitWorkflowAction("lead.captured", {
+  const workflowPayload = {
     leadKey,
     trace,
     score,
     stage,
     family: decision.family,
-  });
-  const workflowTriggers = (await Promise.all([
+  };
+  const workflow = await safelyRunProviderAction("n8n", () => emitWorkflowAction("lead.captured", workflowPayload), workflowPayload);
+
+  const workflowTriggerSpecs: Array<{ eventName: string; payload: Record<string, unknown> } | null> = [
     hot
-      ? emitWorkflowAction("lead.hot", {
-          leadKey,
-          trace,
-          score,
-          stage,
-          family: decision.family,
-        })
-      : Promise.resolve(null),
-    (payload.source === "checkout" || payload.wantsCheckout || decision.family === "checkout")
-      ? emitWorkflowAction("checkout_started", {
-          leadKey,
-          trace,
-          score,
-          stage,
-          family: decision.family,
-          checkoutUrl: `${tenantConfig.siteUrl}${decision.destination}`,
-        })
-      : Promise.resolve(null),
-    (payload.source === "chat" || payload.prefersChat || decision.family === "chat")
-      ? emitWorkflowAction("lead.qualify.ai", {
-          leadKey,
-          trace,
-          score,
-          stage,
-          family: decision.family,
-          promptContext: {
-            source: payload.source,
-            message: payload.message,
-            service: trace.service,
-            niche: trace.niche,
+      ? {
+          eventName: "lead.hot",
+          payload: {
+            leadKey,
+            trace,
+            score,
+            stage,
+            family: decision.family,
           },
-        })
-      : Promise.resolve(null),
+        }
+      : null,
+    (payload.source === "checkout" || payload.wantsCheckout || decision.family === "checkout")
+      ? {
+          eventName: "checkout_started",
+          payload: {
+            leadKey,
+            trace,
+            score,
+            stage,
+            family: decision.family,
+            checkoutUrl: `${tenantConfig.siteUrl}${decision.destination}`,
+          },
+        }
+      : null,
+    (payload.source === "chat" || payload.prefersChat || decision.family === "chat")
+      ? {
+          eventName: "lead.qualify.ai",
+          payload: {
+            leadKey,
+            trace,
+            score,
+            stage,
+            family: decision.family,
+            promptContext: {
+              source: payload.source,
+              message: payload.message,
+              service: trace.service,
+              niche: trace.niche,
+            },
+          },
+        }
+      : null,
     (payload.metadata?.activationMilestone === true)
-      ? emitWorkflowAction("customer_activated", {
-          leadKey,
-          trace,
-          score,
-          stage,
-          family: decision.family,
-          metadata: payload.metadata,
-        })
-      : Promise.resolve(null),
+      ? {
+          eventName: "customer_activated",
+          payload: {
+            leadKey,
+            trace,
+            score,
+            stage,
+            family: decision.family,
+            metadata: payload.metadata,
+          },
+        }
+      : null,
     leadMilestones.includes("lead-m2-return-engaged")
-      ? emitWorkflowAction("lead.milestone.2", {
-          leadKey,
-          trace,
-          score,
-          stage,
-          family: decision.family,
-          visitCount,
-          milestones: leadMilestones,
-        })
-      : Promise.resolve(null),
+      ? {
+          eventName: "lead.milestone.2",
+          payload: {
+            leadKey,
+            trace,
+            score,
+            stage,
+            family: decision.family,
+            visitCount,
+            milestones: leadMilestones,
+          },
+        }
+      : null,
     leadMilestones.includes("lead-m3-booked-or-offered")
-      ? emitWorkflowAction("lead.milestone.3", {
-          leadKey,
-          trace,
-          score,
-          stage,
-          family: decision.family,
-          visitCount,
-          milestones: leadMilestones,
-        })
-      : Promise.resolve(null),
+      ? {
+          eventName: "lead.milestone.3",
+          payload: {
+            leadKey,
+            trace,
+            score,
+            stage,
+            family: decision.family,
+            visitCount,
+            milestones: leadMilestones,
+          },
+        }
+      : null,
     customerMilestones.includes("customer-m2-activated")
-      ? emitWorkflowAction("customer.milestone.2", {
-          leadKey,
-          trace,
-          score,
-          stage,
-          family: decision.family,
-          visitCount,
-          milestones: customerMilestones,
-        })
-      : Promise.resolve(null),
+      ? {
+          eventName: "customer.milestone.2",
+          payload: {
+            leadKey,
+            trace,
+            score,
+            stage,
+            family: decision.family,
+            visitCount,
+            milestones: customerMilestones,
+          },
+        }
+      : null,
     customerMilestones.includes("customer-m3-value-realized")
-      ? emitWorkflowAction("customer.milestone.3", {
-          leadKey,
-          trace,
-          score,
-          stage,
-          family: decision.family,
-          visitCount,
-          milestones: customerMilestones,
-        })
-      : Promise.resolve(null),
-  ])).filter(Boolean) as Array<Awaited<ReturnType<typeof emitWorkflowAction>>>;
+      ? {
+          eventName: "customer.milestone.3",
+          payload: {
+            leadKey,
+            trace,
+            score,
+            stage,
+            family: decision.family,
+            visitCount,
+            milestones: customerMilestones,
+          },
+        }
+      : null,
+  ];
+  const workflowTriggers = await Promise.all(
+    workflowTriggerSpecs
+      .filter((value): value is { eventName: string; payload: Record<string, unknown> } => Boolean(value))
+      .map(async ({ eventName, payload: triggerPayload }) => ({
+        eventName,
+        result: await safelyRunProviderAction("n8n", () => emitWorkflowAction(eventName, triggerPayload), triggerPayload),
+      })),
+  );
 
   const immediatePlan = buildImmediateFollowupPlan({
     hot,
@@ -519,31 +588,58 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
 
   const [emailResult, whatsappResult, smsResult, alertResult] = await Promise.all([
     !payload.dryRun && immediatePlan.sendEmail && normalizedEmail
-      ? sendEmailAction({
-          to: normalizedEmail,
-          subject: `${tenantConfig.brandName}: your next step`,
-          html: `<p>Hi ${firstName},</p><p>We received your ${payload.source.replace(/_/g, " ")} submission and mapped your next best step to the <strong>${decision.family}</strong> funnel.</p><p><a href="${tenantConfig.siteUrl}${decision.destination}">${decision.ctaLabel}</a></p>`,
-          trace,
-        })
+      ? safelyRunProviderAction(
+          "Emailit",
+          () => sendEmailAction({
+            to: normalizedEmail,
+            subject: `${tenantConfig.brandName}: your next step`,
+            html: `<p>Hi ${firstName},</p><p>We received your ${payload.source.replace(/_/g, " ")} submission and mapped your next best step to the <strong>${decision.family}</strong> funnel.</p><p><a href="${tenantConfig.siteUrl}${decision.destination}">${decision.ctaLabel}</a></p>`,
+            trace,
+          }),
+          {
+            to: normalizedEmail,
+            leadKey,
+          },
+        )
       : Promise.resolve(null),
     !payload.dryRun && immediatePlan.sendWhatsApp && normalizedPhone
-      ? sendWhatsAppAction({
-          phone: normalizedPhone,
-          body: `Hi ${firstName}, ${tenantConfig.brandName} received your request. Next step: ${tenantConfig.siteUrl}${decision.destination}`,
-        })
+      ? safelyRunProviderAction(
+          "WbizTool",
+          () => sendWhatsAppAction({
+            phone: normalizedPhone,
+            body: `Hi ${firstName}, ${tenantConfig.brandName} received your request. Next step: ${tenantConfig.siteUrl}${decision.destination}`,
+          }),
+          {
+            to: normalizedPhone,
+            leadKey,
+          },
+        )
       : Promise.resolve(null),
     !payload.dryRun && immediatePlan.sendSms && normalizedPhone
-      ? sendSmsAction({
-          phone: normalizedPhone,
-          body: `${tenantConfig.brandName}: continue here ${tenantConfig.siteUrl}${decision.destination}`,
-        })
+      ? safelyRunProviderAction(
+          "Easy Text Marketing",
+          () => sendSmsAction({
+            phone: normalizedPhone,
+            body: `${tenantConfig.brandName}: continue here ${tenantConfig.siteUrl}${decision.destination}`,
+          }),
+          {
+            to: normalizedPhone,
+            leadKey,
+          },
+        )
       : Promise.resolve(null),
     !payload.dryRun && immediatePlan.alertOps
-      ? sendAlertAction({
-          title: "Hot Lead Captured",
-          body: `${firstName} ${lastName}`.trim() || leadKey,
-          trace,
-        })
+      ? safelyRunProviderAction(
+          "Ops Alert",
+          () => sendAlertAction({
+            title: "Hot Lead Captured",
+            body: `${firstName} ${lastName}`.trim() || leadKey,
+            trace,
+          }),
+          {
+            leadKey,
+          },
+        )
       : Promise.resolve(null),
   ]);
 
@@ -564,24 +660,25 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     decision.family === "qualification" ||
     stage === "qualified" ||
     stage === "booked";
+  const bookingPayload = {
+    dryRun: payload.dryRun,
+    leadKey,
+    trace,
+    firstName,
+    lastName,
+    email: normalizedEmail,
+    phone: normalizedPhone,
+    company: payload.company,
+    service: trace.service,
+    niche: trace.niche,
+    source: payload.source,
+    family: decision.family,
+    stage,
+    score,
+    metadata: payload.metadata ?? {},
+  };
   const bookingActionResult = shouldCreateBookingJob
-    ? await createBookingAction({
-        dryRun: payload.dryRun,
-        leadKey,
-        trace,
-        firstName,
-        lastName,
-        email: normalizedEmail,
-        phone: normalizedPhone,
-        company: payload.company,
-        service: trace.service,
-        niche: trace.niche,
-        source: payload.source,
-        family: decision.family,
-        stage,
-        score,
-        metadata: payload.metadata ?? {},
-      })
+    ? await safelyRunProviderAction("Trafft", () => createBookingAction(bookingPayload), bookingPayload)
     : null;
   const bookingJob = bookingActionResult
     ? await upsertBookingJob({
@@ -601,7 +698,7 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
   const documentTypes = normalizeDocumentTypes(stage, payload.metadata);
   const documentJobs = await Promise.all(
     documentTypes.map(async (documentType) => {
-      const result = await generateDocumentAction({
+      const documentPayload = {
         dryRun: payload.dryRun,
         leadKey,
         trace,
@@ -617,7 +714,8 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
         score,
         documentType,
         metadata: payload.metadata ?? {},
-      });
+      };
+      const result = await safelyRunProviderAction("Documentero", () => generateDocumentAction(documentPayload), documentPayload);
 
       const job = await upsertDocumentJob({
         leadKey,
@@ -674,15 +772,15 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
       detail: workflow.detail,
       payload: workflow.payload,
     }),
-    ...workflowTriggers.map((run) =>
+    ...workflowTriggers.map(({ eventName, result }) =>
       recordWorkflowRun({
         leadKey,
-        eventName: "triggered",
-        provider: run.provider,
-        ok: run.ok,
-        mode: run.mode,
-        detail: run.detail,
-        payload: run.payload,
+        eventName,
+        provider: result.provider,
+        ok: result.ok,
+        mode: result.mode,
+        detail: result.detail,
+        payload: result.payload,
       })
     ),
     ...(alertResult ? [
@@ -767,7 +865,7 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     logging,
     alerts: alertResult,
     workflow,
-    workflowTriggers,
+    workflowTriggers: workflowTriggers.map(({ result }) => result),
     followup: {
       email: emailResult,
       whatsapp: whatsappResult,
