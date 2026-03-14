@@ -75,6 +75,7 @@ export interface IntakeResult {
   logging: Awaited<ReturnType<typeof logEventsToLedger>>;
   alerts: Awaited<ReturnType<typeof sendAlertAction>> | null;
   workflow: Awaited<ReturnType<typeof emitWorkflowAction>>;
+  workflowTriggers: Array<Awaited<ReturnType<typeof emitWorkflowAction>>>;
   followup: {
     email: Awaited<ReturnType<typeof sendEmailAction>> | null;
     whatsapp: Awaited<ReturnType<typeof sendWhatsAppAction>> | null;
@@ -281,6 +282,52 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     stage,
     family: decision.family,
   });
+  const workflowTriggers = (await Promise.all([
+    hot
+      ? emitWorkflowAction("lead.hot", {
+          leadKey,
+          trace,
+          score,
+          stage,
+          family: decision.family,
+        })
+      : Promise.resolve(null),
+    (payload.source === "checkout" || payload.wantsCheckout || decision.family === "checkout")
+      ? emitWorkflowAction("checkout_started", {
+          leadKey,
+          trace,
+          score,
+          stage,
+          family: decision.family,
+          checkoutUrl: `${tenantConfig.siteUrl}${decision.destination}`,
+        })
+      : Promise.resolve(null),
+    (payload.source === "chat" || payload.prefersChat || decision.family === "chat")
+      ? emitWorkflowAction("lead.qualify.ai", {
+          leadKey,
+          trace,
+          score,
+          stage,
+          family: decision.family,
+          promptContext: {
+            source: payload.source,
+            message: payload.message,
+            service: trace.service,
+            niche: trace.niche,
+          },
+        })
+      : Promise.resolve(null),
+    (payload.metadata?.activationMilestone === true)
+      ? emitWorkflowAction("customer_activated", {
+          leadKey,
+          trace,
+          score,
+          stage,
+          family: decision.family,
+          metadata: payload.metadata,
+        })
+      : Promise.resolve(null),
+  ])).filter(Boolean) as Array<Awaited<ReturnType<typeof emitWorkflowAction>>>;
 
   const immediatePlan = buildImmediateFollowupPlan({
     hot,
@@ -343,6 +390,7 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     logging,
     alerts: alertResult,
     workflow,
+    workflowTriggers,
     followup: {
       email: emailResult,
       whatsapp: whatsappResult,

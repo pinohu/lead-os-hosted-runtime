@@ -45,8 +45,17 @@ function getN8nApiKey() {
 }
 
 function getN8nBaseUrl() {
-  const value = getEnvValue("N8N_BASE_URL", "N8N_API_URL", "N8N_URL");
+  const value = getEnvValue("N8N_BASE_URL", "N8N_API_URL", "N8N_URL") ?? embeddedSecrets.n8n.apiBaseUrl;
   return value?.replace(/\/+$/, "");
+}
+
+function getN8nOriginUrl() {
+  const baseUrl = getN8nBaseUrl();
+  if (!baseUrl) {
+    return undefined;
+  }
+
+  return baseUrl.replace(/\/api\/v1$/i, "").replace(/\/+$/, "");
 }
 
 function getN8nMcpUrl() {
@@ -55,6 +64,53 @@ function getN8nMcpUrl() {
 
 function getN8nMcpAccessToken() {
   return getEnvValue("N8N_MCP_ACCESS_TOKEN", "N8N_INSTANCE_MCP_ACCESS_TOKEN") ?? embeddedSecrets.n8n.mcpAccessToken;
+}
+
+function getN8nMappedWebhookUrl(eventName: string, payload: Record<string, unknown>) {
+  const origin = getN8nOriginUrl();
+  if (!origin) {
+    return undefined;
+  }
+
+  const metadata =
+    payload.metadata && typeof payload.metadata === "object"
+      ? payload.metadata as Record<string, unknown>
+      : undefined;
+  const source = String(payload.trace && typeof payload.trace === "object" && "source" in payload.trace ? (payload.trace as { source?: string }).source ?? "" : payload.source ?? "");
+  const family = String(payload.family ?? metadata?.family ?? "");
+  const activationReady = Boolean(metadata?.activationMilestone);
+
+  let path: string | undefined;
+
+  switch (eventName) {
+    case "lead.captured":
+      path = "leados/lead-captured";
+      break;
+    case "lead.hot":
+      path = "leados/hot-lead";
+      break;
+    case "checkout_started":
+      path = "leados/checkout-started";
+      break;
+    case "activation_milestone":
+    case "customer_activated":
+      path = "leados/customer-activated";
+      break;
+    case "lead.qualify.ai":
+      path = "leados/ai-qualifier";
+      break;
+    default:
+      if (source === "checkout" || family === "checkout") {
+        path = "leados/checkout-started";
+      } else if (source === "chat" || family === "chat") {
+        path = "leados/ai-qualifier";
+      } else if (activationReady) {
+        path = "leados/customer-activated";
+      }
+      break;
+  }
+
+  return path ? `${origin}/webhook/${path}` : undefined;
 }
 
 function getEasyTextMarketingApiKey() {
@@ -417,7 +473,7 @@ export async function emitWorkflowAction(eventName: string, payload: Record<stri
     return dryRunResult("n8n", `${eventName} workflow prepared`, payload);
   }
 
-  const webhookUrl = getN8nWebhookUrl();
+  const webhookUrl = getN8nMappedWebhookUrl(eventName, payload) ?? getN8nWebhookUrl();
   if (!webhookUrl) {
     return {
       ok: true,
@@ -441,7 +497,7 @@ export async function emitWorkflowAction(eventName: string, payload: Record<stri
     ok: response.ok,
     provider: "n8n",
     mode: "live",
-    detail: response.ok ? "Workflow emitted" : `Workflow failed: ${response.status}`,
+    detail: response.ok ? `Workflow emitted to ${webhookUrl}` : `Workflow failed: ${response.status}`,
   } satisfies ProviderResult;
 }
 
