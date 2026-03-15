@@ -30,6 +30,11 @@ function asIntent(value: string | string[] | undefined): "discover" | "compare" 
     : undefined;
 }
 
+function asAudience(value: string | string[] | undefined): "client" | "provider" | undefined {
+  const normalized = asString(value);
+  return normalized === "provider" || normalized === "client" ? normalized : undefined;
+}
+
 export default async function FunnelFamilyPage({ params, searchParams }: FunnelFamilyPageProps) {
   const { family } = await params;
   const query = await searchParams;
@@ -39,11 +44,13 @@ export default async function FunnelFamilyPage({ params, searchParams }: FunnelF
   if (!graph) notFound();
 
   const niche = getNiche(asString(query.niche) ?? tenantConfig.defaultNiche);
+  const audience = asAudience(query.audience) ?? "client";
   const headerStore = await headers();
   const recipe = getRecipeForFamily(graph.family);
   const profile = resolveExperienceProfile({
     family: graph.family,
     niche,
+    audience,
     supportEmail: tenantConfig.supportEmail,
     source: asString(query.source),
     intent: asIntent(query.intent),
@@ -59,7 +66,11 @@ export default async function FunnelFamilyPage({ params, searchParams }: FunnelF
     <ExperienceScaffold
       eyebrow="Canonical funnel family"
       title={`${graph.name} for ${niche.label}`}
-      summary={`${recipe.summary} This surface now adapts the ask, proof order, and fallback path around returning status, device, and intent instead of showing one generic page.`}
+      summary={
+        audience === "provider"
+          ? `${recipe.summary} This provider surface now adapts the ask, proof order, and onboarding path around coverage, readiness, and supplier-side intent instead of showing one generic page.`
+          : `${recipe.summary} This surface now adapts the ask, proof order, and fallback path around returning status, device, and intent instead of showing one generic page.`
+      }
       profile={profile}
       metrics={[
         { label: "Goal", value: graph.goal, detail: "Primary outcome this family optimizes for." },
@@ -105,7 +116,7 @@ export default async function FunnelFamilyPage({ params, searchParams }: FunnelF
         }
         family={graph.family as FunnelFamily}
         niche={niche.slug}
-        service={tenantConfig.defaultService}
+        service={audience === "provider" ? "provider-network" : tenantConfig.defaultService}
         pagePath={`/funnel/${graph.family}`}
         returning={asBoolean(query.returning)}
         profile={profile}

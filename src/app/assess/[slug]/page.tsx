@@ -20,6 +20,11 @@ function asBoolean(value: string | string[] | undefined) {
   return normalized === "1" || normalized === "true" || normalized === "yes";
 }
 
+function asAudience(value: string | string[] | undefined): "client" | "provider" | undefined {
+  const normalized = asString(value);
+  return normalized === "provider" || normalized === "client" ? normalized : undefined;
+}
+
 export function generateStaticParams() {
   return Object.keys(nicheCatalog).map((slug) => ({ slug }));
 }
@@ -28,6 +33,7 @@ export default async function AssessmentPage({ params, searchParams }: Assessmen
   const { slug } = await params;
   const query = await searchParams;
   const niche = getNiche(slug);
+  const audience = asAudience(query.audience) ?? "client";
 
   if (!niche) notFound();
 
@@ -35,6 +41,7 @@ export default async function AssessmentPage({ params, searchParams }: Assessmen
   const profile = resolveExperienceProfile({
     family: "qualification",
     niche,
+    audience,
     supportEmail: tenantConfig.supportEmail,
     source: asString(query.source) ?? "assessment",
     intent: asString(query.intent) === "solve-now" ? "solve-now" : "compare",
@@ -50,18 +57,26 @@ export default async function AssessmentPage({ params, searchParams }: Assessmen
     <ExperienceScaffold
       eyebrow="Hosted assessment"
       title={niche.assessmentTitle}
-      summary={`${niche.summary} This assessment path is now designed to feel like guided diagnosis instead of a long form. Each answer should earn the next question and move the visitor closer to a credible next step.`}
+      summary={
+        audience === "provider"
+          ? `${niche.summary} This provider assessment path is designed to confirm service area, issue fit, and dispatch readiness without turning onboarding into a brittle long form.`
+          : `${niche.summary} This assessment path is now designed to feel like guided diagnosis instead of a long form. Each answer should earn the next question and move the visitor closer to a credible next step.`
+      }
       profile={profile}
       metrics={[
         { label: "Assessment style", value: "Progressive", detail: "Only the next useful question should appear." },
         { label: "Return logic", value: "Milestone-aware", detail: "Visit two and three get lighter, smarter asks." },
-        { label: "Output", value: "Tailored next action", detail: "Booking, nurture, or authority path based on fit." },
+        {
+          label: "Output",
+          value: audience === "provider" ? "Dispatch-ready onboarding" : "Tailored next action",
+          detail: audience === "provider" ? "Coverage, capacity, and roster-fit setup." : "Booking, nurture, or authority path based on fit.",
+        },
       ]}
     >
       <section className="grid two">
         <article className="panel">
           <p className="eyebrow">Questioning principle</p>
-          <h2>Never ask before the value is clear</h2>
+          <h2>{audience === "provider" ? "Never ask for roster data before the value is clear" : "Never ask before the value is clear"}</h2>
           <ul className="check-list">
             <li>Each question needs a clear reason connected to the visitor&apos;s outcome.</li>
             <li>Progress stays visible so effort never feels ambiguous.</li>
@@ -70,10 +85,10 @@ export default async function AssessmentPage({ params, searchParams }: Assessmen
         </article>
         <article className="panel">
           <p className="eyebrow">Result design</p>
-          <h2>Diagnosis first, pressure second</h2>
+          <h2>{audience === "provider" ? "Roster fit first, pressure second" : "Diagnosis first, pressure second"}</h2>
           <ul className="check-list">
             <li>The output frames what matters, not internal funnel jargon.</li>
-            <li>Hot leads shorten into booking or proposal quickly.</li>
+            <li>{audience === "provider" ? "Ready providers shorten into network activation and dispatch mapping quickly." : "Hot leads shorten into booking or proposal quickly."}</li>
             <li>Unready leads keep a lower-friction second-touch return path.</li>
           </ul>
         </article>
@@ -83,7 +98,7 @@ export default async function AssessmentPage({ params, searchParams }: Assessmen
         source="assessment"
         family="qualification"
         niche={niche.slug}
-        service={tenantConfig.defaultService}
+        service={audience === "provider" ? "provider-network" : tenantConfig.defaultService}
         pagePath={`/assess/${niche.slug}`}
         returning={asBoolean(query.returning)}
         profile={profile}

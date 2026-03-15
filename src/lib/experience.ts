@@ -1,5 +1,5 @@
 import type { NicheDefinition } from "./catalog.ts";
-import type { FunnelFamily } from "./runtime-schema.ts";
+import type { FunnelFamily, MarketplaceAudience } from "./runtime-schema.ts";
 
 export type ExperienceMode =
   | "chat-first"
@@ -23,6 +23,7 @@ export type ExperiencePromptOption = {
 export type ExperienceInput = {
   family?: FunnelFamily;
   niche: NicheDefinition;
+  audience?: MarketplaceAudience;
   supportEmail?: string;
   source?: string;
   intent?: "discover" | "compare" | "solve-now";
@@ -36,6 +37,7 @@ export type ExperienceInput = {
 
 export type ExperienceProfile = {
   family: FunnelFamily;
+  audience: MarketplaceAudience;
   mode: ExperienceMode;
   device: "mobile" | "desktop";
   experimentId: string;
@@ -80,6 +82,10 @@ function isPlumbingLikeNiche(niche: NicheDefinition) {
   return niche.slug === "plumbing" || niche.slug === "home-services";
 }
 
+function isProviderAudience(input: ExperienceInput) {
+  return input.audience === "provider";
+}
+
 function inferDeviceClass(userAgent?: string) {
   return /android|iphone|ipad|mobile/i.test(userAgent ?? "") ? "mobile" : "desktop";
 }
@@ -100,6 +106,13 @@ function sanitizeMode(value?: string): ExperienceMode | null {
 function buildModeByContext(input: ExperienceInput): ExperienceMode {
   const explicitMode = sanitizeMode(input.preferredMode);
   if (explicitMode) return explicitMode;
+
+  if (isProviderAudience(input)) {
+    if (input.source === "chat" || input.source === "messenger") {
+      return "chat-first";
+    }
+    return "form-first";
+  }
 
   if (isPlumbingLikeNiche(input.niche) && input.intent !== "compare" && input.intent !== "discover") {
     if ((input.score ?? 0) >= 40 || !input.returning) {
@@ -134,6 +147,9 @@ function buildModeByContext(input: ExperienceInput): ExperienceMode {
 
 function buildDefaultFamily(input: ExperienceInput): FunnelFamily {
   if (input.family) return input.family;
+  if (isProviderAudience(input)) {
+    return "qualification";
+  }
   switch (buildModeByContext(input)) {
     case "booking-first":
       return "qualification";
@@ -149,20 +165,37 @@ function buildDefaultFamily(input: ExperienceInput): FunnelFamily {
   }
 }
 
-function buildDestination(family: FunnelFamily, niche: NicheDefinition) {
+function buildDestination(family: FunnelFamily, niche: NicheDefinition, audience: MarketplaceAudience) {
+  const audienceQuery = audience === "provider" ? "&audience=provider" : "";
   switch (family) {
     case "qualification":
-      return `/assess/${niche.slug}?mode=booking-first`;
+      return audience === "provider"
+        ? `/assess/${niche.slug}?mode=form-first&audience=provider`
+        : `/assess/${niche.slug}?mode=booking-first`;
     case "chat":
-      return `/calculator?niche=${niche.slug}&mode=chat-first`;
+      return `/calculator?niche=${niche.slug}&mode=chat-first${audienceQuery}`;
     case "checkout":
-      return `/offers/${niche.slug}?mode=form-first`;
+      return `/offers/${niche.slug}?mode=form-first${audienceQuery}`;
     default:
-      return `/funnel/${family}?niche=${niche.slug}`;
+      return `/funnel/${family}?niche=${niche.slug}${audienceQuery}`;
   }
 }
 
-function buildProofSignals(niche: NicheDefinition, family: FunnelFamily, mode: ExperienceMode) {
+function buildProofSignals(
+  niche: NicheDefinition,
+  family: FunnelFamily,
+  mode: ExperienceMode,
+  audience: MarketplaceAudience,
+) {
+  if (audience === "provider" && isPlumbingLikeNiche(niche)) {
+    return [
+      "Apply once and route leads by service area, issue fit, and live capacity",
+      "Show emergency coverage, specialties, and response readiness before jobs are assigned",
+      family === "qualification" ? "Provider onboarding and dispatch-readiness path already wired" : "Marketplace supply path already connected to LeadOS routing",
+      mode === "chat-first" ? "Human-assisted network join path for complex provider onboarding" : "Faster self-serve network entry for plumbers ready to receive jobs",
+    ];
+  }
+
   if (isPlumbingLikeNiche(niche)) {
     return [
       "Urgent plumbing routing with booking and dispatch-first logic",
@@ -180,7 +213,16 @@ function buildProofSignals(niche: NicheDefinition, family: FunnelFamily, mode: E
   ];
 }
 
-function buildObjections(niche: NicheDefinition, mode: ExperienceMode) {
+function buildObjections(niche: NicheDefinition, mode: ExperienceMode, audience: MarketplaceAudience) {
+  if (audience === "provider" && isPlumbingLikeNiche(niche)) {
+    return [
+      "You are not joining a junk-lead directory. LeadOS is built to route jobs by urgency, fit, and operational readiness.",
+      mode === "chat-first"
+        ? "If your coverage, specialties, or availability are unusual, you can still join through a guided onboarding conversation."
+        : "If you are ready, we keep the network-join path short and focused on coverage, capacity, and job fit.",
+    ];
+  }
+
   const nicheSpecific =
     niche.slug === "legal" ? "You will not get a generic intake script. The questions adapt to risk, urgency, and case-fit." :
     niche.slug === "plumbing" ? "We bias for fast-response dispatch, clear next steps, and fewer dead-end form completions on urgent jobs." :
@@ -197,7 +239,35 @@ function buildObjections(niche: NicheDefinition, mode: ExperienceMode) {
   return [nicheSpecific, modeSpecific];
 }
 
-function buildDiscoveryOptions(niche: NicheDefinition, family: FunnelFamily, mode: ExperienceMode): ExperiencePromptOption[] {
+function buildDiscoveryOptions(
+  niche: NicheDefinition,
+  family: FunnelFamily,
+  mode: ExperienceMode,
+  audience: MarketplaceAudience,
+): ExperiencePromptOption[] {
+  if (audience === "provider" && isPlumbingLikeNiche(niche)) {
+    return [
+      {
+        id: "emergency-jobs",
+        label: "Get more emergency jobs",
+        description: "Show that you can respond quickly to urgent plumbing demand in your service area.",
+        signals: {},
+      },
+      {
+        id: "fill-schedule",
+        label: "Fill open schedule",
+        description: "Bring in more same-day and estimate work without wasting time on bad-fit leads.",
+        signals: { contentEngaged: true },
+      },
+      {
+        id: "expand-coverage",
+        label: "Expand coverage",
+        description: "Add more ZIPs, issue types, or commercial capacity to your dispatch footprint.",
+        signals: { prefersChat: mode === "chat-first" },
+      },
+    ];
+  }
+
   const commonOptions: ExperiencePromptOption[] = [
     {
       id: "speed",
@@ -299,7 +369,22 @@ function buildDiscoveryOptions(niche: NicheDefinition, family: FunnelFamily, mod
   return commonOptions;
 }
 
-function buildProgressSteps(mode: ExperienceMode, family: FunnelFamily) {
+function buildProgressSteps(mode: ExperienceMode, family: FunnelFamily, audience: MarketplaceAudience) {
+  if (audience === "provider") {
+    const stepTwo = mode === "chat-first"
+      ? "We clarify your service area, specialties, and response model through a guided onboarding conversation."
+      : "We capture only the roster details needed to route jobs by fit, capacity, and geography.";
+    const stepThree =
+      family === "qualification"
+        ? "Qualified providers move into readiness review, dispatch mapping, and network activation."
+        : "Your provider profile stays ready for follow-up and dispatch activation.";
+    return [
+      { label: "Choose the kind of work you want", detail: "This keeps the supply-side path aligned with the jobs you actually want to receive." },
+      { label: "Show your coverage and capacity", detail: stepTwo },
+      { label: "Activate your provider path", detail: stepThree },
+    ];
+  }
+
   const stepTwo =
     mode === "chat-first" ? "We adapt the questions as answers come in." :
     mode === "calculator-first" ? "We turn your inputs into an immediate upside estimate." :
@@ -318,7 +403,10 @@ function buildProgressSteps(mode: ExperienceMode, family: FunnelFamily) {
   ];
 }
 
-function buildFieldOrder(mode: ExperienceMode) {
+function buildFieldOrder(mode: ExperienceMode, audience: MarketplaceAudience) {
+  if (audience === "provider") {
+    return ["firstName", "company", "email", "phone"] as const;
+  }
   if (mode === "booking-first") {
     return ["firstName", "email", "phone", "company"] as const;
   }
@@ -329,12 +417,17 @@ function buildFieldOrder(mode: ExperienceMode) {
 }
 
 export function resolveExperienceProfile(input: ExperienceInput): ExperienceProfile {
+  const audience = input.audience ?? "client";
   const mode = buildModeByContext(input);
   const family = buildDefaultFamily(input);
   const device = inferDeviceClass(input.userAgent);
-  const destination = buildDestination(family, input.niche);
+  const destination = buildDestination(family, input.niche, audience);
   const plumbingLike = isPlumbingLikeNiche(input.niche);
-  const returnOffer = input.returning
+  const returnOffer = audience === "provider"
+    ? input.returning
+      ? "You are not starting over. We will resume with your coverage, specialty, and capacity context intact."
+      : "If you are not ready to finish onboarding now, LeadOS keeps your provider path warm so you can come back without re-entering everything."
+    : input.returning
     ? plumbingLike
       ? "You are not starting over. We will resume with the lightest useful next step and preserve your job context."
       : "You are not starting over. We will resume with a lighter second-touch ask and skip repeated context."
@@ -344,12 +437,17 @@ export function resolveExperienceProfile(input: ExperienceInput): ExperienceProf
 
   return {
     family,
+    audience,
     mode,
     device,
     experimentId: `${input.niche.slug}:${family}:${device}`,
     variantId: `${input.niche.slug}:${family}:${mode}:${device}`,
     heroTitle:
-      plumbingLike
+      audience === "provider" && plumbingLike
+        ? input.returning
+          ? "Resume your provider setup without losing your coverage profile"
+          : "Join the plumbing dispatch network with the jobs you actually want"
+      : plumbingLike
         ? input.returning
           ? "Resume your plumbing request without starting over"
           : "Get a plumber confirmed fast without dead-end forms"
@@ -357,7 +455,11 @@ export function resolveExperienceProfile(input: ExperienceInput): ExperienceProf
         ? `${input.niche.label} momentum, resumed without friction`
         : `${input.niche.label} growth paths that adapt to visitor intent`,
     heroSummary:
-      plumbingLike && mode === "booking-first"
+      audience === "provider" && plumbingLike
+        ? mode === "chat-first"
+          ? "For providers with complex coverage or specialty constraints, we keep a guided onboarding path open instead of forcing a brittle signup form."
+          : "For plumbers and service teams, we bias the first interaction toward service area fit, live capacity, and dispatch-readiness instead of generic directory signup."
+      : plumbingLike && mode === "booking-first"
         ? "For urgent plumbing demand, we bias the first interaction toward dispatch speed, booking readiness, and clear next-step certainty."
         : plumbingLike && mode === "chat-first"
         ? "For unusual or urgent jobs, we keep a dispatch-style conversation path open instead of forcing a dead-end form."
@@ -374,32 +476,43 @@ export function resolveExperienceProfile(input: ExperienceInput): ExperienceProf
         : "For most qualified visitors, the fastest win is a tailored plan that explains exactly what happens next.",
     primaryActionLabel: MODE_LABELS[mode],
     primaryActionHref: destination,
-    secondaryActionLabel: "Talk to a human",
+    secondaryActionLabel: audience === "provider" ? "Talk to network ops" : "Talk to a human",
     secondaryActionHref: `mailto:${input.supportEmail ?? "support@example.com"}`,
-    trustPromise: plumbingLike
+    trustPromise: audience === "provider" && plumbingLike
+      ? "No directory-style bait. We collect only what is needed to map your coverage, specialties, and readiness to live plumbing demand."
+      : plumbingLike
       ? "No dead-end quote form. We bias for fast routing, clear next steps, and a human fallback when the job needs it."
       : "No generic bait-and-switch. The next step adapts to niche, intent, return state, and contact preference.",
     progressLabel:
-      plumbingLike
+      audience === "provider" && plumbingLike
+        ? input.returning
+          ? "We already have your provider context. The goal now is moving you toward dispatch-readiness without duplicating setup work."
+          : "The first interaction should confirm where you work, what jobs you want, and how ready you are to take dispatch traffic."
+      : plumbingLike
         ? input.returning
           ? "We already have your context. The goal now is getting you to the fastest useful human or booking step."
           : "The first interaction should confirm urgency, location, and the fastest credible next step."
         : input.returning
         ? "You are on visit two or beyond. The goal is momentum, not re-explaining yourself."
         : "The first interaction should feel clear, light, and immediately useful.",
-    anxietyReducer: plumbingLike
+    anxietyReducer: audience === "provider" && plumbingLike
+      ? "You can join the network, ask for a human onboarding path, or come back later without losing your service-area and capacity details."
+      : plumbingLike
       ? "You can take the fast booking path, ask for dispatch help, or switch to a lighter estimate path if the job is not urgent."
       : "You can stop at any point, ask for a human path, or take the lighter next step instead of the heavier one.",
-    proofSignals: buildProofSignals(input.niche, family, mode),
-    objectionBlocks: buildObjections(input.niche, mode),
+    proofSignals: buildProofSignals(input.niche, family, mode, audience),
+    objectionBlocks: buildObjections(input.niche, mode, audience),
     discoveryPrompt:
-      mode === "calculator-first"
+      audience === "provider"
+        ? "Which provider outcome matters most first?"
+      : mode === "calculator-first"
         ? "Which upside would make this worth exploring right now?"
         : "Which outcome matters most first?",
-    discoveryOptions: buildDiscoveryOptions(input.niche, family, mode),
-    fieldOrder: [...buildFieldOrder(mode)],
-    progressSteps: buildProgressSteps(mode, family),
+    discoveryOptions: buildDiscoveryOptions(input.niche, family, mode, audience),
+    fieldOrder: [...buildFieldOrder(mode, audience)],
+    progressSteps: buildProgressSteps(mode, family, audience),
     supportingSignals: [
+      audience === "provider" ? "Two-sided marketplace path for plumbers and service providers" : "Two-sided marketplace path for homeowners, tenants, and clients",
       input.referrer ? `Arrived from ${new URL(input.referrer).hostname}` : plumbingLike ? "Adaptive by urgency, service type, and entry source" : "Adaptive by source and referral context",
       device === "mobile" ? "Mobile-optimized path with lower cognitive load" : "Desktop path can support richer proof and comparison",
       ...(plumbingLike ? [`Service model: ${input.niche.serviceCategories.slice(0, 3).join(", ")}`] : []),

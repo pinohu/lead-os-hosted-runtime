@@ -74,3 +74,23 @@ test("decision engine classifies plumbing estimate demand without emergency rout
   assert.equal(decision.plumbing?.dispatchMode, "estimate-path");
   assert.match(decision.ctaLabel, /estimate/i);
 });
+
+test("decision engine routes plumbing providers into supplier onboarding instead of homeowner dispatch", () => {
+  const decision = decideNextStep({
+    source: "contact_form",
+    niche: "plumbing",
+    service: "provider-network",
+    hasEmail: true,
+    marketplaceAudience: "provider",
+    metadata: {
+      marketplaceAudience: "provider",
+      goalId: "fill-schedule",
+    },
+  });
+
+  assert.equal(decision.operatingModel, "plumbing-provider-network");
+  assert.equal(decision.family, "qualification");
+  assert.equal(decision.plumbing, undefined);
+  assert.match(decision.destination, /audience=provider/);
+  assert.match(decision.ctaLabel, /provider onboarding/i);
+});

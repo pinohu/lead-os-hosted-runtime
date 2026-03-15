@@ -35,6 +35,8 @@ export type CustomerMilestoneId =
   | "customer-m2-activated"
   | "customer-m3-value-realized";
 
+export type MarketplaceAudience = "client" | "provider";
+
 export type PlumbingUrgencyBand =
   | "emergency-now"
   | "same-day"

@@ -2,7 +2,7 @@ import { getNiche } from "./catalog.ts";
 import { getRecipeForFamily } from "./automation.ts";
 import { getDefaultFunnelGraph } from "./funnel-library.ts";
 import { classifyPlumbingLead, isPlumbingLead } from "./plumbing-os.ts";
-import type { FunnelFamily, PlumbingLeadContext } from "./runtime-schema.ts";
+import type { FunnelFamily, MarketplaceAudience, PlumbingLeadContext } from "./runtime-schema.ts";
 import { tenantConfig } from "./tenant.ts";
 
 export type DecisionSignal = {
@@ -21,6 +21,7 @@ export type DecisionSignal = {
   prefersChat?: boolean;
   contentEngaged?: boolean;
   score?: number;
+  marketplaceAudience?: MarketplaceAudience;
 };
 
 export type NextStepDecision = {
@@ -30,7 +31,7 @@ export type NextStepDecision = {
   reason: string;
   ctaLabel: string;
   recommendedChannels: string[];
-  operatingModel: "generic-growth" | "plumbing-dispatch";
+  operatingModel: "generic-growth" | "plumbing-dispatch" | "plumbing-provider-network";
   plumbing?: PlumbingLeadContext;
   traceDefaults: {
     service: string;
@@ -41,16 +42,27 @@ export type NextStepDecision = {
   recipe: ReturnType<typeof getRecipeForFamily>;
 };
 
-function buildDestination(family: FunnelFamily, niche: string) {
+function getMarketplaceAudience(signal: DecisionSignal): MarketplaceAudience {
+  if (signal.marketplaceAudience === "provider") {
+    return "provider";
+  }
+  if (signal.metadata?.marketplaceAudience === "provider") {
+    return "provider";
+  }
+  return "client";
+}
+
+function buildDestination(family: FunnelFamily, niche: string, audience: MarketplaceAudience) {
+  const audienceQuery = audience === "provider" ? "&audience=provider" : "";
   switch (family) {
     case "qualification":
-      return `/assess/${niche}`;
+      return audience === "provider" ? `/assess/${niche}?audience=provider` : `/assess/${niche}`;
     case "chat":
-      return `/calculator?niche=${niche}&mode=chat`;
+      return `/calculator?niche=${niche}&mode=chat${audienceQuery}`;
     case "checkout":
-      return `/offers/${niche}`;
+      return `/offers/${niche}${audience === "provider" ? "?audience=provider" : ""}`;
     default:
-      return `/funnel/${family}?niche=${niche}`;
+      return `/funnel/${family}?niche=${niche}${audienceQuery}`;
   }
 }
 
@@ -74,6 +86,14 @@ function decidePlumbingFamily(signal: DecisionSignal, plumbing: PlumbingLeadCont
 }
 
 function decideFamily(signal: DecisionSignal): { family: FunnelFamily; reason: string; plumbing?: PlumbingLeadContext; operatingModel: NextStepDecision["operatingModel"] } {
+  const audience = getMarketplaceAudience(signal);
+  if (audience === "provider" && (signal.niche === "plumbing" || signal.niche === "home-services")) {
+    return {
+      family: signal.preferredFamily ?? "qualification",
+      reason: "Provider-network audience detected; route into supplier onboarding instead of homeowner dispatch.",
+      operatingModel: "plumbing-provider-network",
+    };
+  }
   if (isPlumbingLead(signal)) {
     const plumbing = classifyPlumbingLead(signal);
     const plumbingDecision = decidePlumbingFamily(signal, plumbing);
@@ -114,6 +134,7 @@ function decideFamily(signal: DecisionSignal): { family: FunnelFamily; reason: s
 
 export function decideNextStep(signal: DecisionSignal): NextStepDecision {
   const niche = getNiche(signal.niche);
+  const audience = getMarketplaceAudience(signal);
   const { family, reason, plumbing, operatingModel } = decideFamily(signal);
   const graph = getDefaultFunnelGraph(tenantConfig.tenantId, family);
   const recipe = getRecipeForFamily(family);
@@ -126,12 +147,14 @@ export function decideNextStep(signal: DecisionSignal): NextStepDecision {
   return {
     family,
     blueprintId: graph.id,
-    destination: buildDestination(family, niche.slug),
+    destination: buildDestination(family, niche.slug, audience),
     reason,
     operatingModel,
     plumbing,
     ctaLabel:
-      family === "qualification" && plumbing
+      operatingModel === "plumbing-provider-network"
+        ? "Continue provider onboarding"
+      : family === "qualification" && plumbing
         ? plumbing.dispatchMode === "estimate-path" ? "Book Estimate"
         : plumbing.dispatchMode === "commercial-intake" ? "Start Commercial Intake"
         : "Start Dispatch"

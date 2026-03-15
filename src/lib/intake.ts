@@ -34,7 +34,7 @@ import {
   ensureTraceContext,
 } from "./trace.ts";
 import { tenantConfig } from "./tenant.ts";
-import type { FunnelFamily } from "./runtime-schema.ts";
+import type { FunnelFamily, MarketplaceAudience } from "./runtime-schema.ts";
 
 export type IntakeSource =
   | "contact_form"
@@ -80,6 +80,7 @@ export interface HostedLeadPayload {
   prefersChat?: boolean;
   contentEngaged?: boolean;
   preferredFamily?: FunnelFamily;
+  marketplaceAudience?: MarketplaceAudience;
   dryRun?: boolean;
 }
 
@@ -116,7 +117,7 @@ export interface PublicIntakeResponse {
   hot: boolean;
   scoreBand: "low" | "medium" | "high";
   stage: LeadStage;
-  operatingModel?: "generic-growth" | "plumbing-dispatch";
+  operatingModel?: "generic-growth" | "plumbing-dispatch" | "plumbing-provider-network";
   plumbing?: {
     urgencyBand: PlumbingLeadContext["urgencyBand"];
     issueType: PlumbingLeadContext["issueType"];
@@ -196,6 +197,7 @@ function computeLeadScore(payload: HostedLeadPayload) {
 function buildPlumbingMetadata(payload: HostedLeadPayload) {
   return {
     ...(payload.metadata ?? {}),
+    marketplaceAudience: payload.marketplaceAudience ?? payload.metadata?.marketplaceAudience,
     state: payload.state ?? payload.metadata?.state,
     county: payload.county ?? payload.metadata?.county,
     city: payload.city ?? payload.metadata?.city,
@@ -365,6 +367,9 @@ function resolveScoreBand(score: number): PublicIntakeResponse["scoreBand"] {
 }
 
 function buildPublicNextStep(result: IntakeResult): PublicIntakeResponse["nextStep"] {
+  const providerMessage = result.decision.operatingModel === "plumbing-provider-network"
+    ? "We captured your provider details and moved you into the network-readiness path for coverage, capacity, and dispatch fit."
+    : null;
   const plumbingMessage = result.decision.plumbing
     ? result.decision.plumbing.dispatchMode === "dispatch-now"
       ? "We classified this as urgent plumbing demand and moved it into the fastest dispatch-ready path."
@@ -378,7 +383,7 @@ function buildPublicNextStep(result: IntakeResult): PublicIntakeResponse["nextSt
     : null;
   const familyCopy: Record<FunnelFamily, string> = {
     "lead-magnet": "We captured your request and prepared the fastest relevant next step.",
-    qualification: plumbingMessage ?? (result.hot
+    qualification: providerMessage ?? plumbingMessage ?? (result.hot
       ? "We are moving you into the fastest qualification and booking path."
       : "We captured your details and prepared the best next qualification step."),
     chat: "We prepared the fastest conversation path for your request.",
@@ -463,6 +468,7 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     message: payload.message,
     metadata: plumbingMetadata,
     preferredFamily: payload.preferredFamily,
+    marketplaceAudience: payload.marketplaceAudience,
     hasEmail: Boolean(normalizedEmail),
     hasPhone: Boolean(normalizedPhone),
     returning: payload.returning,

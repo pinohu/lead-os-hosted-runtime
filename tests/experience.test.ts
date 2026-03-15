@@ -39,3 +39,17 @@ test("mobile discover traffic can bias toward chat-first guidance", () => {
   assert.equal(profile.mode, "chat-first");
   assert.equal(profile.device, "mobile");
 });
+
+test("provider audience gets a supplier-side onboarding profile for plumbing", () => {
+  const profile = resolveExperienceProfile({
+    niche: nicheCatalog.plumbing,
+    audience: "provider",
+    supportEmail: "support@yourdeputy.com",
+  });
+
+  assert.equal(profile.audience, "provider");
+  assert.equal(profile.family, "qualification");
+  assert.equal(profile.mode, "form-first");
+  assert.match(profile.heroTitle, /provider|network/i);
+  assert.match(profile.primaryActionHref, /audience=provider/);
+});

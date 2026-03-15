@@ -39,6 +39,7 @@ function normalizePhone(value: string) {
 
 export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
   const plumbingLike = props.niche === "plumbing" || props.niche === "home-services";
+  const providerAudience = props.profile.audience === "provider";
   const [step, setStep] = useState(1);
   const [selectedGoalId, setSelectedGoalId] = useState(props.profile.discoveryOptions[0]?.id ?? "");
   const [firstName, setFirstName] = useState("");
@@ -69,14 +70,20 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
       }
       if (!email.trim()) {
         setError(
-          plumbingLike
+          providerAudience
+            ? "Add your email so we can continue your provider onboarding path."
+          : plumbingLike
             ? "Add your email so we can confirm the next plumbing step."
             : "Add your email so we can send your tailored next step.",
         );
         return;
       }
       if (requiresPhone && !normalizePhone(phone)) {
-        setError("Add your best phone number so we can keep the fast path available.");
+        setError(
+          providerAudience
+            ? "Add your best phone number so dispatch and onboarding follow-up can reach you."
+            : "Add your best phone number so we can keep the fast path available.",
+        );
         return;
       }
     }
@@ -117,10 +124,12 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
               variantId: props.profile.variantId,
               pagePath: props.pagePath,
               trustPromise: props.profile.trustPromise,
+              marketplaceAudience: props.profile.audience,
             },
             website: "",
             experimentId: props.profile.experimentId,
             variantId: props.profile.variantId,
+            marketplaceAudience: props.profile.audience,
             returning: props.returning,
             contentEngaged:
               selectedGoal?.signals.contentEngaged ?? props.profile.mode === "webinar-first",
@@ -181,6 +190,7 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
       </div>
 
       <div className="sticky-summary" aria-live="polite">
+        <span>Audience: {providerAudience ? "provider" : "client"}</span>
         <span>Mode: {props.profile.mode.replace("-", " ")}</span>
         <span>Outcome: {selectedGoal?.label ?? "Choose one"}</span>
         <span>Progress: step {step} of 3</span>
@@ -188,7 +198,13 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
 
       {result ? (
         <div className="status-banner success" role="status">
-          <h3>{plumbingLike ? "Your next plumbing step is ready" : "Your path is ready"}</h3>
+          <h3>
+            {providerAudience
+              ? "Your provider onboarding path is ready"
+              : plumbingLike
+                ? "Your next plumbing step is ready"
+                : "Your path is ready"}
+          </h3>
           <p>{result.nextStep.message}</p>
           <p className="muted">
             Priority: {result.scoreBand}{" "}
@@ -232,54 +248,76 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
           {step === 2 ? (
             <div className="capture-step">
               <h3>
-                {plumbingLike
+                {providerAudience
+                  ? "Where should we send network and dispatch follow-up?"
+                  : plumbingLike
                   ? "Where should we confirm the next plumbing step?"
                   : "Where should we send the tailored next step?"}
               </h3>
               <p className="muted">
-                {plumbingLike
+                {providerAudience
+                  ? "We ask for the minimum needed to map your service area, specialties, and response readiness without turning this into a long signup flow."
+                  : plumbingLike
                   ? "We ask for the minimum needed to keep urgency, service type, and routing context intact. Phone stays available for faster dispatch."
                   : "We ask for the minimum we need to keep your path relevant. If you are on a fast booking path, we keep phone available too."}
               </p>
               <div className="form-grid">
-                <label>
-                  First name
-                  <input
-                    value={firstName}
-                    onChange={(event) => setFirstName(event.target.value)}
-                    autoComplete="given-name"
-                  />
-                </label>
-                <label>
-                  Email
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    autoComplete="email"
-                    inputMode="email"
-                  />
-                </label>
-                <label>
-                  Company
-                  <input
-                    value={company}
-                    onChange={(event) => setCompany(event.target.value)}
-                    autoComplete="organization"
-                  />
-                </label>
-                <label>
-                  Phone {requiresPhone ? "(recommended for this path)" : "(optional)"}
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(event) => setPhone(event.target.value)}
-                    autoComplete="tel"
-                    inputMode="tel"
-                  />
-                </label>
+                {props.profile.fieldOrder.map((field) => {
+                  if (field === "firstName") {
+                    return (
+                      <label key={field}>
+                        First name
+                        <input
+                          value={firstName}
+                          onChange={(event) => setFirstName(event.target.value)}
+                          autoComplete="given-name"
+                        />
+                      </label>
+                    );
+                  }
+                  if (field === "email") {
+                    return (
+                      <label key={field}>
+                        Email
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(event) => setEmail(event.target.value)}
+                          autoComplete="email"
+                          inputMode="email"
+                        />
+                      </label>
+                    );
+                  }
+                  if (field === "company") {
+                    return (
+                      <label key={field}>
+                        {providerAudience ? "Company or plumbing brand" : "Company"}
+                        <input
+                          value={company}
+                          onChange={(event) => setCompany(event.target.value)}
+                          autoComplete="organization"
+                        />
+                      </label>
+                    );
+                  }
+                  return (
+                    <label key={field}>
+                      Phone {requiresPhone ? "(recommended for this path)" : "(optional)"}
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={(event) => setPhone(event.target.value)}
+                        autoComplete="tel"
+                        inputMode="tel"
+                      />
+                    </label>
+                  );
+                })}
                 <label className="span-two">
-                  {plumbingLike
+                  {providerAudience
+                    ? "Coverage, specialties, license, or scheduling details we should know"
+                    : plumbingLike
                     ? "Job details we should know before routing the next step"
                     : "Context we should know before tailoring the next step"}
                   <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} />
@@ -290,7 +328,13 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
 
           {step === 3 ? (
             <div className="capture-step">
-              <h3>{plumbingLike ? "Confirm the fastest useful path" : "Confirm your tailored path"}</h3>
+              <h3>
+                {providerAudience
+                  ? "Confirm your provider-network path"
+                  : plumbingLike
+                    ? "Confirm the fastest useful path"
+                    : "Confirm your tailored path"}
+              </h3>
               <div className="review-grid">
                 <article className="review-card">
                   <p className="eyebrow">Chosen outcome</p>
@@ -331,11 +375,13 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
                 disabled={isPending}
               >
                 {isPending
-                  ? plumbingLike
-                    ? "Routing your next plumbing step..."
-                    : "Tailoring your next step..."
-                  : plumbingLike
-                    ? "Save and continue"
+                  ? providerAudience
+                    ? "Preparing your provider path..."
+                    : plumbingLike
+                      ? "Routing your next plumbing step..."
+                      : "Tailoring your next step..."
+                  : providerAudience
+                    ? "Join the network path"
                     : "Save and continue"}
               </button>
             )}

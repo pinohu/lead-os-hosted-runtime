@@ -16,6 +16,11 @@ type PlumbingSignal = {
   metadata?: Record<string, unknown>;
 };
 
+function getMarketplaceAudience(signal: PlumbingSignal) {
+  const audience = signal.metadata?.marketplaceAudience;
+  return audience === "provider" ? "provider" : "client";
+}
+
 const ISSUE_PATTERNS: Array<{ issueType: PlumbingIssueType; keywords: string[] }> = [
   { issueType: "burst-pipe", keywords: ["burst pipe", "pipe burst", "flooding", "flood", "gushing", "water everywhere"] },
   { issueType: "drain-clog", keywords: ["clog", "clogged", "drain", "toilet backed", "backed up", "slow drain"] },
@@ -177,6 +182,9 @@ function buildConfidence(
 }
 
 export function isPlumbingLead(signal: PlumbingSignal) {
+  if (getMarketplaceAudience(signal) === "provider") {
+    return false;
+  }
   return signal.niche === "plumbing" || signal.niche === "home-services";
 }
 

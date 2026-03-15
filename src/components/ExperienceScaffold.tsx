@@ -53,6 +53,7 @@ export function ExperienceScaffold({
 
         <aside className="hero-rail" aria-label="Experience summary">
           <div className="signal-chip-row">
+            <span className="signal-chip">{profile.audience === "provider" ? "provider path" : "client path"}</span>
             <span className="signal-chip">{profile.mode.replace("-", " ")}</span>
             <span className="signal-chip">{profile.device}</span>
             <span className="signal-chip">{profile.family}</span>
