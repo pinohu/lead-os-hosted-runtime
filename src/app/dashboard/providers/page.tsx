@@ -169,6 +169,28 @@ export default async function ProviderHealthPage() {
         </section>
       ) : null}
 
+      {consoleSnapshot.plumbingDispatch.zipCellLiquidity.topCells.length > 0 ? (
+        <section className="panel">
+          <p className="eyebrow">ZIP-cell liquidity</p>
+          <h2>Where to recruit supply versus where to add demand</h2>
+          <div className="stack-grid">
+            {consoleSnapshot.plumbingDispatch.zipCellLiquidity.topCells.map((cell) => (
+              <article key={cell.label} className="stack-card">
+                <p className="eyebrow">{cell.label}</p>
+                <h3>{cell.liquidityScore}</h3>
+                <p className="muted">
+                  Leads: {cell.leadCount} | Urgent: {cell.urgentLeadCount} | Accepting providers: {cell.acceptingProviders}
+                </p>
+                <p className="muted">
+                  Open capacity: {cell.openCapacity} | Completed revenue: {cell.completedRevenue}
+                </p>
+                <p className="muted portal-breakable">{cell.recommendedAction}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {!configSummary.envOnlyReady ? (
         <section className="panel">
           <p className="eyebrow">Config hardening</p>

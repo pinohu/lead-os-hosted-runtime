@@ -408,6 +408,56 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
       <section className="grid two">
         <article className="panel">
+          <p className="eyebrow">ZIP-cell liquidity</p>
+          <h2>Where supply is too thin for current demand</h2>
+          {dispatch.zipCellLiquidity.constrainedCells.length === 0 ? (
+            <p className="muted">No constrained ZIP cells are showing up yet.</p>
+          ) : (
+            <div className="stack-grid">
+              {dispatch.zipCellLiquidity.constrainedCells.map((cell) => (
+                <article key={cell.label} className="stack-card">
+                  <p className="eyebrow">{cell.label}</p>
+                  <h3>{cell.liquidityScore}</h3>
+                  <p className="muted">
+                    Leads: {cell.leadCount} | Urgent: {cell.urgentLeadCount} | Open capacity: {cell.openCapacity}
+                  </p>
+                  <p className="muted">
+                    Accepting providers: {cell.acceptingProviders} | Revenue: {cell.completedRevenue}
+                  </p>
+                  <p className="muted portal-breakable">{cell.recommendedAction}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </article>
+
+        <article className="panel">
+          <p className="eyebrow">Expansion cells</p>
+          <h2>Where supply looks ready for more local demand</h2>
+          {dispatch.zipCellLiquidity.expansionCells.length === 0 ? (
+            <p className="muted">No expansion-ready ZIP cells are visible yet.</p>
+          ) : (
+            <div className="stack-grid">
+              {dispatch.zipCellLiquidity.expansionCells.map((cell) => (
+                <article key={cell.label} className="stack-card">
+                  <p className="eyebrow">{cell.label}</p>
+                  <h3>{cell.liquidityScore}</h3>
+                  <p className="muted">
+                    Leads: {cell.leadCount} | Urgent: {cell.urgentLeadCount} | Open capacity: {cell.openCapacity}
+                  </p>
+                  <p className="muted">
+                    Accepting providers: {cell.acceptingProviders} | Revenue: {cell.completedRevenue}
+                  </p>
+                  <p className="muted portal-breakable">{cell.recommendedAction}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </article>
+      </section>
+
+      <section className="grid two">
+        <article className="panel">
           <p className="eyebrow">Queue mix</p>
           <h2>Where dispatch pressure is building</h2>
           <div className="stack-grid">

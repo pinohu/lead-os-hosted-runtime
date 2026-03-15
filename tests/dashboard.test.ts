@@ -419,6 +419,8 @@ test("operator console snapshot exposes plumbing dispatch queues and provider sc
   assert.equal(snapshot.plumbingDispatch.metroBreakdown[0]?.label, "dallas, texas");
   assert.equal(snapshot.plumbingDispatch.metroRevenueBreakdown[0]?.label, "dallas, texas");
   assert.equal(snapshot.plumbingDispatch.metroRevenueBreakdown[0]?.revenue, 1450);
+  assert.equal(snapshot.plumbingDispatch.zipCellLiquidity.topCells[0]?.label, "dallas, texas");
+  assert.match(snapshot.plumbingDispatch.zipCellLiquidity.topCells[0]?.recommendedAction ?? "", /supply|balance/i);
   assert.equal(snapshot.plumbingDispatch.providerRequestQueue.pendingCount, 0);
   assert.equal(snapshot.plumbingDispatch.executionQueue.pendingCount, 0);
 });

@@ -117,6 +117,92 @@ function formatPlumbingGeoCell(plumbing: PlumbingLeadContext | null) {
   return "unlocated";
 }
 
+function matchesZipCell(cell: string, zipPrefixes: string[]) {
+  if (!cell.startsWith("zip ")) {
+    return zipPrefixes.length === 0;
+  }
+  const zip = cell.slice(4);
+  if (zipPrefixes.length === 0) {
+    return true;
+  }
+  return zipPrefixes.some((prefix) => zip.startsWith(prefix));
+}
+
+function buildZipCellLiquiditySnapshot(
+  plumbingLeads: Array<{ lead: StoredLeadRecord; plumbing: PlumbingLeadContext; outcome: PlumbingJobOutcome | null }>,
+  dispatchProviders: OperationalRuntimeConfig["dispatch"]["providers"],
+) {
+  const candidateCells = new Set<string>();
+  for (const item of plumbingLeads) {
+    candidateCells.add(formatPlumbingGeoCell(item.plumbing));
+  }
+  for (const provider of dispatchProviders) {
+    for (const zipPrefix of provider.zipPrefixes) {
+      candidateCells.add(`zip ${zipPrefix}`);
+    }
+  }
+
+  const cells = [...candidateCells]
+    .filter((cell) => cell !== "unlocated")
+    .map((cell) => {
+      const leadItems = plumbingLeads.filter((item) => formatPlumbingGeoCell(item.plumbing) === cell);
+      const matchingProviders = dispatchProviders.filter((provider) => matchesZipCell(cell, provider.zipPrefixes));
+      const activeProviders = matchingProviders.filter((provider) => provider.active);
+      const acceptingProviders = activeProviders.filter((provider) => provider.acceptingNewJobs !== false);
+      const knownOpenCapacity = acceptingProviders.reduce((sum, provider) => {
+        if (typeof provider.maxConcurrentJobs !== "number") {
+          return sum;
+        }
+        return sum + Math.max(0, provider.maxConcurrentJobs - (provider.activeJobs ?? 0));
+      }, 0);
+      const urgentLeadCount = leadItems.filter((item) => item.plumbing.urgencyBand === "emergency-now").length;
+      const sameDayLeadCount = leadItems.filter((item) => item.plumbing.urgencyBand === "same-day").length;
+      const completedRevenue = leadItems.reduce((sum, item) => (
+        item.outcome?.status === "completed" && typeof item.outcome.revenueValue === "number"
+          ? sum + item.outcome.revenueValue
+          : sum
+      ), 0);
+      const demandPressure = urgentLeadCount * 2 + sameDayLeadCount + leadItems.length;
+      const supplyPressure = acceptingProviders.length * 20 + knownOpenCapacity * 8;
+      const liquidityScore = Math.max(0, Math.min(100, Math.round((supplyPressure / Math.max(demandPressure, 1)) * 20)));
+      const recommendedAction =
+        acceptingProviders.length === 0
+          ? "Recruit or reactivate providers in this ZIP cell"
+          : knownOpenCapacity < urgentLeadCount
+            ? "Add backup emergency coverage before scaling local demand"
+            : leadItems.length === 0 && acceptingProviders.length > 0
+              ? "Route more local traffic into this ready ZIP cell"
+              : liquidityScore < 45
+                ? "Increase supply before increasing acquisition"
+                : "Healthy balance between demand and provider capacity";
+
+      return {
+        label: cell,
+        leadCount: leadItems.length,
+        urgentLeadCount,
+        sameDayLeadCount,
+        completedRevenue,
+        providersCovering: matchingProviders.length,
+        acceptingProviders: acceptingProviders.length,
+        openCapacity: knownOpenCapacity,
+        liquidityScore,
+        recommendedAction,
+      };
+    })
+    .sort((left, right) => {
+      if (left.liquidityScore !== right.liquidityScore) {
+        return left.liquidityScore - right.liquidityScore;
+      }
+      return right.leadCount - left.leadCount;
+    });
+
+  return {
+    topCells: cells.slice(0, 8),
+    constrainedCells: cells.filter((cell) => cell.liquidityScore < 45).slice(0, 5),
+    expansionCells: cells.filter((cell) => cell.liquidityScore >= 70 && cell.acceptingProviders > 0).slice(0, 5),
+  };
+}
+
 function buildPlumbingDispatchSnapshot(
   leads: StoredLeadRecord[],
   bookingJobs: BookingJobRecord[],
@@ -285,6 +371,10 @@ function buildPlumbingDispatchSnapshot(
       };
     })
     .sort((left, right) => right.routingScore - left.routingScore);
+  const zipCellLiquidity = buildZipCellLiquiditySnapshot(
+    plumbingLeads as Array<{ lead: StoredLeadRecord; plumbing: PlumbingLeadContext; outcome: PlumbingJobOutcome | null }>,
+    dispatchProviders,
+  );
 
   return {
     totalPlumbingLeads: plumbingLeads.length,
@@ -299,6 +389,7 @@ function buildPlumbingDispatchSnapshot(
     dispatchModeBreakdown: topBreakdown(queueItems.map((item) => item.dispatchMode)),
     metroBreakdown,
     metroRevenueBreakdown,
+    zipCellLiquidity,
     topQueue: unresolved.slice(0, 8),
     providerScores: rankedProviderScores,
     configuredDispatchProviders: dispatchProviders.length,
