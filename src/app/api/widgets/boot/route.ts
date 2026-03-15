@@ -33,6 +33,16 @@ export async function GET(request: Request) {
         service: tenantConfig.defaultService,
         niche: tenantConfig.defaultNiche,
       },
+      embed: {
+        scriptUrl: `${tenantConfig.siteUrl}/embed/lead-os-embed.js`,
+        launcherLabel: "Need help now?",
+        drawerTitle: "Get the right next step",
+        drawerSummary: "Use the embedded LeadOS flow to qualify, book, or route urgent demand without leaving the client site.",
+        accessibility: {
+          role: "dialog",
+          closeLabel: "Close LeadOS panel",
+        },
+      },
       channels: health.channels,
       enabledFunnels: tenantConfig.enabledFunnels,
       experience,
