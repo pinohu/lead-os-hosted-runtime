@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
+import { formatLeadKeyForDisplay, formatPortalLabel } from "@/lib/operator-ui";
 import {
   getLeadRecord,
   getWorkflowRegistryRecords,
@@ -107,9 +108,9 @@ export default async function WorkflowRunsPage({ searchParams }: WorkflowRunsPag
         {registry.length === 0 ? null : registry.map((workflow) => (
           <article key={workflow.slug} className="stack-card">
             <p className="eyebrow">Starter workflow</p>
-            <h2>{workflow.workflowName}</h2>
+            <h2>{formatPortalLabel(workflow.workflowName)}</h2>
             <p className="muted">
-              Status: {workflow.status} | Active: {workflow.active ? "yes" : "no"}
+              Status: {formatPortalLabel(workflow.status)} | Active: {workflow.active ? "yes" : "no"}
             </p>
             <p className="muted">
               Manifest: {workflow.manifestVersion.slice(0, 12)} | Hash: {workflow.manifestHash.slice(0, 12)}
@@ -117,7 +118,7 @@ export default async function WorkflowRunsPage({ searchParams }: WorkflowRunsPag
             <p className="muted">
               Last provisioned: {workflow.lastProvisionedAt}
             </p>
-            {workflow.detail ? <p className="muted">{workflow.detail}</p> : null}
+            {workflow.detail ? <p className="muted portal-breakable">{workflow.detail}</p> : null}
           </article>
         ))}
       </section>
@@ -130,14 +131,14 @@ export default async function WorkflowRunsPage({ searchParams }: WorkflowRunsPag
         ) : (
           runsWithLead.map(({ run, lead }) => (
             <article key={run.id} className="stack-card">
-              <p className="eyebrow">{run.provider}</p>
-              <h2>{run.eventName}</h2>
-              <p className="muted">{run.detail}</p>
+              <p className="eyebrow">{formatPortalLabel(run.provider)}</p>
+              <h2>{formatPortalLabel(run.eventName)}</h2>
+              <p className="muted portal-breakable">{run.detail}</p>
               <p className="muted">
                 Mode: {run.mode} | Success: {run.ok ? "yes" : "no"}
               </p>
-              <p className="muted">
-                Lead: {run.leadKey ?? "not tied to a lead"}
+              <p className="muted portal-breakable">
+                Lead: {run.leadKey ? formatLeadKeyForDisplay(run.leadKey) : "not tied to a lead"}
                 {lead ? ` | Family: ${lead.family}` : ""}
               </p>
               <p className="muted">Created: {run.createdAt}</p>

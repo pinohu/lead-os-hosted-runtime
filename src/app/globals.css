@@ -178,10 +178,14 @@ main > * + *,
 .stack-card,
 .review-card {
   padding: 28px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .hero {
   padding: 36px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .eyebrow {
@@ -287,6 +291,17 @@ button[disabled] {
   gap: 18px;
 }
 
+.grid > *,
+.metric-grid > *,
+.proof-ribbon > *,
+.insight-grid > *,
+.option-grid > *,
+.review-grid > *,
+.stack-grid > *,
+.form-grid > * {
+  min-width: 0;
+}
+
 .grid.two,
 .insight-grid,
 .review-grid {
@@ -303,6 +318,8 @@ button[disabled] {
 .check-list li {
   position: relative;
   padding-left: 1.7rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .check-list li::before {
@@ -720,6 +737,55 @@ button[disabled] {
 
 .stack-card {
   background: rgba(255, 255, 255, 0.68);
+}
+
+.panel h2,
+.panel h3,
+.stack-card h2,
+.stack-card h3,
+.hero-copy h1,
+.hero-copy h2,
+.hero-rail h2 {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-wrap: balance;
+}
+
+.portal-identifier,
+.portal-inline-link,
+.portal-inline-text,
+.portal-breakable {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.portal-identifier {
+  margin-bottom: 0.4rem;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.portal-meta {
+  display: grid;
+  gap: 6px;
+}
+
+.portal-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.portal-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(34, 95, 84, 0.08);
+  color: #194439;
+  font-size: 0.88rem;
+  font-weight: 700;
 }
 
 .mobile-action-bar {

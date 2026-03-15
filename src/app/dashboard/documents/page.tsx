@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
+import { formatLeadKeyForDisplay, formatPortalLabel } from "@/lib/operator-ui";
 import { getDocumentJobs, getLeadRecord, type DocumentJobRecord } from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
 import { isSystemDocumentJob } from "@/lib/operator-view";
@@ -101,11 +102,11 @@ export default async function DocumentJobsPage({ searchParams }: DocumentJobsPag
         ) : (
           jobsWithLead.map(({ job, lead }) => (
             <article key={job.id} className="stack-card">
-              <p className="eyebrow">{job.provider}</p>
-              <h2>{job.status}</h2>
-              <p className="muted">{job.detail}</p>
-              <p className="muted">
-                Lead: {job.leadKey}
+              <p className="eyebrow">{formatPortalLabel(job.provider)}</p>
+              <h2>{formatPortalLabel(job.status)}</h2>
+              <p className="muted portal-breakable">{job.detail}</p>
+              <p className="muted portal-breakable">
+                Lead: {formatLeadKeyForDisplay(job.leadKey)}
                 {lead ? ` | Family: ${lead.family} | Stage: ${lead.stage}` : ""}
               </p>
               <p className="muted">Updated: {job.updatedAt}</p>

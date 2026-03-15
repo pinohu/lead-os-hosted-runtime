@@ -2,6 +2,7 @@ import Link from "next/link";
 import { buildOperatorConsoleSnapshot } from "@/lib/dashboard";
 import { getConfigStatusSummary } from "@/lib/config-status";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
+import { formatPortalLabel } from "@/lib/operator-ui";
 import { getAutomationHealth } from "@/lib/providers";
 import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import {
@@ -98,11 +99,12 @@ export default async function ProviderHealthPage() {
           <div className="stack-grid">
             {providerScores.map((provider) => (
               <article key={provider.provider} className="stack-card">
-                <p className="eyebrow">{provider.provider}</p>
+                <p className="eyebrow">{formatPortalLabel(provider.provider)}</p>
                 <h3>{provider.routingScore}</h3>
-                <p className="muted">
-                  Routing score: {provider.routingScore} | Reliability: {provider.reliabilityScore} | Revenue score: {provider.revenueScore}
-                </p>
+                <div className="portal-status-row">
+                  <span className="portal-chip">Reliability {provider.reliabilityScore}</span>
+                  <span className="portal-chip">Revenue {provider.revenueScore}</span>
+                </div>
                 <p className="muted">
                   Success rate: {formatPercent(provider.successRate)} | Booking fill: {formatPercent(provider.bookingFillRate)}
                 </p>
@@ -144,8 +146,8 @@ export default async function ProviderHealthPage() {
       <section className="stack-grid">
         {providerEntries.map(([provider, status]) => (
           <article key={provider} className="stack-card">
-            <p className="eyebrow">{provider}</p>
-            <h2>{status.capability.replace(/-/g, " ")}</h2>
+            <p className="eyebrow">{formatPortalLabel(provider)}</p>
+            <h2>{formatPortalLabel(status.capability)}</h2>
             <p className="muted">
               {status.status === "configured"
                 ? "Legacy status: configured"
@@ -154,15 +156,15 @@ export default async function ProviderHealthPage() {
                   : "Legacy status: missing"}
             </p>
             <p className="muted">{status.live ? "Execution ready" : "Not executing yet"}</p>
-            <p className="muted">{status.owner}</p>
-            <p className="muted">{status.responsibility}</p>
+            <p className="muted portal-breakable">{status.owner}</p>
+            <p className="muted portal-breakable">{status.responsibility}</p>
             {(() => {
               const config = configSummary.providers.find((entry) => entry.key === provider);
               if (!config) return null;
               return (
                 <>
                   <p className="muted">Credential source: {config.source}</p>
-                  {config.notes ? <p className="muted">{config.notes}</p> : null}
+                  {config.notes ? <p className="muted portal-breakable">{config.notes}</p> : null}
                 </>
               );
             })()}

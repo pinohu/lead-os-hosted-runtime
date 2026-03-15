@@ -2,6 +2,7 @@ import Link from "next/link";
 import { DispatchActionPanel } from "@/components/DispatchActionPanel";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { isSystemBookingJob, isSystemDocumentJob, isSystemWorkflowRun } from "@/lib/operator-view";
+import { formatLeadKeyForDisplay, formatMilestoneIdForDisplay, formatPortalLabel } from "@/lib/operator-ui";
 import { getAutomationHealth } from "@/lib/providers";
 import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import {
@@ -23,10 +24,6 @@ type DashboardPageProps = {
 
 function asString(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function formatLabel(value: string) {
-  return value.replace(/-/g, " ");
 }
 
 function formatPercent(value: number) {
@@ -146,7 +143,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
         <aside className="hero-rail">
           <p className="eyebrow">Operator session</p>
-          <h2>{session.email}</h2>
+          <h2 className="portal-identifier" title={session.email}>{session.email}</h2>
           <ul className="journey-rail">
             <li>
               <strong>Live mode</strong>
@@ -219,20 +216,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <div className="stack-grid">
               {dispatch.topQueue.map((item) => (
                 <article key={item.leadKey} className="stack-card">
-                  <p className="eyebrow">{formatLabel(item.urgencyBand)}</p>
-                  <h3>{item.leadKey}</h3>
-                  <p className="muted">
-                    Issue: {formatLabel(item.issueType)} | Mode: {formatLabel(item.dispatchMode)}
-                  </p>
-                  <p className="muted">
-                    Readiness: {item.readinessScore} | Stage: {item.stage}
-                  </p>
-                  <p className="muted">
+                  <p className="eyebrow">{formatPortalLabel(item.urgencyBand)}</p>
+                  <h3 className="portal-identifier" title={item.leadKey}>{formatLeadKeyForDisplay(item.leadKey)}</h3>
+                  <div className="portal-status-row">
+                    <span className="portal-chip">Issue: {formatPortalLabel(item.issueType)}</span>
+                    <span className="portal-chip">Mode: {formatPortalLabel(item.dispatchMode)}</span>
+                    <span className="portal-chip">Stage: {item.stage}</span>
+                  </div>
+                  <p className="muted">Readiness score: {item.readinessScore}</p>
+                  <p className="muted portal-breakable">
                     SLA: {item.overdue ? `overdue by ${item.minutesPastDue}m` : `due ${item.dueAt}`}
                     {item.escalationReady ? " | backup escalation ready" : ""}
                   </p>
                   {item.recommendedProviders.length > 0 ? (
-                    <p className="muted">
+                    <p className="muted portal-breakable">
                       Best match: {item.recommendedProviders[0].providerLabel} ({item.recommendedProviders[0].reason})
                     </p>
                   ) : (
@@ -276,9 +273,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               ) : (
                 <ul className="check-list">
                   {bookingFailures.map((job) => (
-                    <li key={job.id}>
-                      <Link href={`/dashboard/leads/${encodeURIComponent(job.leadKey)}`}>
-                        {job.leadKey}
+                    <li key={job.id} className="portal-breakable">
+                      <Link className="portal-inline-link" href={`/dashboard/leads/${encodeURIComponent(job.leadKey)}`}>
+                        {formatLeadKeyForDisplay(job.leadKey)}
                       </Link>{" "}
                       - {job.status}
                     </li>
@@ -293,15 +290,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               ) : (
                 <ul className="check-list">
                   {workflowFailures.map((run) => (
-                    <li key={run.id}>
+                    <li key={run.id} className="portal-breakable">
                       {run.leadKey ? (
-                        <Link href={`/dashboard/leads/${encodeURIComponent(run.leadKey)}`}>
-                          {run.leadKey}
+                        <Link className="portal-inline-link" href={`/dashboard/leads/${encodeURIComponent(run.leadKey)}`}>
+                          {formatLeadKeyForDisplay(run.leadKey)}
                         </Link>
                       ) : (
                         <span>Unknown lead</span>
                       )}{" "}
-                      - {run.eventName}
+                      - {formatPortalLabel(run.eventName)}
                     </li>
                   ))}
                 </ul>
@@ -314,9 +311,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               ) : (
                 <ul className="check-list">
                   {documentFailures.map((job) => (
-                    <li key={job.id}>
-                      <Link href={`/dashboard/leads/${encodeURIComponent(job.leadKey)}`}>
-                        {job.leadKey}
+                    <li key={job.id} className="portal-breakable">
+                      <Link className="portal-inline-link" href={`/dashboard/leads/${encodeURIComponent(job.leadKey)}`}>
+                        {formatLeadKeyForDisplay(job.leadKey)}
                       </Link>{" "}
                       - {job.status}
                     </li>
@@ -375,7 +372,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 ) : (
                   dispatch.urgencyBreakdown.map((entry) => (
                     <li key={entry.label}>
-                      {formatLabel(entry.label)}: {entry.count}
+                      {formatPortalLabel(entry.label)}: {entry.count}
                     </li>
                   ))
                 )}
@@ -389,7 +386,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 ) : (
                   dispatch.issueBreakdown.map((entry) => (
                     <li key={entry.label}>
-                      {formatLabel(entry.label)}: {entry.count}
+                      {formatPortalLabel(entry.label)}: {entry.count}
                     </li>
                   ))
                 )}
@@ -403,7 +400,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 ) : (
                   dispatch.dispatchModeBreakdown.map((entry) => (
                     <li key={entry.label}>
-                      {formatLabel(entry.label)}: {entry.count}
+                      {formatPortalLabel(entry.label)}: {entry.count}
                     </li>
                   ))
                 )}
@@ -431,16 +428,25 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               {dispatch.providerScores.slice(0, 6).map((provider) => (
                 <article key={provider.provider} className="stack-card">
                   <p className="eyebrow">{provider.provider}</p>
-                  <h3>{provider.reliabilityScore}</h3>
-                  <p className="muted">
-                    Success rate: {formatPercent(provider.successRate)} | Booking fill: {formatPercent(provider.bookingFillRate)}
-                  </p>
-                  <p className="muted">
-                    Completion: {formatPercent(provider.completionRate)} | Completed jobs: {provider.completedOutcomes}
-                  </p>
-                  <p className="muted">
-                    Attempts: {provider.attempts} | Workflow failures: {provider.workflowFailures}
-                  </p>
+                  <h3>{provider.routingScore}</h3>
+                  <div className="portal-status-row">
+                    <span className="portal-chip">Reliability {provider.reliabilityScore}</span>
+                    <span className="portal-chip">Revenue {provider.revenueScore}</span>
+                  </div>
+                  <div className="portal-meta">
+                    <p className="muted">
+                      Success rate: {formatPercent(provider.successRate)} | Booking fill: {formatPercent(provider.bookingFillRate)}
+                    </p>
+                    <p className="muted">
+                      Completion: {formatPercent(provider.completionRate)} | Completed jobs: {provider.completedOutcomes}
+                    </p>
+                    <p className="muted portal-breakable">
+                      Completed revenue: {provider.completedRevenue} | Avg completed value: {provider.averageCompletedRevenue || "n/a"}
+                    </p>
+                    <p className="muted">
+                      Attempts: {provider.attempts} | Workflow failures: {provider.workflowFailures}
+                    </p>
+                  </div>
                 </article>
               ))}
             </div>
@@ -459,11 +465,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               {snapshot.leadTimeline.map((lead) => (
                 <article key={lead.leadKey} className="stack-card">
                   <p className="eyebrow">{lead.family}</p>
-                  <h3>{lead.leadKey}</h3>
-                  <p className="muted">
-                    Stage: {lead.stage} | Visits: {lead.visitCount} | Score: {lead.score}
-                  </p>
-                  <p className="muted">Next lead milestone: {lead.nextLeadMilestone ?? "Complete"}</p>
+                  <h3 className="portal-identifier" title={lead.leadKey}>{formatLeadKeyForDisplay(lead.leadKey)}</h3>
+                  <div className="portal-meta">
+                    <p className="muted">
+                      Stage: {lead.stage} | Visits: {lead.visitCount} | Score: {lead.score}
+                    </p>
+                    <p className="muted">Next lead milestone: {lead.nextLeadMilestone ?? "Complete"}</p>
+                  </div>
                   <div className="cta-row">
                     <Link href={`/dashboard/leads/${encodeURIComponent(lead.leadKey)}`} className="secondary">
                       Open lead detail
@@ -485,8 +493,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               {snapshot.recentMilestoneEvents.map((event) => (
                 <article key={event.id} className="stack-card">
                   <p className="eyebrow">{event.type}</p>
-                  <h3>{event.milestoneId}</h3>
-                  <p className="muted">{event.leadKey}</p>
+                  <h3 className="portal-identifier" title={event.milestoneId}>{formatMilestoneIdForDisplay(event.milestoneId)}</h3>
+                  <p className="muted portal-breakable" title={event.leadKey}>{formatLeadKeyForDisplay(event.leadKey)}</p>
                   <p className="muted">
                     Visit count: {event.visitCount} | Stage: {event.stage}
                   </p>
