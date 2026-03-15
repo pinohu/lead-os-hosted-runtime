@@ -5,6 +5,7 @@ import {
   generateDeploymentPackage,
 } from "@/lib/embed-deployment";
 import { tenantConfig } from "@/lib/tenant";
+import { generateWordPressPluginPackage } from "@/lib/wordpress-plugin";
 
 type DeploymentBlueprintPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -27,6 +28,7 @@ export default async function DeploymentBlueprintPage({ searchParams }: Deployme
     city,
     niche: "plumbing",
   }, tenantConfig);
+  const wordpressPlugin = generateWordPressPluginPackage(activeDeployment, tenantConfig);
   const bulkDeployment = generateBulkZipDeploymentPackage({
     recipe,
     niche: "plumbing",
@@ -105,6 +107,13 @@ export default async function DeploymentBlueprintPage({ searchParams }: Deployme
           </div>
         </article>
         <article className="panel">
+          <p className="eyebrow">WordPress plugin file</p>
+          <h2>Install a generated plugin instead of pasting snippets manually</h2>
+          <div className="code-card">
+            <pre><code>{wordpressPlugin.phpSource}</code></pre>
+          </div>
+        </article>
+        <article className="panel">
           <p className="eyebrow">Iframe fallback</p>
           <h2>Full hosted-page embed</h2>
           <div className="code-card">
@@ -121,6 +130,8 @@ export default async function DeploymentBlueprintPage({ searchParams }: Deployme
             <li><strong>Generator endpoint</strong>: <span className="portal-breakable">{activeDeployment.generatorEndpoint}</span></li>
             <li><strong>Widget boot</strong>: <span className="portal-breakable">{activeDeployment.bundle.bootEndpoint}</span></li>
             <li><strong>Embed manifest</strong>: <span className="portal-breakable">{activeDeployment.bundle.manifestEndpoint}</span></li>
+            <li><strong>WordPress plugin</strong>: <span className="portal-breakable">{wordpressPlugin.downloadPath}</span></li>
+            <li><strong>WordPress shortcode</strong>: <span className="portal-breakable">{wordpressPlugin.shortcode}</span></li>
           </ul>
         </article>
         <article className="panel">

@@ -39,6 +39,10 @@ export async function GET(request: Request) {
       endpoint: "/api/embed/generate-bulk",
       summary: "Generate many ZIP-aware deployment payloads in one request for local SEO and metro rollouts.",
     },
+    wordpressPluginSupport: {
+      endpoint: "/api/embed/wordpress-plugin",
+      summary: "Generate a ready-to-install WordPress plugin file for a preset-aware deployment recipe.",
+    },
     funnels: Object.values(graphs).map((graph) => ({
       id: graph.id,
       family: graph.family,

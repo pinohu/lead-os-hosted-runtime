@@ -6,6 +6,7 @@ LeadOS now exposes a deployment-grade integration stack for the plumbing marketp
 - `/api/widgets/boot`
 - `/api/embed/generate`
 - `/api/embed/generate-bulk`
+- `/api/embed/wordpress-plugin`
 - `/deployments/plumbing`
 
 ## Endpoint roles
@@ -77,6 +78,16 @@ It accepts:
 - `limit`
 
 It returns a batch of generated deployment packages so an operator, script, or plugin can provision many localized landing pages in one request.
+
+### `/api/embed/wordpress-plugin`
+
+Use this when you want a ready-to-install WordPress deployment package instead of raw snippets.
+
+It returns:
+- generated plugin metadata
+- a single-file PHP plugin
+- a shortcode contract
+- a direct download path for the generated plugin file
 
 Add `format=csv` when the output needs to be consumed by spreadsheets, rollout sheets, or external provisioning tools.
 

@@ -43,5 +43,6 @@
    - JavaScript widget snippet
    - iframe fallback
    - WordPress HTML block
-4. Paste the generated snippet into Gutenberg or a custom HTML widget.
-5. Keep long-form or higher-trust paths hosted on the LeadOS subdomain.
+4. If you want a packaged installation path instead of manual snippet placement, call `/api/embed/wordpress-plugin`.
+5. Install the generated plugin and place the `[leados_embed]` shortcode where the widget should appear.
+6. Keep long-form or higher-trust paths hosted on the LeadOS subdomain.
