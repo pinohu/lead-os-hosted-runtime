@@ -2,6 +2,7 @@ import { embeddedSecrets } from "./embedded-secrets.ts";
 import { getOperationalRuntimeConfig } from "./runtime-config.ts";
 import { TOOL_OWNERSHIP_MAP } from "./runtime-schema.ts";
 import { createContact } from "./suitedash.ts";
+import { tenantConfig } from "./tenant.ts";
 import type { CanonicalEvent, TraceContext } from "./trace.ts";
 
 type ProviderStatus = "configured" | "dry-run" | "missing";
@@ -401,6 +402,121 @@ function getBooleanValue(...values: unknown[]) {
     }
   }
   return undefined;
+}
+
+function stripHtml(html: string) {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractEmailAddress(value?: string | null) {
+  if (!value) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  const angleMatch = trimmed.match(/<([^>]+)>/);
+  const candidate = angleMatch?.[1] ?? trimmed;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate) ? candidate.toLowerCase() : undefined;
+}
+
+function isPlaceholderEmail(value?: string | null) {
+  const email = extractEmailAddress(value);
+  return !email || email.endsWith("@example.com");
+}
+
+function getEmailDomain(value?: string | null) {
+  const email = extractEmailAddress(value);
+  if (!email) {
+    return undefined;
+  }
+
+  return email.split("@")[1];
+}
+
+function isConsumerMailboxDomain(domain?: string | null) {
+  if (!domain) {
+    return false;
+  }
+
+  return new Set([
+    "gmail.com",
+    "googlemail.com",
+    "outlook.com",
+    "hotmail.com",
+    "live.com",
+    "msn.com",
+    "yahoo.com",
+    "icloud.com",
+    "me.com",
+    "aol.com",
+    "proton.me",
+    "protonmail.com",
+    "gmx.com",
+    "yandex.com",
+  ]).has(domain.toLowerCase());
+}
+
+function getRootDomain(hostname?: string | null) {
+  if (!hostname) {
+    return undefined;
+  }
+
+  const cleaned = hostname.toLowerCase().trim().replace(/^\.+|\.+$/g, "");
+  if (!cleaned || /^\d+\.\d+\.\d+\.\d+$/.test(cleaned)) {
+    return undefined;
+  }
+
+  const parts = cleaned.split(".").filter(Boolean);
+  if (parts.length < 2) {
+    return undefined;
+  }
+
+  return parts.slice(-2).join(".");
+}
+
+function deriveSiteRootDomain() {
+  try {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? tenantConfig.siteUrl;
+    return getRootDomain(new URL(siteUrl).hostname);
+  } catch {
+    return undefined;
+  }
+}
+
+function getEmailSenderAddress() {
+  const explicitFrom = process.env.LEAD_OS_FROM_EMAIL?.trim();
+  if (explicitFrom && !isPlaceholderEmail(explicitFrom)) {
+    return explicitFrom;
+  }
+
+  const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? tenantConfig.supportEmail;
+  const supportDomain = getEmailDomain(supportEmail);
+  if (!isPlaceholderEmail(supportEmail) && supportDomain && !isConsumerMailboxDomain(supportDomain)) {
+    return `${tenantConfig.brandName} <${extractEmailAddress(supportEmail)}>`;
+  }
+
+  const siteDomain = deriveSiteRootDomain();
+  if (siteDomain) {
+    return `${tenantConfig.brandName} <hello@${siteDomain}>`;
+  }
+
+  if (!isPlaceholderEmail(supportEmail)) {
+    return `${tenantConfig.brandName} <${extractEmailAddress(supportEmail)}>`;
+  }
+
+  return "LeadOS <hello@example.com>";
+}
+
+function getEmailReplyToAddress() {
+  const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? tenantConfig.supportEmail;
+  return isPlaceholderEmail(supportEmail) ? undefined : extractEmailAddress(supportEmail);
 }
 
 async function request(url: string, init: RequestInit): Promise<HttpResult> {
@@ -1045,14 +1161,18 @@ export async function sendEmailAction(payload: {
   }
 
   try {
+    const from = getEmailSenderAddress();
+    const replyTo = getEmailReplyToAddress();
     const response = await postJson(
-      "https://api.emailit.com/v1/emails",
+      "https://api.emailit.com/v2/emails",
       {
-        from: process.env.LEAD_OS_FROM_EMAIL ?? process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "LeadOS <support@example.com>",
+        from,
         to: payload.to,
         subject: payload.subject,
         html: payload.html,
-        metadata: {
+        text: stripHtml(payload.html),
+        ...(replyTo ? { reply_to: replyTo } : {}),
+        meta: {
           leadKey: payload.trace.leadKey,
           blueprintId: payload.trace.blueprintId,
         },
@@ -1065,6 +1185,11 @@ export async function sendEmailAction(payload: {
       provider: "Emailit",
       mode: "live",
       detail: response.ok ? "Email sent" : `Email failed: ${response.status}`,
+      payload: response.ok ? undefined : {
+        from,
+        replyTo,
+        response: response.json ?? response.text,
+      },
     } satisfies ProviderResult;
   } catch (error) {
     return {

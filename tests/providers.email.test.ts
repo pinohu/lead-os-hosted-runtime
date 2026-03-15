@@ -51,3 +51,75 @@ test("sendEmailAction returns a graceful failure when delivery throws", async ()
     }
   }
 });
+
+test("sendEmailAction uses Emailit v2 and derives a verified-domain sender when support email is consumer-hosted", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalEnv = {
+    LEAD_OS_ENABLE_LIVE_SENDS: process.env.LEAD_OS_ENABLE_LIVE_SENDS,
+    LEAD_OS_ALLOW_EMBEDDED_SECRETS: process.env.LEAD_OS_ALLOW_EMBEDDED_SECRETS,
+    EMAILIT_API_KEY: process.env.EMAILIT_API_KEY,
+    NEXT_PUBLIC_SUPPORT_EMAIL: process.env.NEXT_PUBLIC_SUPPORT_EMAIL,
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+    LEAD_OS_FROM_EMAIL: process.env.LEAD_OS_FROM_EMAIL,
+  };
+
+  process.env.LEAD_OS_ENABLE_LIVE_SENDS = "true";
+  process.env.LEAD_OS_ALLOW_EMBEDDED_SECRETS = "false";
+  process.env.EMAILIT_API_KEY = "emailit-live-key";
+  process.env.NEXT_PUBLIC_SUPPORT_EMAIL = "polycarpohu@gmail.com";
+  process.env.NEXT_PUBLIC_SITE_URL = "https://leados.yourdeputy.com";
+  delete process.env.LEAD_OS_FROM_EMAIL;
+
+  const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+  globalThis.fetch = async (input, init) => {
+    fetchCalls.push({
+      url: String(input),
+      init,
+    });
+
+    return new Response(JSON.stringify({ id: "email_123" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  try {
+    const modulePath = new URL(`../src/lib/providers.ts?email-success-${Date.now()}`, import.meta.url).href;
+    const { sendEmailAction } = await import(modulePath);
+    const result = await sendEmailAction({
+      to: "polycarpohu@gmail.com",
+      subject: "Operator sign-in",
+      html: "<p>Test</p>",
+      trace: {
+        leadKey: "email:polycarpohu@gmail.com",
+        tenant: "default-tenant",
+        source: "manual",
+        service: "operator-auth",
+        niche: "operations",
+        blueprintId: "operator-auth",
+        stepId: "magic-link",
+      },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(fetchCalls.length, 1);
+    assert.equal(fetchCalls[0]?.url, "https://api.emailit.com/v2/emails");
+
+    const body = JSON.parse(String(fetchCalls[0]?.init?.body ?? "{}")) as Record<string, unknown>;
+    assert.equal(body.reply_to, "polycarpohu@gmail.com");
+    assert.equal(body.from, "Lead OS Hosted <hello@yourdeputy.com>");
+    assert.equal(body.text, "Test");
+    assert.ok("meta" in body);
+    assert.ok(!("metadata" in body));
+  } finally {
+    globalThis.fetch = originalFetch;
+
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (typeof value === "undefined") {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+});
