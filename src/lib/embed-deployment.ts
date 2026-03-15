@@ -112,6 +112,17 @@ export type GeneratedDeploymentPackage = {
   generatorEndpoint: string;
 };
 
+export type BulkZipDeploymentQuery = DeploymentGeneratorQuery & {
+  zips?: string[];
+  limit?: number;
+};
+
+export type BulkZipDeploymentPackage = {
+  recipe?: DeploymentRecipeId | string;
+  count: number;
+  deployments: GeneratedDeploymentPackage[];
+};
+
 const widgetPresets: WidgetPreset[] = [
   {
     id: "urgent-drawer",
@@ -518,6 +529,13 @@ function buildWordpressEmbedBlock(bundle: PlumbingIntegrationBundle) {
   ].join("\n");
 }
 
+function normalizeZipList(zips?: string[]) {
+  return [...new Set((zips ?? [])
+    .map((zip) => String(zip).trim())
+    .filter(Boolean)
+    .map((zip) => zip.replace(/[^\dA-Za-z-]/g, "")))];
+}
+
 export function generateDeploymentPackage(
   query: DeploymentGeneratorQuery,
   tenantConfig: TenantConfig,
@@ -550,5 +568,25 @@ export function generateDeploymentPackage(
     bundle,
     wordpressEmbedBlock: buildWordpressEmbedBlock(bundle),
     generatorEndpoint: `${tenantConfig.siteUrl}/api/embed/generate?${generatorQuery.toString()}`,
+  };
+}
+
+export function generateBulkZipDeploymentPackage(
+  query: BulkZipDeploymentQuery,
+  tenantConfig: TenantConfig,
+): BulkZipDeploymentPackage {
+  const limit = Math.max(1, Math.min(query.limit ?? 25, 250));
+  const zipList = normalizeZipList(query.zips).slice(0, limit);
+  const deployments = zipList.map((zip) =>
+    generateDeploymentPackage({
+      ...query,
+      zip,
+    }, tenantConfig),
+  );
+
+  return {
+    recipe: query.recipe,
+    count: deployments.length,
+    deployments,
   };
 }

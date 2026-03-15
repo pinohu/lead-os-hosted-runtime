@@ -5,6 +5,7 @@ LeadOS now exposes a deployment-grade integration stack for the plumbing marketp
 - `/api/embed/manifest`
 - `/api/widgets/boot`
 - `/api/embed/generate`
+- `/api/embed/generate-bulk`
 - `/deployments/plumbing`
 
 ## Endpoint roles
@@ -64,6 +65,19 @@ It returns:
 - manifest endpoint
 - resolved deployment pattern
 
+### `/api/embed/generate-bulk`
+
+Use this when rolling out many ZIP-aware deployments at once.
+
+It accepts:
+
+- `recipe`
+- `city`
+- `zips` as a comma-separated list
+- `limit`
+
+It returns a batch of generated deployment packages so an operator, script, or plugin can provision many localized landing pages in one request.
+
 ### `/deployments/plumbing`
 
 Use this as the human-facing operator blueprint page for:
@@ -85,8 +99,9 @@ Use this as the human-facing operator blueprint page for:
 
 1. Use `/api/embed/manifest` in the setup/configuration interface.
 2. Use `/api/embed/generate` to create the exact deployment payload.
-3. Use `/api/widgets/boot` in the live browser widget.
-4. Use hosted pages for ads, email, SMS, QR, and directory handoff.
+3. Use `/api/embed/generate-bulk` for ZIP-cell expansion and local SEO rollout batches.
+4. Use `/api/widgets/boot` in the live browser widget.
+5. Use hosted pages for ads, email, SMS, QR, and directory handoff.
 
 ## Scale assumptions
 

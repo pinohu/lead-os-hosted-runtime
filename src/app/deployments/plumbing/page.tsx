@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { generateDeploymentPackage, buildManifestCatalog } from "@/lib/embed-deployment";
+import {
+  buildManifestCatalog,
+  generateBulkZipDeploymentPackage,
+  generateDeploymentPackage,
+} from "@/lib/embed-deployment";
 import { tenantConfig } from "@/lib/tenant";
 
 type DeploymentBlueprintPageProps = {
@@ -15,12 +19,20 @@ export default async function DeploymentBlueprintPage({ searchParams }: Deployme
   const zip = asString(params.zip) ?? "19103";
   const city = asString(params.city) ?? "Philadelphia";
   const recipe = asString(params.recipe) ?? "provider-homepage-emergency-widget";
+  const bulkZipInput = asString(params.zips) ?? "19103,19104,19107";
   const catalog = buildManifestCatalog(tenantConfig);
   const activeDeployment = generateDeploymentPackage({
     recipe,
     zip,
     city,
     niche: "plumbing",
+  }, tenantConfig);
+  const bulkDeployment = generateBulkZipDeploymentPackage({
+    recipe,
+    niche: "plumbing",
+    city,
+    zips: bulkZipInput.split(","),
+    limit: 12,
   }, tenantConfig);
 
   return (
@@ -119,6 +131,31 @@ export default async function DeploymentBlueprintPage({ searchParams }: Deployme
               <li key={metric}>{metric}</li>
             ))}
           </ul>
+        </article>
+      </section>
+
+      <section className="grid two">
+        <article className="panel">
+          <p className="eyebrow">Bulk ZIP rollout</p>
+          <h2>Generate many localized deployments at once</h2>
+          <p className="muted">
+            Use the bulk generator endpoint when rolling out emergency or estimate widgets across many ZIP-level pages.
+          </p>
+          <div className="code-card">
+            <pre><code>{`${tenantConfig.siteUrl}/api/embed/generate-bulk?recipe=${recipe}&city=${encodeURIComponent(city)}&zips=${encodeURIComponent(bulkZipInput)}&limit=12`}</code></pre>
+          </div>
+        </article>
+        <article className="panel">
+          <p className="eyebrow">Preview of generated ZIP packages</p>
+          <h2>First {bulkDeployment.count} localized deployments</h2>
+          <div className="entry-link-grid">
+            {bulkDeployment.deployments.map((deployment) => (
+              <article key={deployment.bundle.hostedUrl} className="entry-link-card">
+                <strong>{deployment.bundle.hostedUrl}</strong>
+                <span>{deployment.widgetPreset.label}</span>
+              </article>
+            ))}
+          </div>
         </article>
       </section>
     </main>

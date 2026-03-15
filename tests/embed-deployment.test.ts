@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildManifestCatalog, generateDeploymentPackage, resolveWidgetBoot } from "../src/lib/embed-deployment.ts";
+import {
+  buildManifestCatalog,
+  generateBulkZipDeploymentPackage,
+  generateDeploymentPackage,
+  resolveWidgetBoot,
+} from "../src/lib/embed-deployment.ts";
 import { tenantConfig } from "../src/lib/tenant.ts";
 
 test("resolveWidgetBoot returns a ZIP-aware local emergency deployment when ZIP is provided", () => {
@@ -61,4 +66,22 @@ test("generateDeploymentPackage returns preset-aware snippets for ZIP deployment
   assert.match(generated.bundle.widgetScript, /city: "Philadelphia"/);
   assert.match(generated.wordpressEmbedBlock, /lead-os-embed\.js/);
   assert.match(generated.generatorEndpoint, /recipe=zip-seo-page-urgent-widget/);
+});
+
+test("generateBulkZipDeploymentPackage returns many localized deployment packages", () => {
+  const generated = generateBulkZipDeploymentPackage(
+    {
+      recipe: "zip-seo-page-urgent-widget",
+      niche: "plumbing",
+      city: "Philadelphia",
+      zips: ["19103", "19104", "19107"],
+      limit: 10,
+    },
+    tenantConfig,
+  );
+
+  assert.equal(generated.count, 3);
+  assert.equal(generated.deployments[0]?.entrypointPreset.kind, "local");
+  assert.match(generated.deployments[1]?.bundle.bootEndpoint ?? "", /zip=19104/);
+  assert.match(generated.deployments[2]?.bundle.widgetScript ?? "", /city: "Philadelphia"/);
 });

@@ -35,6 +35,10 @@ export async function GET(request: Request) {
     themePresets: catalog.themePresets,
     supportedIntegrations: catalog.supportedIntegrations,
     localSeoPresets: catalog.localSeoPresets,
+    bulkDeploymentSupport: {
+      endpoint: "/api/embed/generate-bulk",
+      summary: "Generate many ZIP-aware deployment payloads in one request for local SEO and metro rollouts.",
+    },
     funnels: Object.values(graphs).map((graph) => ({
       id: graph.id,
       family: graph.family,
