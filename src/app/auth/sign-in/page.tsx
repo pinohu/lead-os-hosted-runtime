@@ -1,6 +1,12 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { isAllowedOperatorEmail, sanitizeNextPath, sendOperatorMagicLink } from "@/lib/operator-auth";
+import {
+  buildOperatorAbsoluteUrl,
+  getOperatorPublicOrigin,
+  isAllowedOperatorEmail,
+  sanitizeNextPath,
+  sendOperatorMagicLink,
+} from "@/lib/operator-auth";
 
 type SignInPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -17,22 +23,22 @@ async function requestMagicLinkAction(formData: FormData) {
   const nextPath = sanitizeNextPath(String(formData.get("next") ?? "/dashboard"));
 
   if (!email || !isAllowedOperatorEmail(email)) {
-    redirect(`/auth/sign-in?error=unauthorized&next=${encodeURIComponent(nextPath)}`);
+    redirect(buildOperatorAbsoluteUrl(`/auth/sign-in?error=unauthorized&next=${encodeURIComponent(nextPath)}`));
   }
 
   const headerStore = await headers();
-  const forwardedHost = headerStore.get("x-forwarded-host");
-  const host = forwardedHost ?? headerStore.get("host") ?? "leados.yourdeputy.com";
-  const forwardedProto = headerStore.get("x-forwarded-proto");
-  const protocol = forwardedProto ?? "https";
-  const origin = `${protocol}://${host}`;
+  const origin = getOperatorPublicOrigin({
+    host: headerStore.get("host"),
+    forwardedHost: headerStore.get("x-forwarded-host"),
+    forwardedProto: headerStore.get("x-forwarded-proto"),
+  });
 
   const result = await sendOperatorMagicLink(email, origin, nextPath);
   if (!result.ok) {
-    redirect(`/auth/sign-in?error=delivery-failed&next=${encodeURIComponent(nextPath)}`);
+    redirect(buildOperatorAbsoluteUrl(`/auth/sign-in?error=delivery-failed&next=${encodeURIComponent(nextPath)}`));
   }
 
-  redirect(`/auth/check-email?email=${encodeURIComponent(email)}`);
+  redirect(buildOperatorAbsoluteUrl(`/auth/check-email?email=${encodeURIComponent(email)}`));
 }
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {

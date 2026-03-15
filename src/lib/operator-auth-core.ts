@@ -18,6 +18,54 @@ export function sanitizeNextPath(value?: string | null) {
   return value.startsWith("/") && !value.startsWith("//") ? value : "/dashboard";
 }
 
+function isPrivateHostname(hostname: string) {
+  const normalized = hostname.trim().toLowerCase();
+  if (!normalized) return true;
+  if (normalized === "localhost" || normalized === "0.0.0.0" || normalized.endsWith(".local")) {
+    return true;
+  }
+  if (/^127\.\d+\.\d+\.\d+$/.test(normalized)) {
+    return true;
+  }
+  if (/^10\.\d+\.\d+\.\d+$/.test(normalized)) {
+    return true;
+  }
+  if (/^192\.168\.\d+\.\d+$/.test(normalized)) {
+    return true;
+  }
+
+  const private172Match = normalized.match(/^172\.(\d+)\.\d+\.\d+$/);
+  if (private172Match) {
+    const secondOctet = Number(private172Match[1]);
+    if (secondOctet >= 16 && secondOctet <= 31) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function resolvePublicOrigin(candidates: Array<string | undefined | null>, fallback: string) {
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    try {
+      const parsed = new URL(candidate);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        continue;
+      }
+      if (isPrivateHostname(parsed.hostname)) {
+        continue;
+      }
+      return parsed.origin;
+    } catch {
+      continue;
+    }
+  }
+
+  return fallback;
+}
+
 export function defaultOperatorEmails(candidates: Array<string | undefined | null>) {
   return [
     ...new Set(

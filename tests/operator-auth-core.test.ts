@@ -4,6 +4,7 @@ import {
   createMagicLinkUrl,
   decodeOperatorToken,
   getAllowedOperatorEmails,
+  resolvePublicOrigin,
   sanitizeNextPath,
 } from "../src/lib/operator-auth-core.ts";
 
@@ -12,6 +13,15 @@ test("sanitizeNextPath only allows internal paths", () => {
   assert.equal(sanitizeNextPath("//evil.example.com"), "/dashboard");
   assert.equal(sanitizeNextPath("https://evil.example.com"), "/dashboard");
   assert.equal(sanitizeNextPath(undefined), "/dashboard");
+});
+
+test("resolvePublicOrigin rejects private bind addresses and prefers the public site", () => {
+  const origin = resolvePublicOrigin(
+    ["https://0.0.0.0:8080", "https://localhost:3000", "https://leados.yourdeputy.com"],
+    "https://fallback.example.com",
+  );
+
+  assert.equal(origin, "https://leados.yourdeputy.com");
 });
 
 test("getAllowedOperatorEmails prefers configured operator emails", () => {

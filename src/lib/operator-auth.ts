@@ -9,6 +9,7 @@ import {
   isAllowedOperatorEmail as isAllowedOperatorEmailInList,
   issueOperatorToken,
   normalizeEmail,
+  resolvePublicOrigin,
   sanitizeNextPath,
 } from "./operator-auth-core.ts";
 import { sendEmailAction } from "./providers.ts";
@@ -17,6 +18,13 @@ import { ensureTraceContext } from "./trace.ts";
 
 export const OPERATOR_SESSION_COOKIE = "leados_operator_session";
 export { sanitizeNextPath } from "./operator-auth-core.ts";
+
+type PublicOriginOptions = {
+  requestUrl?: string;
+  host?: string | null;
+  forwardedHost?: string | null;
+  forwardedProto?: string | null;
+};
 
 function getAuthSecret() {
   return process.env.LEAD_OS_AUTH_SECRET ?? process.env.CRON_SECRET ?? embeddedSecrets.cron.secret;
@@ -32,6 +40,34 @@ export function getAllowedOperatorEmails() {
 
 export function isAllowedOperatorEmail(email: string) {
   return isAllowedOperatorEmailInList(email, getAllowedOperatorEmails());
+}
+
+export function getOperatorPublicOrigin(options: PublicOriginOptions = {}) {
+  const protocol = options.forwardedProto?.trim() || "https";
+  const forwardedOrigin = options.forwardedHost?.trim()
+    ? `${protocol}://${options.forwardedHost.trim()}`
+    : undefined;
+  const requestOrigin = options.requestUrl
+    ? new URL(options.requestUrl).origin
+    : undefined;
+  const hostOrigin = options.host?.trim()
+    ? `${protocol}://${options.host.trim()}`
+    : undefined;
+
+  return resolvePublicOrigin(
+    [
+      forwardedOrigin,
+      requestOrigin,
+      hostOrigin,
+      process.env.NEXT_PUBLIC_SITE_URL,
+      tenantConfig.siteUrl,
+    ],
+    tenantConfig.siteUrl,
+  );
+}
+
+export function buildOperatorAbsoluteUrl(path: string, options: PublicOriginOptions = {}) {
+  return new URL(path, getOperatorPublicOrigin(options)).toString();
 }
 
 export async function createMagicLink(email: string, origin: string, nextPath?: string) {
@@ -156,7 +192,7 @@ export async function requireOperatorApiSession(request: Request) {
 export async function requireOperatorPageSession(nextPath: string) {
   const session = await getOperatorSession();
   if (!session) {
-    redirect(`/auth/sign-in?next=${encodeURIComponent(sanitizeNextPath(nextPath))}`);
+    redirect(buildOperatorAbsoluteUrl(`/auth/sign-in?next=${encodeURIComponent(sanitizeNextPath(nextPath))}`));
   }
   return session;
 }
