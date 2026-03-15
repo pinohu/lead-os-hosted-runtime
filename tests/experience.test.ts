@@ -53,3 +53,30 @@ test("provider audience gets a supplier-side onboarding profile for plumbing", (
   assert.match(profile.heroTitle, /provider|network/i);
   assert.match(profile.primaryActionHref, /audience=provider/);
 });
+
+test("plumbing client qualification can resolve into randomized holdout-aware variants", () => {
+  const profile = resolveExperienceProfile({
+    family: "qualification",
+    niche: nicheCatalog.plumbing,
+    assignmentKey: "visitor-123",
+    supportEmail: "support@yourdeputy.com",
+  });
+
+  assert.match(profile.experimentId, /plumbing-client-entry-v1/);
+  assert.equal(profile.randomizedExperiment, true);
+  assert.ok(["dispatch-proof", "comparison-assist", "holdout-light-form", "rapid-triage"].includes(profile.variantId));
+});
+
+test("plumbing provider onboarding can resolve into randomized provider variants", () => {
+  const profile = resolveExperienceProfile({
+    family: "qualification",
+    niche: nicheCatalog.plumbing,
+    audience: "provider",
+    assignmentKey: "provider-visitor-123",
+    supportEmail: "support@yourdeputy.com",
+  });
+
+  assert.match(profile.experimentId, /plumbing-provider-entry-v1/);
+  assert.equal(profile.randomizedExperiment, true);
+  assert.ok(["coverage-proof", "ops-guided", "holdout-basic-form"].includes(profile.variantId));
+});

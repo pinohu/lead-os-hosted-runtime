@@ -4,6 +4,7 @@ import { AdaptiveLeadCaptureForm } from "@/components/AdaptiveLeadCaptureForm";
 import { ExperienceScaffold } from "@/components/ExperienceScaffold";
 import { getRecipeForFamily } from "@/lib/automation";
 import { getNiche } from "@/lib/catalog";
+import { EXPERIENCE_ASSIGNMENT_HEADER } from "@/lib/experiments";
 import { resolveExperienceProfile } from "@/lib/experience";
 import { buildDefaultFunnelGraphs } from "@/lib/funnel-library";
 import type { FunnelFamily } from "@/lib/runtime-schema";
@@ -58,6 +59,7 @@ export default async function FunnelFamilyPage({ params, searchParams }: FunnelF
     milestone: asString(query.milestone),
     preferredMode: asString(query.mode),
     score: Number(asString(query.score) ?? 0) || undefined,
+    assignmentKey: headerStore.get(EXPERIENCE_ASSIGNMENT_HEADER) ?? undefined,
     userAgent: headerStore.get("user-agent") ?? undefined,
     referrer: headerStore.get("referer") ?? undefined,
   });

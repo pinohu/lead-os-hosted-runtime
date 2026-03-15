@@ -1,4 +1,5 @@
 import type { NicheDefinition } from "./catalog.ts";
+import { resolveExperienceExperiment } from "./experiments.ts";
 import type { FunnelFamily, MarketplaceAudience } from "./runtime-schema.ts";
 
 export type ExperienceMode =
@@ -30,6 +31,7 @@ export type ExperienceInput = {
   returning?: boolean;
   milestone?: string;
   preferredMode?: ExperienceMode | string;
+  assignmentKey?: string;
   score?: number;
   userAgent?: string;
   referrer?: string;
@@ -42,6 +44,8 @@ export type ExperienceProfile = {
   device: "mobile" | "desktop";
   experimentId: string;
   variantId: string;
+  randomizedExperiment: boolean;
+  holdout: boolean;
   heroTitle: string;
   heroSummary: string;
   primaryActionLabel: string;
@@ -418,9 +422,18 @@ function buildFieldOrder(mode: ExperienceMode, audience: MarketplaceAudience) {
 
 export function resolveExperienceProfile(input: ExperienceInput): ExperienceProfile {
   const audience = input.audience ?? "client";
-  const mode = buildModeByContext(input);
+  const baseMode = buildModeByContext(input);
   const family = buildDefaultFamily(input);
   const device = inferDeviceClass(input.userAgent);
+  const assignment = resolveExperienceExperiment({
+    assignmentKey: input.assignmentKey,
+    nicheSlug: input.niche.slug,
+    family,
+    audience,
+    device,
+    baseMode,
+  });
+  const mode = assignment.mode;
   const destination = buildDestination(family, input.niche, audience);
   const plumbingLike = isPlumbingLikeNiche(input.niche);
   const returnOffer = audience === "provider"
@@ -440,8 +453,10 @@ export function resolveExperienceProfile(input: ExperienceInput): ExperienceProf
     audience,
     mode,
     device,
-    experimentId: `${input.niche.slug}:${family}:${device}`,
-    variantId: `${input.niche.slug}:${family}:${mode}:${device}`,
+    experimentId: assignment.experimentId,
+    variantId: assignment.variantId,
+    randomizedExperiment: assignment.randomized,
+    holdout: assignment.holdout,
     heroTitle:
       audience === "provider" && plumbingLike
         ? input.returning
@@ -455,6 +470,19 @@ export function resolveExperienceProfile(input: ExperienceInput): ExperienceProf
         ? `${input.niche.label} momentum, resumed without friction`
         : `${input.niche.label} growth paths that adapt to visitor intent`,
     heroSummary:
+      input.niche.slug === "plumbing" && assignment.variantId === "dispatch-proof"
+        ? "This version keeps proof, speed, and local trust signals tight to the first ask so urgent plumbing buyers can move fast with confidence."
+      : input.niche.slug === "plumbing" && assignment.variantId === "rapid-triage"
+        ? "This version opens with a faster guided dispatch conversation so urgent mobile visitors can move before the job cools off."
+      : input.niche.slug === "plumbing" && assignment.variantId === "comparison-assist"
+        ? "This version gives estimate-minded visitors a calmer comparison path before the stronger booking ask."
+      : audience === "provider" && assignment.variantId === "coverage-proof"
+        ? "This version leads with service area, job fit, and capacity proof so serious providers can see how the network routes work."
+      : audience === "provider" && assignment.variantId === "ops-guided"
+        ? "This version uses a more guided onboarding path for providers with complex specialties, coverage, or dispatch constraints."
+      : audience === "provider" && assignment.holdout
+        ? "This holdout path keeps the onboarding flow simple so LeadOS can compare richer provider onboarding against a lean baseline."
+      :
       audience === "provider" && plumbingLike
         ? mode === "chat-first"
           ? "For providers with complex coverage or specialty constraints, we keep a guided onboarding path open instead of forcing a brittle signup form."
@@ -516,6 +544,7 @@ export function resolveExperienceProfile(input: ExperienceInput): ExperienceProf
       input.referrer ? `Arrived from ${new URL(input.referrer).hostname}` : plumbingLike ? "Adaptive by urgency, service type, and entry source" : "Adaptive by source and referral context",
       device === "mobile" ? "Mobile-optimized path with lower cognitive load" : "Desktop path can support richer proof and comparison",
       ...(plumbingLike ? [`Service model: ${input.niche.serviceCategories.slice(0, 3).join(", ")}`] : []),
+      assignment.randomized ? `Experiment assignment: ${assignment.variantId}${assignment.holdout ? " (holdout)" : ""}` : "Deterministic default experience path",
       returnOffer,
     ],
     returnOffer,

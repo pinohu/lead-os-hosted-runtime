@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AdaptiveLeadCaptureForm } from "@/components/AdaptiveLeadCaptureForm";
 import { ExperienceScaffold } from "@/components/ExperienceScaffold";
 import { getNiche, nicheCatalog } from "@/lib/catalog";
+import { EXPERIENCE_ASSIGNMENT_HEADER } from "@/lib/experiments";
 import { resolveExperienceProfile } from "@/lib/experience";
 import { tenantConfig } from "@/lib/tenant";
 
@@ -49,6 +50,7 @@ export default async function AssessmentPage({ params, searchParams }: Assessmen
     milestone: asString(query.milestone),
     preferredMode: asString(query.mode) ?? "booking-first",
     score: Number(asString(query.score) ?? 75),
+    assignmentKey: headerStore.get(EXPERIENCE_ASSIGNMENT_HEADER) ?? undefined,
     userAgent: headerStore.get("user-agent") ?? undefined,
     referrer: headerStore.get("referer") ?? undefined,
   });

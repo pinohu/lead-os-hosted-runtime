@@ -14,11 +14,12 @@ export default async function ExperimentsPage() {
     <main className="experience-page">
       <section className="experience-hero">
         <div className="hero-copy">
-          <p className="eyebrow">Variation signals</p>
-          <h1>{tenantConfig.brandName} observational variant reporting</h1>
+          <p className="eyebrow">Experiment assignment</p>
+          <h1>{tenantConfig.brandName} randomized experience reporting</h1>
           <p className="lede">
-            Review which tagged experiences are showing stronger milestone movement. This page is
-            observational until LeadOS has true randomized experiments and holdouts in place.
+            Review which assigned experience variants are showing stronger milestone movement. LeadOS now
+            supports randomized visitor assignment for key plumbing entry paths, though final winner logic
+            still needs more samples and stronger closed-loop revenue weighting.
           </p>
           <div className="cta-row">
             <Link href="/dashboard" className="secondary">
@@ -37,16 +38,21 @@ export default async function ExperimentsPage() {
               <strong>Variants</strong>
               <span>{snapshot.experimentPerformance.reduce((sum, item) => sum + item.topVariants.length, 0)}</span>
             </li>
+            <li>
+              <strong>Holdout variants</strong>
+              <span>{snapshot.experimentPerformance.reduce((sum, item) => sum + item.topVariants.filter((variant) => variant.variantId.includes("holdout")).length, 0)}</span>
+            </li>
           </ul>
         </aside>
       </section>
 
       <section className="stack-grid">
         <article className="portal-notice">
-          <strong>Interpret these results carefully.</strong>
+          <strong>Interpret these results as early experimental evidence.</strong>
           <p className="muted">
-            Current variant reporting is based on tagged traffic segments, not randomized causal
-            tests. Use it for directional learning, not final winner selection.
+            Assignment is now randomized for key plumbing entry experiences when a stable visitor key
+            is available, but revenue winner selection should still wait for stronger sample sizes and
+            more completed-job data.
           </p>
         </article>
         {snapshot.experimentPerformance.length === 0 ? (

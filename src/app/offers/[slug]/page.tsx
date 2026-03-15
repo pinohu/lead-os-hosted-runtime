@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { AdaptiveLeadCaptureForm } from "@/components/AdaptiveLeadCaptureForm";
 import { ExperienceScaffold } from "@/components/ExperienceScaffold";
 import { getNiche } from "@/lib/catalog";
+import { EXPERIENCE_ASSIGNMENT_HEADER } from "@/lib/experiments";
 import { resolveExperienceProfile } from "@/lib/experience";
 import { tenantConfig } from "@/lib/tenant";
 
@@ -34,6 +35,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
     milestone: asString(query.milestone),
     preferredMode: asString(query.mode) ?? "form-first",
     score: Number(asString(query.score) ?? 90),
+    assignmentKey: headerStore.get(EXPERIENCE_ASSIGNMENT_HEADER) ?? undefined,
     userAgent: headerStore.get("user-agent") ?? undefined,
     referrer: headerStore.get("referer") ?? undefined,
   });

@@ -8,6 +8,7 @@ import {
 } from "@/lib/plumbing-entrypoints";
 import { getNiche } from "@/lib/catalog";
 import { buildDashboardSnapshot, buildOperatorConsoleSnapshot } from "@/lib/dashboard";
+import { EXPERIENCE_ASSIGNMENT_HEADER } from "@/lib/experiments";
 import { resolveExperienceProfile } from "@/lib/experience";
 import { getAutomationHealth } from "@/lib/providers";
 import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
@@ -75,6 +76,7 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
     milestone: asString(searchParams.milestone),
     preferredMode: asString(searchParams.mode) ?? entry.preferredMode,
     score: Number(asString(searchParams.score) ?? (entry.audience === "provider" ? 55 : 80)),
+    assignmentKey: headerStore.get(EXPERIENCE_ASSIGNMENT_HEADER) ?? undefined,
     userAgent: headerStore.get("user-agent") ?? undefined,
     referrer: headerStore.get("referer") ?? undefined,
   });
