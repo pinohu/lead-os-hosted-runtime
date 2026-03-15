@@ -9,6 +9,7 @@ import {
   getCanonicalEvents,
   getExecutionTasks,
   getLeadRecords,
+  getProviderDispatchRequests,
   getProviderExecutions,
   getRuntimePersistenceMode,
   getWorkflowRuns,
@@ -22,11 +23,12 @@ export async function GET(request: Request) {
   }
 
   const includeSystemTraffic = new URL(request.url).searchParams.get("include") === "system";
-  const [leads, events, bookingJobs, executionTasks, providerExecutions, workflowRuns, runtimeConfig] = await Promise.all([
+  const [leads, events, bookingJobs, executionTasks, providerDispatchRequests, providerExecutions, workflowRuns, runtimeConfig] = await Promise.all([
     getLeadRecords(),
     getCanonicalEvents(),
     getBookingJobs(),
     getExecutionTasks(),
+    getProviderDispatchRequests(),
     getProviderExecutions(),
     getWorkflowRuns(),
     getOperationalRuntimeConfig(),
@@ -43,6 +45,7 @@ export async function GET(request: Request) {
       events,
       bookingJobs,
       executionTasks,
+      providerDispatchRequests,
       providerExecutions,
       workflowRuns,
       runtimeConfig.dispatch.providers,

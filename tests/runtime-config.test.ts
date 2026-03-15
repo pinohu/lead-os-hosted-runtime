@@ -30,7 +30,10 @@ test("runtime config persists normalized provider mappings", async () => {
         {
           id: "crew-dallas",
           label: " Dallas Emergency Crew ",
+          contactEmail: " Dispatch@Dallas.example.com ",
+          phone: " 5551234567 ",
           active: true,
+          acceptingNewJobs: true,
           priorityWeight: 88,
           maxConcurrentJobs: 4,
           activeJobs: 1,
@@ -61,7 +64,10 @@ test("runtime config persists normalized provider mappings", async () => {
   assert.deepEqual(config.dispatch.providers[0], {
     id: "crew-dallas",
     label: "Dallas Emergency Crew",
+    contactEmail: "dispatch@dallas.example.com",
+    phone: "5551234567",
     active: true,
+    acceptingNewJobs: true,
     priorityWeight: 88,
     maxConcurrentJobs: 4,
     activeJobs: 1,
@@ -74,6 +80,7 @@ test("runtime config persists normalized provider mappings", async () => {
     cities: ["dallas"],
     zipPrefixes: ["752"],
     emergencyCoverageWindow: "24/7",
+    lastSelfUpdatedAt: undefined,
   });
 });
 
@@ -96,7 +103,9 @@ test("runtime config summary reports executable coverage", async () => {
         {
           id: "crew-a",
           label: "Crew A",
+          contactEmail: "crew-a@example.com",
           active: true,
+          acceptingNewJobs: true,
           priorityWeight: 70,
           acceptsEmergency: true,
           acceptsCommercial: false,
@@ -111,6 +120,7 @@ test("runtime config summary reports executable coverage", async () => {
           id: "crew-b",
           label: "Crew B",
           active: false,
+          acceptingNewJobs: true,
           priorityWeight: 40,
           acceptsEmergency: true,
           acceptsCommercial: true,
@@ -130,6 +140,7 @@ test("runtime config summary reports executable coverage", async () => {
   assert.equal(summary.dispatch.providerCount, 2);
   assert.equal(summary.dispatch.activeProviders, 1);
   assert.equal(summary.dispatch.emergencyReadyProviders, 1);
+  assert.equal(summary.dispatch.selfServeEnabledProviders, 1);
   assert.equal(summary.documentero.hasProposalTemplate, true);
   assert.equal(summary.crove.hasWebhookUrl, true);
 });

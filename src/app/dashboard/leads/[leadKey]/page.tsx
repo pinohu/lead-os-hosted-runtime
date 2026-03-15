@@ -22,6 +22,7 @@ import {
   getCanonicalEvents,
   getDocumentJobs,
   getLeadRecord,
+  getProviderDispatchRequests,
   getProviderExecutions,
   type ProviderExecutionRecord,
   type WorkflowRunRecord,
@@ -46,7 +47,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
     notFound();
   }
 
-  const [events, workflows, providerExecutions, bookingJobs, documentJobs, operatorActions, runtimeConfig] = await Promise.all([
+  const [events, workflows, providerExecutions, bookingJobs, documentJobs, operatorActions, runtimeConfig, providerDispatchRequests] = await Promise.all([
     getCanonicalEvents(),
     getWorkflowRuns(decodedLeadKey),
     getProviderExecutions(decodedLeadKey),
@@ -54,6 +55,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
     getDocumentJobs(decodedLeadKey),
     getOperatorActions(decodedLeadKey),
     getOperationalRuntimeConfig(),
+    getProviderDispatchRequests({ leadKey: decodedLeadKey }),
   ]);
   const filteredEvents = (events as CanonicalEvent[])
     .filter((event) => event.leadKey === decodedLeadKey)
@@ -229,6 +231,27 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
               ))}
             </div>
           )}
+        </section>
+      ) : null}
+
+      {providerDispatchRequests.length > 0 ? (
+        <section className="panel">
+          <p className="eyebrow">Provider dispatch requests</p>
+          <h2>Which providers were asked to claim this job</h2>
+          <div className="stack-grid">
+            {providerDispatchRequests.map((request) => (
+              <article key={request.id} className="stack-card">
+                <p className="eyebrow">{request.providerLabel}</p>
+                <h3>{formatPortalLabel(request.status)}</h3>
+                <p className="muted">
+                  {formatPortalLabel(request.urgencyBand ?? "dispatch")} | {formatPortalLabel(request.issueType ?? "general-plumbing")}
+                </p>
+                <p className="muted">{formatOptionalDateTime(request.createdAt)}</p>
+                {request.respondedAt ? <p className="muted">Responded: {formatOptionalDateTime(request.respondedAt)}</p> : null}
+                {request.note ? <p className="muted portal-breakable">{request.note}</p> : null}
+              </article>
+            ))}
+          </div>
         </section>
       ) : null}
 

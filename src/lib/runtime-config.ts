@@ -14,7 +14,10 @@ export type OperationalRuntimeConfig = {
     providers: Array<{
       id: string;
       label: string;
+      contactEmail?: string;
+      phone?: string;
       active: boolean;
+      acceptingNewJobs: boolean;
       priorityWeight: number;
       maxConcurrentJobs?: number;
       activeJobs?: number;
@@ -27,6 +30,7 @@ export type OperationalRuntimeConfig = {
       cities: string[];
       zipPrefixes: string[];
       emergencyCoverageWindow?: string;
+      lastSelfUpdatedAt?: string;
     }>;
   };
   documentero: {
@@ -108,7 +112,10 @@ function sanitizeDispatchProviders(value: unknown) {
     .map((entry) => ({
       id: getStringValue(entry.id) ?? crypto.randomUUID(),
       label: getStringValue(entry.label) ?? "Unnamed provider",
+      contactEmail: getStringValue(entry.contactEmail)?.toLowerCase(),
+      phone: getStringValue(entry.phone),
       active: entry.active !== false,
+      acceptingNewJobs: entry.acceptingNewJobs !== false,
       priorityWeight: typeof entry.priorityWeight === "number" && Number.isFinite(entry.priorityWeight)
         ? Math.max(0, Math.min(100, entry.priorityWeight))
         : 50,
@@ -127,6 +134,7 @@ function sanitizeDispatchProviders(value: unknown) {
       cities: sanitizeStringArray(entry.cities),
       zipPrefixes: sanitizeStringArray(entry.zipPrefixes),
       emergencyCoverageWindow: getStringValue(entry.emergencyCoverageWindow),
+      lastSelfUpdatedAt: getStringValue(entry.lastSelfUpdatedAt),
     }))
     .sort((left, right) => right.priorityWeight - left.priorityWeight);
 }
@@ -244,6 +252,7 @@ export function buildRuntimeConfigSummary(config: OperationalRuntimeConfig) {
       providerCount: config.dispatch.providers.length,
       activeProviders: config.dispatch.providers.filter((provider) => provider.active).length,
       emergencyReadyProviders: config.dispatch.providers.filter((provider) => provider.active && provider.acceptsEmergency).length,
+      selfServeEnabledProviders: config.dispatch.providers.filter((provider) => Boolean(provider.contactEmail)).length,
     },
     documentero: {
       hasProposalTemplate: Boolean(config.documentero.proposalTemplateId),
@@ -258,4 +267,51 @@ export function buildRuntimeConfigSummary(config: OperationalRuntimeConfig) {
       hasOnboardingTemplate: Boolean(config.crove.onboardingTemplateId),
     },
   };
+}
+
+export async function getDispatchProviderById(providerId: string) {
+  const config = await getOperationalRuntimeConfig();
+  return config.dispatch.providers.find((provider) => provider.id === providerId);
+}
+
+export async function getDispatchProviderByEmail(email: string) {
+  const normalized = email.trim().toLowerCase();
+  const config = await getOperationalRuntimeConfig();
+  return config.dispatch.providers.find((provider) => provider.contactEmail === normalized);
+}
+
+export async function updateDispatchProviderSelfServe(
+  providerId: string,
+  updates: Partial<OperationalRuntimeConfig["dispatch"]["providers"][number]>,
+  updatedBy?: string,
+) {
+  const config = await getOperationalRuntimeConfig();
+  const providers = config.dispatch.providers.map((provider) =>
+    provider.id === providerId
+      ? {
+          ...provider,
+          ...updates,
+          id: provider.id,
+          label: updates.label?.trim() || provider.label,
+          contactEmail: updates.contactEmail?.trim().toLowerCase() || provider.contactEmail,
+          phone: updates.phone?.trim() || provider.phone,
+          propertyTypes: updates.propertyTypes ?? provider.propertyTypes,
+          issueTypes: updates.issueTypes ?? provider.issueTypes,
+          states: updates.states ?? provider.states,
+          counties: updates.counties ?? provider.counties,
+          cities: updates.cities ?? provider.cities,
+          zipPrefixes: updates.zipPrefixes ?? provider.zipPrefixes,
+          emergencyCoverageWindow: updates.emergencyCoverageWindow?.trim() || provider.emergencyCoverageWindow,
+          lastSelfUpdatedAt: new Date().toISOString(),
+        }
+      : provider,
+  );
+
+  const next = await updateOperationalRuntimeConfig({
+    dispatch: {
+      providers,
+    },
+  }, updatedBy);
+
+  return next.dispatch.providers.find((provider) => provider.id === providerId);
 }

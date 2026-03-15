@@ -1,5 +1,6 @@
 import { buildImmediateFollowupPlan } from "./automation.ts";
 import { decideNextStep } from "./orchestrator.ts";
+import { recommendDispatchProviders } from "./dispatch-routing.ts";
 import { classifyPlumbingLead, isPlumbingLead } from "./plumbing-os.ts";
 import {
   logEventsToLedger,
@@ -25,7 +26,9 @@ import {
   upsertBookingJob,
   upsertDocumentJob,
   upsertLeadRecord,
+  upsertProviderDispatchRequest,
 } from "./runtime-store.ts";
+import { getOperationalRuntimeConfig } from "./runtime-config.ts";
 import {
   buildLeadKey,
   createCanonicalEvent,
@@ -862,6 +865,51 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     await appendEvents([createCanonicalEvent(trace, "followup_sms_sent", "sms", smsResult.ok ? "SENT" : "FAILED")]);
   }
 
+  const plumbingDecision = decision.plumbing;
+  const providerDispatchRequests = plumbingDecision && decision.operatingModel === "plumbing-dispatch" &&
+      payload.marketplaceAudience !== "provider" && !payload.dryRun
+    ? await (async () => {
+        const runtimeConfig = await getOperationalRuntimeConfig();
+        const recommendations = recommendDispatchProviders(plumbingDecision, runtimeConfig.dispatch.providers).slice(0, 3);
+        const requests = await Promise.all(
+          recommendations.map((provider) =>
+            upsertProviderDispatchRequest({
+              id: `dispatch-request:${leadKey}:${provider.providerId}`,
+              leadKey,
+              providerId: provider.providerId,
+              providerLabel: provider.providerLabel,
+              status: "pending",
+              issueType: plumbingDecision.issueType,
+              urgencyBand: plumbingDecision.urgencyBand,
+              propertyType: plumbingDecision.propertyType,
+              note: provider.reason,
+              payload: {
+                providerScore: provider.score,
+                availableCapacity: provider.availableCapacity,
+                recommendationReason: provider.reason,
+              },
+            })
+          ),
+        );
+
+        if (requests.length > 0) {
+          await appendEvents(
+            requests.map((request) =>
+              createCanonicalEvent(trace, "provider_dispatch_requested", "internal", "REQUESTED", {
+                requestId: request.id,
+                providerId: request.providerId,
+                providerLabel: request.providerLabel,
+                urgencyBand: request.urgencyBand,
+                issueType: request.issueType,
+              })
+            ),
+          );
+        }
+
+        return requests;
+      })()
+    : [];
+
   const shouldCreateBookingJob =
     payload.wantsBooking ||
     payload.askingForQuote ||
@@ -900,6 +948,7 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
           family: decision.family,
           stage,
           score,
+          providerDispatchRequestCount: providerDispatchRequests.length,
           ...bookingActionResult.payload,
         },
       })

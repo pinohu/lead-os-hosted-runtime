@@ -3,6 +3,7 @@ import { buildOperatorConsoleSnapshot } from "@/lib/dashboard";
 import { getConfigStatusSummary } from "@/lib/config-status";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { formatPortalLabel } from "@/lib/operator-ui";
+import { createProviderPortalLink } from "@/lib/provider-portal-auth";
 import { getAutomationHealth } from "@/lib/providers";
 import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import {
@@ -10,6 +11,7 @@ import {
   getCanonicalEvents,
   getExecutionTasks,
   getLeadRecords,
+  getProviderDispatchRequests,
   getProviderExecutions,
   getRuntimePersistenceMode,
   getWorkflowRuns,
@@ -20,12 +22,13 @@ export const dynamic = "force-dynamic";
 
 export default async function ProviderHealthPage() {
   await requireOperatorPageSession("/dashboard/providers");
-  const [health, leads, events, bookingJobs, executionTasks, providerExecutions, workflowRuns, runtimeConfig] = await Promise.all([
+  const [health, leads, events, bookingJobs, executionTasks, providerDispatchRequests, providerExecutions, workflowRuns, runtimeConfig] = await Promise.all([
     Promise.resolve(getAutomationHealth()),
     getLeadRecords(),
     getCanonicalEvents(),
     getBookingJobs(),
     getExecutionTasks(),
+    getProviderDispatchRequests(),
     getProviderExecutions(),
     getWorkflowRuns(),
     getOperationalRuntimeConfig(),
@@ -39,12 +42,23 @@ export default async function ProviderHealthPage() {
     events,
     bookingJobs,
     executionTasks,
+    providerDispatchRequests,
     providerExecutions,
     workflowRuns,
     runtimeConfig.dispatch.providers,
     {},
   );
   const providerScores = consoleSnapshot.plumbingDispatch.providerScores.slice(0, 8);
+  const providerPortalLinks = await Promise.all(
+    runtimeConfig.dispatch.providers
+      .filter((provider) => Boolean(provider.contactEmail))
+      .map(async (provider) => ({
+        providerId: provider.id,
+        providerLabel: provider.label,
+        link: (await createProviderPortalLink(provider.contactEmail!)).url,
+        contactEmail: provider.contactEmail!,
+      })),
+  );
 
   function formatPercent(value: number) {
     return `${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;
@@ -131,6 +145,27 @@ export default async function ProviderHealthPage() {
           {consoleSnapshot.plumbingDispatch.configuredDispatchProviders === 0 ? (
             <p className="muted">No dispatch roster is configured yet, so LeadOS cannot recommend coverage-aware backup providers.</p>
           ) : null}
+        </section>
+      ) : null}
+
+      {providerPortalLinks.length > 0 ? (
+        <section className="panel">
+          <p className="eyebrow">Provider self-serve</p>
+          <h2>Signed access links for dispatch providers</h2>
+          <p className="muted">
+            Share these links with the dispatch email on file so providers can update coverage, pause intake,
+            and accept or decline live jobs without operator intervention.
+          </p>
+          <div className="stack-grid">
+            {providerPortalLinks.map((entry) => (
+              <article key={entry.providerId} className="stack-card">
+                <p className="eyebrow">{entry.providerLabel}</p>
+                <h3 className="portal-breakable">{entry.contactEmail}</h3>
+                <p className="muted portal-breakable">{entry.link}</p>
+                <a href={entry.link} className="secondary">Open provider portal link</a>
+              </article>
+            ))}
+          </div>
         </section>
       ) : null}
 

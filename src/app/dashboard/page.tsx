@@ -11,6 +11,7 @@ import {
   getDocumentJobs,
   getExecutionTasks,
   getLeadRecords,
+  getProviderDispatchRequests,
   getProviderExecutions,
   getWorkflowRuns,
 } from "@/lib/runtime-store";
@@ -36,13 +37,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const params = (await searchParams) ?? {};
   const includeSystemTraffic = asString(params.include) === "system";
   const dashboardError = asString(params.error);
-  const [leads, events, bookingJobs, documentJobs, executionTasks, workflowRuns, providerExecutions, runtimeConfig] = await Promise.all([
+  const [leads, events, bookingJobs, documentJobs, executionTasks, workflowRuns, providerDispatchRequests, providerExecutions, runtimeConfig] = await Promise.all([
     getLeadRecords(),
     getCanonicalEvents(),
     getBookingJobs(),
     getDocumentJobs(),
     getExecutionTasks(),
     getWorkflowRuns(),
+    getProviderDispatchRequests(),
     getProviderExecutions(),
     getOperationalRuntimeConfig(),
   ]);
@@ -52,6 +54,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     events,
     bookingJobs,
     executionTasks,
+    providerDispatchRequests,
     providerExecutions,
     workflowRuns,
     runtimeConfig.dispatch.providers,
@@ -212,6 +215,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <h2>{dispatch.executionQueue.pendingCount}</h2>
           <p className="muted">Workflow, booking, and document tasks waiting for the executor.</p>
         </article>
+        <article className="metric-card">
+          <p className="eyebrow">Provider responses waiting</p>
+          <h2>{dispatch.providerRequestQueue.pendingCount}</h2>
+          <p className="muted">Pending provider claim decisions that still need a fast yes or no.</p>
+        </article>
       </section>
 
       <section className="grid two">
@@ -321,6 +329,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   {dispatch.executionQueue.pendingByKind.map((entry) => (
                     <li key={entry.label}>
                       {formatPortalLabel(entry.label)}: {entry.count}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+            <article className="stack-card">
+              <p className="eyebrow">Provider responses</p>
+              {dispatch.providerRequestQueue.pendingCount === 0 ? (
+                <p className="muted">No provider claim requests are waiting.</p>
+              ) : (
+                <ul className="check-list">
+                  {dispatch.providerRequestQueue.topPending.map((request) => (
+                    <li key={request.id} className="portal-breakable">
+                      <Link className="portal-inline-link" href={`/dashboard/leads/${encodeURIComponent(request.leadKey)}`}>
+                        {formatLeadKeyForDisplay(request.leadKey)}
+                      </Link>{" "}
+                      - {request.providerLabel}
                     </li>
                   ))}
                 </ul>

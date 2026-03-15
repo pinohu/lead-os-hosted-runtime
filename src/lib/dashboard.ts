@@ -8,6 +8,7 @@ import type { OperationalRuntimeConfig } from "./runtime-config.ts";
 import type {
   BookingJobRecord,
   ExecutionTaskRecord,
+  ProviderDispatchRequestRecord,
   ProviderExecutionRecord,
   StoredLeadRecord,
   WorkflowRunRecord,
@@ -120,6 +121,7 @@ function buildPlumbingDispatchSnapshot(
   leads: StoredLeadRecord[],
   bookingJobs: BookingJobRecord[],
   executionTasks: ExecutionTaskRecord[],
+  providerDispatchRequests: ProviderDispatchRequestRecord[],
   providerExecutions: ProviderExecutionRecord[],
   workflowRuns: WorkflowRunRecord[],
   dispatchProviders: OperationalRuntimeConfig["dispatch"]["providers"] = [],
@@ -175,6 +177,7 @@ function buildPlumbingDispatchSnapshot(
   const unresolved = queueItems.filter((item) => !["booked", "converted", "active"].includes(item.stage));
   const pendingExecutionTasks = executionTasks.filter((task) => task.status === "pending");
   const failedExecutionTasks = executionTasks.filter((task) => task.status === "failed");
+  const pendingProviderRequests = providerDispatchRequests.filter((request) => request.status === "pending");
   const metroBreakdown = topBreakdown(plumbingLeads.map((item) => formatPlumbingGeoCell(item.plumbing)));
   const metroRevenueBreakdown = Object.entries(
     plumbingLeads.reduce<Record<string, number>>((acc, item) => {
@@ -299,6 +302,12 @@ function buildPlumbingDispatchSnapshot(
     topQueue: unresolved.slice(0, 8),
     providerScores: rankedProviderScores,
     configuredDispatchProviders: dispatchProviders.length,
+    providerRequestQueue: {
+      pendingCount: pendingProviderRequests.length,
+      acceptedCount: providerDispatchRequests.filter((request) => request.status === "accepted").length,
+      declinedCount: providerDispatchRequests.filter((request) => request.status === "declined").length,
+      topPending: pendingProviderRequests.slice(0, 6),
+    },
     executionQueue: {
       pendingCount: pendingExecutionTasks.length,
       failedCount: failedExecutionTasks.length,
@@ -467,6 +476,7 @@ export function buildOperatorConsoleSnapshot(
   events: CanonicalEvent[],
   bookingJobs: BookingJobRecord[],
   executionTasks: ExecutionTaskRecord[],
+  providerDispatchRequests: ProviderDispatchRequestRecord[],
   providerExecutions: ProviderExecutionRecord[],
   workflowRuns: WorkflowRunRecord[],
   dispatchProviders: OperationalRuntimeConfig["dispatch"]["providers"] = [],
@@ -483,6 +493,7 @@ export function buildOperatorConsoleSnapshot(
       visibleLeads,
       bookingJobs,
       executionTasks,
+      providerDispatchRequests,
       providerExecutions,
       workflowRuns,
       dispatchProviders,

@@ -7,11 +7,13 @@ import {
   claimIntakeReplayKey,
   getBookingJobs,
   getDocumentJobs,
+  getProviderDispatchRequests,
   getExecutionTasks,
   getWorkflowRuns,
   resetRuntimeStore,
 } from "../src/lib/runtime-store.ts";
 import { tenantConfig } from "../src/lib/tenant.ts";
+import { updateOperationalRuntimeConfig } from "../src/lib/runtime-config.ts";
 
 test("validateLeadPayload requires a source and identity", () => {
   assert.throws(() => validateLeadPayload({} as never), /Lead source is required/);
@@ -185,6 +187,54 @@ test("persistLead queues durable execution tasks for live booking and workflow w
   assert.ok(executionTasks.some((task) => task.kind === "booking" && task.status === "pending"));
   assert.equal(result.jobs.booking?.status, "queued");
   assert.equal(result.workflow.mode, "prepared");
+});
+
+test("persistLead creates provider dispatch requests for plumbing dispatch leads", async () => {
+  await resetRuntimeStore();
+  await updateOperationalRuntimeConfig({
+    dispatch: {
+      providers: [
+        {
+          id: "crew-dallas",
+          label: "Dallas Emergency Crew",
+          contactEmail: "dispatch@dallas.example.com",
+          active: true,
+          acceptingNewJobs: true,
+          priorityWeight: 90,
+          maxConcurrentJobs: 4,
+          activeJobs: 1,
+          acceptsEmergency: true,
+          acceptsCommercial: false,
+          propertyTypes: ["residential"],
+          issueTypes: ["burst-pipe", "leak"],
+          states: ["texas"],
+          counties: [],
+          cities: ["dallas"],
+          zipPrefixes: ["752"],
+          emergencyCoverageWindow: "24/7",
+        },
+      ],
+    },
+  });
+
+  const result = await persistLead({
+    source: "contact_form",
+    email: "burst@test.com",
+    phone: "5551234567",
+    firstName: "Burst",
+    niche: "plumbing",
+    service: "burst pipe",
+    city: "Dallas",
+    state: "Texas",
+    zip: "75201",
+    message: "Emergency burst pipe right now",
+    wantsBooking: true,
+  });
+
+  const requests = await getProviderDispatchRequests({ leadKey: result.leadKey });
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0]?.providerId, "crew-dallas");
+  assert.equal(requests[0]?.status, "pending");
 });
 
 test("processExecutionTasks drains queued workflow and booking work", async () => {

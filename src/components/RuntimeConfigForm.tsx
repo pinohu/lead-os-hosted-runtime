@@ -13,7 +13,10 @@ type ServiceMapRow = {
 type DispatchProviderRow = {
   id: string;
   label: string;
+  contactEmail: string;
+  phone: string;
   active: boolean;
+  acceptingNewJobs: boolean;
   priorityWeight: string;
   maxConcurrentJobs: string;
   activeJobs: string;
@@ -52,7 +55,10 @@ function createDispatchProviderRow(
       ?? globalThis.crypto?.randomUUID?.()
       ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     label: row.label ?? "",
+    contactEmail: row.contactEmail ?? "",
+    phone: row.phone ?? "",
     active: row.active ?? true,
+    acceptingNewJobs: row.acceptingNewJobs ?? true,
     priorityWeight: row.priorityWeight ?? "50",
     maxConcurrentJobs: row.maxConcurrentJobs ?? "",
     activeJobs: row.activeJobs ?? "",
@@ -76,7 +82,10 @@ function buildDispatchProviderRows(providers: OperationalRuntimeConfig["dispatch
   return providers.map((provider) => createDispatchProviderRow({
     id: provider.id,
     label: provider.label,
+    contactEmail: provider.contactEmail ?? "",
+    phone: provider.phone ?? "",
     active: provider.active,
+    acceptingNewJobs: provider.acceptingNewJobs,
     priorityWeight: String(provider.priorityWeight),
     maxConcurrentJobs: provider.maxConcurrentJobs == null ? "" : String(provider.maxConcurrentJobs),
     activeJobs: provider.activeJobs == null ? "" : String(provider.activeJobs),
@@ -237,7 +246,10 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
       parsedDispatchProviders.push({
         id: row.id,
         label,
+        contactEmail: row.contactEmail.trim() || undefined,
+        phone: row.phone.trim() || undefined,
         active: row.active,
+        acceptingNewJobs: row.acceptingNewJobs,
         priorityWeight: Number(row.priorityWeight || "50"),
         maxConcurrentJobs: row.maxConcurrentJobs.trim() ? Number(row.maxConcurrentJobs) : undefined,
         activeJobs: row.activeJobs.trim() ? Number(row.activeJobs) : undefined,
@@ -467,16 +479,32 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
             <div className="mapping-stack">
               {dispatchProviderRows.map((row) => (
                 <div key={row.id} className="mapping-row">
-                  <label>
-                    Provider label
-                    <input
-                      value={row.label}
-                      onChange={(event) => updateDispatchProviderRow(row.id, { label: event.target.value })}
-                      placeholder="Dallas Emergency Crew"
-                    />
-                  </label>
-                  <label>
-                    Priority weight
+                    <label>
+                      Provider label
+                      <input
+                        value={row.label}
+                        onChange={(event) => updateDispatchProviderRow(row.id, { label: event.target.value })}
+                        placeholder="Dallas Emergency Crew"
+                      />
+                    </label>
+                    <label>
+                      Contact email
+                      <input
+                        value={row.contactEmail}
+                        onChange={(event) => updateDispatchProviderRow(row.id, { contactEmail: event.target.value })}
+                        placeholder="dispatch@provider.com"
+                      />
+                    </label>
+                    <label>
+                      Contact phone
+                      <input
+                        value={row.phone}
+                        onChange={(event) => updateDispatchProviderRow(row.id, { phone: event.target.value })}
+                        placeholder="5551234567"
+                      />
+                    </label>
+                    <label>
+                      Priority weight
                     <input
                       value={row.priorityWeight}
                       onChange={(event) => updateDispatchProviderRow(row.id, { priorityWeight: event.target.value })}
@@ -566,6 +594,14 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
                         onChange={(event) => updateDispatchProviderRow(row.id, { active: event.target.checked })}
                       />
                       Active
+                    </label>
+                    <label className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={row.acceptingNewJobs}
+                        onChange={(event) => updateDispatchProviderRow(row.id, { acceptingNewJobs: event.target.checked })}
+                      />
+                      Accepting new jobs
                     </label>
                     <label className="checkbox-row">
                       <input

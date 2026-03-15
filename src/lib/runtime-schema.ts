@@ -77,6 +77,8 @@ export type PlumbingOperatorActionType =
 
 export type PlumbingJobOutcomeStatus =
   | "dispatch-requested"
+  | "provider-claimed"
+  | "provider-declined"
   | "backup-provider-requested"
   | "booking-retry-requested"
   | "booked"
@@ -299,6 +301,8 @@ export type CanonicalEventType =
   | "review_requested"
   | "plumbing_urgency_classified"
   | "dispatch_path_selected"
+  | "provider_dispatch_requested"
+  | "provider_dispatch_responded"
   | "operator_dispatch_action"
   | "plumbing_job_outcome_recorded"
   | "lead_milestone_reached"

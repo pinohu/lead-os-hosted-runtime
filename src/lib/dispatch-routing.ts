@@ -46,7 +46,7 @@ function scoreCoverage(plumbing: PlumbingLeadContext, provider: DispatchProvider
 
 function scoreFit(plumbing: PlumbingLeadContext, provider: DispatchProvider) {
   let score = 0;
-  if (!provider.active) {
+  if (!provider.active || provider.acceptingNewJobs === false) {
     return -1000;
   }
   if (plumbing.urgencyBand === "emergency-now" && !provider.acceptsEmergency) {

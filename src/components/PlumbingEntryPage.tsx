@@ -16,6 +16,7 @@ import {
   getCanonicalEvents,
   getExecutionTasks,
   getLeadRecords,
+  getProviderDispatchRequests,
   getProviderExecutions,
   getWorkflowRuns,
 } from "@/lib/runtime-store";
@@ -38,13 +39,14 @@ function asBoolean(value: string | string[] | undefined) {
 export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEntryPageProps) {
   const niche = getNiche("plumbing");
   const headerStore = await headers();
-  const [health, leads, events, bookingJobs, executionTasks, providerExecutions, workflowRuns, runtimeConfig] =
+  const [health, leads, events, bookingJobs, executionTasks, providerDispatchRequests, providerExecutions, workflowRuns, runtimeConfig] =
     await Promise.all([
       Promise.resolve(getAutomationHealth()),
       getLeadRecords(),
       getCanonicalEvents(),
       getBookingJobs(),
       getExecutionTasks(),
+      getProviderDispatchRequests(),
       getProviderExecutions(),
       getWorkflowRuns(),
       getOperationalRuntimeConfig(),
@@ -55,6 +57,7 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
     events,
     bookingJobs,
     executionTasks,
+    providerDispatchRequests,
     providerExecutions,
     workflowRuns,
     runtimeConfig.dispatch.providers,

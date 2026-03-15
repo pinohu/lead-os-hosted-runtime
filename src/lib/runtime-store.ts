@@ -147,6 +147,24 @@ export interface ExecutionTaskRecord {
   updatedAt: string;
 }
 
+export type ProviderDispatchRequestStatus = "pending" | "accepted" | "declined" | "expired";
+
+export interface ProviderDispatchRequestRecord {
+  id: string;
+  leadKey: string;
+  providerId: string;
+  providerLabel: string;
+  status: ProviderDispatchRequestStatus;
+  issueType?: string;
+  urgencyBand?: string;
+  propertyType?: string;
+  note?: string;
+  payload?: Record<string, unknown>;
+  respondedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 const leadStore = new Map<string, StoredLeadRecord>();
 const eventStore: CanonicalEvent[] = [];
 const providerExecutionStore: ProviderExecutionRecord[] = [];
@@ -158,6 +176,7 @@ const runtimeConfigStore = new Map<string, RuntimeConfigRecord>();
 const operatorActionStore = new Map<string, OperatorActionRecord>();
 const intakeAttemptStore = new Map<string, IntakeAttemptRecord>();
 const executionTaskStore = new Map<string, ExecutionTaskRecord>();
+const providerDispatchRequestStore = new Map<string, ProviderDispatchRequestRecord>();
 
 let pool: Pool | null = null;
 let schemaReady: Promise<void> | null = null;
@@ -176,7 +195,8 @@ type AitableRuntimeKind =
   | "runtime-config"
   | "operator-action"
   | "intake-attempt"
-  | "execution-task";
+  | "execution-task"
+  | "provider-dispatch-request";
 
 type AitableRuntimeEntry = {
   kind: AitableRuntimeKind;
@@ -192,7 +212,8 @@ type AitableRuntimeEntry = {
     | RuntimeConfigRecord
     | OperatorActionRecord
     | IntakeAttemptRecord
-    | ExecutionTaskRecord;
+    | ExecutionTaskRecord
+    | ProviderDispatchRequestRecord;
 };
 
 function getDatabaseUrl() {
@@ -328,6 +349,15 @@ async function ensureSchema() {
           payload JSONB NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS lead_os_provider_dispatch_requests (
+          id TEXT PRIMARY KEY,
+          lead_key TEXT NOT NULL,
+          provider_id TEXT NOT NULL,
+          status TEXT NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL,
+          payload JSONB NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS lead_os_events_lead_idx
           ON lead_os_events (lead_key, timestamp DESC);
         CREATE INDEX IF NOT EXISTS lead_os_provider_exec_lead_idx
@@ -340,6 +370,8 @@ async function ensureSchema() {
           ON lead_os_intake_attempts (last_seen_at DESC);
         CREATE INDEX IF NOT EXISTS lead_os_execution_tasks_status_idx
           ON lead_os_execution_tasks (status, updated_at ASC);
+        CREATE INDEX IF NOT EXISTS lead_os_provider_dispatch_requests_provider_idx
+          ON lead_os_provider_dispatch_requests (provider_id, updated_at DESC);
       `);
     } catch (error) {
       schemaReady = null;
@@ -1176,6 +1208,113 @@ export async function finalizeExecutionTask(
   return updated;
 }
 
+export async function upsertProviderDispatchRequest(
+  request: Omit<ProviderDispatchRequestRecord, "id" | "createdAt" | "updatedAt"> & {
+    id?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  },
+) {
+  const normalizedRequest: ProviderDispatchRequestRecord = {
+    ...request,
+    id: request.id ?? crypto.randomUUID(),
+    createdAt: request.createdAt ?? new Date().toISOString(),
+    updatedAt: request.updatedAt ?? new Date().toISOString(),
+  };
+  providerDispatchRequestStore.set(normalizedRequest.id, normalizedRequest);
+
+  const activePool = getPool();
+  if (!activePool && runtimeMode() === "aitable") {
+    await appendAitableRuntimeEntry("provider-dispatch-request", normalizedRequest.id, normalizedRequest);
+    return normalizedRequest;
+  }
+  if (!activePool) {
+    return normalizedRequest;
+  }
+
+  await ensureSchema();
+  await queryPostgres(
+    `
+      INSERT INTO lead_os_provider_dispatch_requests (id, lead_key, provider_id, status, updated_at, payload)
+      VALUES ($1, $2, $3, $4, $5::timestamptz, $6::jsonb)
+      ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = EXCLUDED.updated_at, status = EXCLUDED.status
+    `,
+    [
+      normalizedRequest.id,
+      normalizedRequest.leadKey,
+      normalizedRequest.providerId,
+      normalizedRequest.status,
+      normalizedRequest.updatedAt,
+      JSON.stringify(normalizedRequest),
+    ],
+  );
+  return normalizedRequest;
+}
+
+export async function getProviderDispatchRequests(filters?: {
+  providerId?: string;
+  leadKey?: string;
+  status?: ProviderDispatchRequestStatus;
+}) {
+  const matches = (record: ProviderDispatchRequestRecord) =>
+    (!filters?.providerId || record.providerId === filters.providerId) &&
+    (!filters?.leadKey || record.leadKey === filters.leadKey) &&
+    (!filters?.status || record.status === filters.status);
+
+  if (!getPool() && runtimeMode() === "aitable") {
+    const entries = await getAitableRuntimeEntries();
+    const latestById = new Map<string, ProviderDispatchRequestRecord>();
+    for (const entry of entries) {
+      if (entry.kind !== "provider-dispatch-request") continue;
+      const record = entry.payload as ProviderDispatchRequestRecord;
+      const existing = latestById.get(record.id);
+      if (!existing || new Date(record.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
+        latestById.set(record.id, record);
+      }
+    }
+    const values = sortByUpdatedAt([...latestById.values()].filter(matches));
+    providerDispatchRequestStore.clear();
+    for (const value of values) {
+      providerDispatchRequestStore.set(value.id, value);
+    }
+    return values;
+  }
+  if (!getPool()) {
+    return sortByUpdatedAt([...providerDispatchRequestStore.values()].filter(matches));
+  }
+
+  await ensureSchema();
+  const clauses: string[] = [];
+  const values: unknown[] = [];
+  if (filters?.providerId) {
+    values.push(filters.providerId);
+    clauses.push(`provider_id = $${values.length}`);
+  }
+  if (filters?.leadKey) {
+    values.push(filters.leadKey);
+    clauses.push(`lead_key = $${values.length}`);
+  }
+  if (filters?.status) {
+    values.push(filters.status);
+    clauses.push(`status = $${values.length}`);
+  }
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+  const result = await queryPostgres<{ payload: ProviderDispatchRequestRecord }>(
+    `SELECT payload FROM lead_os_provider_dispatch_requests ${where} ORDER BY updated_at DESC`,
+    values,
+  );
+  const records = result.rows.map((row) => row.payload);
+  for (const record of records) {
+    providerDispatchRequestStore.set(record.id, record);
+  }
+  return records;
+}
+
+export async function getProviderDispatchRequestById(requestId: string) {
+  const records = await getProviderDispatchRequests();
+  return records.find((record) => record.id === requestId);
+}
+
 export async function upsertRuntimeConfig(
   config: Omit<RuntimeConfigRecord, "updatedAt"> & { updatedAt?: string },
 ) {
@@ -1511,6 +1650,7 @@ export async function resetRuntimeStore() {
   operatorActionStore.clear();
   intakeAttemptStore.clear();
   executionTaskStore.clear();
+  providerDispatchRequestStore.clear();
   invalidateAitableCache();
 
   const activePool = getPool();
@@ -1532,6 +1672,7 @@ export async function resetRuntimeStore() {
       lead_os_operator_actions,
       lead_os_intake_attempts,
       lead_os_execution_tasks,
+      lead_os_provider_dispatch_requests,
       lead_os_workflow_runs,
       lead_os_provider_executions,
       lead_os_events,
