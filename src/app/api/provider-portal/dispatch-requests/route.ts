@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { applyProviderDispatchRequestAction, getProviderPortalSnapshot } from "@/lib/provider-portal";
+import { applyProviderDispatchRequestAction, getProviderPortalSnapshot, recordProviderDispatchCompletion } from "@/lib/provider-portal";
 import { requireProviderPortalApiSession } from "@/lib/provider-portal-auth";
 
 export async function GET(request: Request) {
@@ -24,24 +24,43 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({})) as {
     requestId?: string;
-    action?: "accept" | "decline";
+    action?: "accept" | "decline" | "complete";
     note?: string;
+    revenueValue?: number;
+    marginValue?: number;
+    complaintStatus?: "none" | "minor" | "major";
+    reviewStatus?: "not-requested" | "requested" | "positive" | "mixed" | "negative";
+    reviewRating?: number;
+    refundIssued?: boolean;
   };
-  if (!body.requestId || (body.action !== "accept" && body.action !== "decline")) {
+  if (!body.requestId || (body.action !== "accept" && body.action !== "decline" && body.action !== "complete")) {
     return NextResponse.json({ success: false, error: "A request id and valid action are required." }, { status: 400 });
   }
 
-  const result = await applyProviderDispatchRequestAction({
-    requestId: body.requestId,
-    providerId: auth.session.providerId,
-    actorEmail: auth.session.email,
-    action: body.action,
-    note: body.note,
-  });
+  const result = body.action === "complete"
+    ? await recordProviderDispatchCompletion({
+        requestId: body.requestId,
+        providerId: auth.session.providerId,
+        actorEmail: auth.session.email,
+        note: body.note,
+        revenueValue: typeof body.revenueValue === "number" && Number.isFinite(body.revenueValue) ? body.revenueValue : undefined,
+        marginValue: typeof body.marginValue === "number" && Number.isFinite(body.marginValue) ? body.marginValue : undefined,
+        complaintStatus: body.complaintStatus,
+        reviewStatus: body.reviewStatus,
+        reviewRating: typeof body.reviewRating === "number" && Number.isFinite(body.reviewRating) ? Math.max(0, Math.min(5, body.reviewRating)) : undefined,
+        refundIssued: typeof body.refundIssued === "boolean" ? body.refundIssued : undefined,
+      })
+    : await applyProviderDispatchRequestAction({
+        requestId: body.requestId,
+        providerId: auth.session.providerId,
+        actorEmail: auth.session.email,
+        action: body.action,
+        note: body.note,
+      });
 
   return NextResponse.json({
     success: true,
     request: result.request,
-    unchanged: result.unchanged,
+    unchanged: "unchanged" in result ? result.unchanged : false,
   });
 }

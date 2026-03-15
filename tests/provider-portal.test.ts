@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { persistLead } from "../src/lib/intake.ts";
-import { applyProviderDispatchRequestAction } from "../src/lib/provider-portal.ts";
+import { applyProviderDispatchRequestAction, recordProviderDispatchCompletion } from "../src/lib/provider-portal.ts";
 import { decodeProviderPortalToken, issueProviderPortalToken } from "../src/lib/provider-portal-auth-core.ts";
 import { getDispatchProviderById, updateOperationalRuntimeConfig } from "../src/lib/runtime-config.ts";
 import { getBookingJobs, getLeadRecord, getProviderDispatchRequests, resetRuntimeStore } from "../src/lib/runtime-store.ts";
@@ -108,4 +108,84 @@ test("provider accepting a dispatch request updates lead, capacity, and booking 
   assert.equal((updatedLead?.metadata.providerDispatch as { status?: string })?.status, "accepted");
   assert.equal(updatedProvider?.activeJobs, 2);
   assert.equal(bookingJobs[0]?.status, "handoff-ready");
+});
+
+test("provider completion records closed-loop economics and releases capacity", async () => {
+  await resetRuntimeStore();
+  process.env.LEAD_OS_AUTH_SECRET = "provider-portal-test-secret";
+
+  await updateOperationalRuntimeConfig({
+    dispatch: {
+      providers: [
+        {
+          id: "crew-dallas",
+          label: "Dallas Emergency Crew",
+          contactEmail: "dispatch@dallas.example.com",
+          active: true,
+          acceptingNewJobs: true,
+          priorityWeight: 90,
+          maxConcurrentJobs: 2,
+          activeJobs: 1,
+          propertyTypes: ["residential"],
+          issueTypes: ["burst-pipe", "leak"],
+          states: ["texas"],
+          counties: [],
+          cities: ["dallas"],
+          zipPrefixes: ["752"],
+          acceptsEmergency: true,
+          acceptsCommercial: false,
+        },
+      ],
+    },
+  });
+
+  const result = await persistLead({
+    source: "contact_form",
+    email: "complete@test.com",
+    phone: "5551234567",
+    firstName: "Complete",
+    niche: "plumbing",
+    service: "burst pipe",
+    city: "Dallas",
+    state: "Texas",
+    zip: "75201",
+    message: "Emergency burst pipe flooding now",
+    wantsBooking: true,
+  });
+
+  const request = (await getProviderDispatchRequests({ leadKey: result.leadKey }))[0];
+  assert.ok(request);
+
+  await applyProviderDispatchRequestAction({
+    requestId: request!.id,
+    providerId: "crew-dallas",
+    actorEmail: "dispatch@dallas.example.com",
+    action: "accept",
+    note: "Crew is on the way",
+  });
+
+  await recordProviderDispatchCompletion({
+    requestId: request!.id,
+    providerId: "crew-dallas",
+    actorEmail: "dispatch@dallas.example.com",
+    note: "Completed same day with positive review.",
+    revenueValue: 1200,
+    marginValue: 480,
+    complaintStatus: "none",
+    reviewStatus: "positive",
+    reviewRating: 5,
+    refundIssued: false,
+  });
+
+  const updatedLead = await getLeadRecord(result.leadKey);
+  const updatedProvider = await getDispatchProviderById("crew-dallas");
+  const bookingJobs = await getBookingJobs(result.leadKey);
+
+  assert.equal(updatedLead?.stage, "active");
+  assert.equal((updatedLead?.metadata.plumbingOutcome as { status?: string })?.status, "completed");
+  assert.equal((updatedLead?.metadata.plumbingOutcome as { marginValue?: number })?.marginValue, 480);
+  assert.equal((updatedLead?.metadata.plumbingOutcome as { reviewStatus?: string })?.reviewStatus, "positive");
+  assert.equal(updatedProvider?.activeJobs, 1);
+  assert.equal(updatedProvider?.acceptingNewJobs, true);
+  assert.equal(bookingJobs[0]?.status, "completed");
 });

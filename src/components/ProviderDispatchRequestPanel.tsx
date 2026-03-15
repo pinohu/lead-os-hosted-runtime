@@ -24,10 +24,21 @@ export function ProviderDispatchRequestPanel({ requests }: Props) {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [revenueValues, setRevenueValues] = useState<Record<string, string>>({});
+  const [marginValues, setMarginValues] = useState<Record<string, string>>({});
+  const [reviewRatings, setReviewRatings] = useState<Record<string, string>>({});
+  const [complaintStatuses, setComplaintStatuses] = useState<Record<string, "none" | "minor" | "major">>({});
+  const [reviewStatuses, setReviewStatuses] = useState<Record<string, "not-requested" | "requested" | "positive" | "mixed" | "negative">>({});
+  const [refundIssued, setRefundIssued] = useState<Record<string, boolean>>({});
 
-  function runAction(requestId: string, action: "accept" | "decline") {
+  function runAction(requestId: string, action: "accept" | "decline" | "complete") {
     setError("");
     setStatus("");
+
+    if (action === "complete" && !(revenueValues[requestId] ?? "").trim()) {
+      setError("Add completed revenue before reporting the job as complete.");
+      return;
+    }
 
     startTransition(async () => {
       const response = await fetch("/api/provider-portal/dispatch-requests", {
@@ -39,6 +50,12 @@ export function ProviderDispatchRequestPanel({ requests }: Props) {
           requestId,
           action,
           note: notes[requestId] ?? "",
+          revenueValue: revenueValues[requestId]?.trim() ? Number(revenueValues[requestId]) : undefined,
+          marginValue: marginValues[requestId]?.trim() ? Number(marginValues[requestId]) : undefined,
+          complaintStatus: complaintStatuses[requestId] ?? "none",
+          reviewStatus: reviewStatuses[requestId] ?? "not-requested",
+          reviewRating: reviewRatings[requestId]?.trim() ? Number(reviewRatings[requestId]) : undefined,
+          refundIssued: refundIssued[requestId] ?? false,
         }),
       });
 
@@ -48,7 +65,13 @@ export function ProviderDispatchRequestPanel({ requests }: Props) {
         return;
       }
 
-      setStatus(action === "accept" ? "Dispatch request accepted." : "Dispatch request declined.");
+      setStatus(
+        action === "accept"
+          ? "Dispatch request accepted."
+          : action === "decline"
+            ? "Dispatch request declined."
+            : "Completed job outcome recorded.",
+      );
       window.location.reload();
     });
   }
@@ -70,6 +93,7 @@ export function ProviderDispatchRequestPanel({ requests }: Props) {
         <div className="stack-grid">
           {requests.map((request) => {
             const pending = request.status === "pending";
+            const accepted = request.status === "accepted";
             return (
               <article key={request.id} className="stack-card">
                 <p className="eyebrow">{request.providerLabel}</p>
@@ -100,6 +124,96 @@ export function ProviderDispatchRequestPanel({ requests }: Props) {
                     <button type="button" className="secondary" disabled={isPending} onClick={() => runAction(request.id, "decline")}>
                       Decline
                     </button>
+                  </div>
+                ) : accepted ? (
+                  <div className="stack-grid">
+                    <div className="portal-data-list compact">
+                      <div>
+                        <dt>Revenue</dt>
+                        <dd>
+                          <input
+                            value={revenueValues[request.id] ?? ""}
+                            onChange={(event) => setRevenueValues((current) => ({ ...current, [request.id]: event.target.value }))}
+                            inputMode="decimal"
+                            placeholder="Completed invoice value"
+                            disabled={isPending}
+                          />
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Margin</dt>
+                        <dd>
+                          <input
+                            value={marginValues[request.id] ?? ""}
+                            onChange={(event) => setMarginValues((current) => ({ ...current, [request.id]: event.target.value }))}
+                            inputMode="decimal"
+                            placeholder="Estimated gross margin"
+                            disabled={isPending}
+                          />
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Complaint level</dt>
+                        <dd>
+                          <select
+                            value={complaintStatuses[request.id] ?? "none"}
+                            onChange={(event) => setComplaintStatuses((current) => ({ ...current, [request.id]: event.target.value as "none" | "minor" | "major" }))}
+                            disabled={isPending}
+                          >
+                            <option value="none">None</option>
+                            <option value="minor">Minor</option>
+                            <option value="major">Major</option>
+                          </select>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Review outcome</dt>
+                        <dd>
+                          <select
+                            value={reviewStatuses[request.id] ?? "not-requested"}
+                            onChange={(event) => setReviewStatuses((current) => ({ ...current, [request.id]: event.target.value as "not-requested" | "requested" | "positive" | "mixed" | "negative" }))}
+                            disabled={isPending}
+                          >
+                            <option value="not-requested">Not requested</option>
+                            <option value="requested">Requested</option>
+                            <option value="positive">Positive</option>
+                            <option value="mixed">Mixed</option>
+                            <option value="negative">Negative</option>
+                          </select>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Review rating</dt>
+                        <dd>
+                          <input
+                            value={reviewRatings[request.id] ?? ""}
+                            onChange={(event) => setReviewRatings((current) => ({ ...current, [request.id]: event.target.value }))}
+                            inputMode="decimal"
+                            placeholder="0-5"
+                            disabled={isPending}
+                          />
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Refund issued</dt>
+                        <dd>
+                          <label className="portal-chip">
+                            <input
+                              type="checkbox"
+                              checked={refundIssued[request.id] ?? false}
+                              onChange={(event) => setRefundIssued((current) => ({ ...current, [request.id]: event.target.checked }))}
+                              disabled={isPending}
+                            />
+                            <span>Yes</span>
+                          </label>
+                        </dd>
+                      </div>
+                    </div>
+                    <div className="cta-row">
+                      <button type="button" className="primary" disabled={isPending} onClick={() => runAction(request.id, "complete")}>
+                        Report completed job
+                      </button>
+                    </div>
                   </div>
                 ) : null}
               </article>

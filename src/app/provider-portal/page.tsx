@@ -61,6 +61,10 @@ export default async function ProviderPortalPage() {
               <span>{snapshot.summary.declined}</span>
             </li>
             <li>
+              <strong>Completed reported</strong>
+              <span>{snapshot.summary.completed}</span>
+            </li>
+            <li>
               <strong>Accepting jobs</strong>
               <span>{snapshot.provider.acceptingNewJobs ? "yes" : "paused"}</span>
             </li>
