@@ -83,30 +83,43 @@ export async function createMagicLink(email: string, origin: string, nextPath?: 
 
 export async function sendOperatorMagicLink(email: string, origin: string, nextPath?: string) {
   const normalizedEmail = normalizeEmail(email);
-  const magicLink = await createMagicLink(normalizedEmail, origin, nextPath);
-  const trace = ensureTraceContext({
-    tenant: tenantConfig.tenantId,
-    source: "manual",
-    service: "operator-auth",
-    niche: "operations",
-    blueprintId: "operator-auth",
-    stepId: "magic-link",
-    email: normalizedEmail,
-  });
+  try {
+    const magicLink = await createMagicLink(normalizedEmail, origin, nextPath);
+    const trace = ensureTraceContext({
+      tenant: tenantConfig.tenantId,
+      source: "manual",
+      service: "operator-auth",
+      niche: "operations",
+      blueprintId: "operator-auth",
+      stepId: "magic-link",
+      email: normalizedEmail,
+    });
 
-  return sendEmailAction({
-    to: normalizedEmail,
-    subject: `${tenantConfig.brandName} operator sign-in link`,
-    html: `
-      <div style="font-family:Segoe UI,sans-serif;line-height:1.6;color:#0f172a">
-        <h1 style="font-size:24px;margin-bottom:12px">${tenantConfig.brandName} operator access</h1>
-        <p>Use the secure link below to sign in to the LeadOS operator dashboard.</p>
-        <p><a href="${magicLink}" style="display:inline-block;background:#14b8a6;color:#07142b;padding:12px 18px;border-radius:12px;font-weight:700;text-decoration:none">Open operator dashboard</a></p>
-        <p>This link expires in 15 minutes and only works for approved operator email addresses.</p>
-      </div>
-    `,
-    trace,
-  });
+    return await sendEmailAction({
+      to: normalizedEmail,
+      subject: `${tenantConfig.brandName} operator sign-in link`,
+      html: `
+        <div style="font-family:Segoe UI,sans-serif;line-height:1.6;color:#0f172a">
+          <h1 style="font-size:24px;margin-bottom:12px">${tenantConfig.brandName} operator access</h1>
+          <p>Use the secure link below to sign in to the LeadOS operator dashboard.</p>
+          <p><a href="${magicLink}" style="display:inline-block;background:#14b8a6;color:#07142b;padding:12px 18px;border-radius:12px;font-weight:700;text-decoration:none">Open operator dashboard</a></p>
+          <p>This link expires in 15 minutes and only works for approved operator email addresses.</p>
+        </div>
+      `,
+      trace,
+    });
+  } catch (error) {
+    const detail = error instanceof Error && error.message
+      ? `Magic link delivery failed: ${error.message}`
+      : "Magic link delivery failed";
+
+    return {
+      ok: false,
+      provider: "Emailit",
+      mode: "live",
+      detail,
+    } as const;
+  }
 }
 
 export async function createSessionToken(email: string) {

@@ -1044,27 +1044,38 @@ export async function sendEmailAction(payload: {
     return dryRunResult("Emailit", "Email prepared", { to: payload.to, subject: payload.subject });
   }
 
-  const response = await postJson(
-    "https://api.emailit.com/v1/emails",
-    {
-      from: process.env.LEAD_OS_FROM_EMAIL ?? process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "LeadOS <support@example.com>",
-      to: payload.to,
-      subject: payload.subject,
-      html: payload.html,
-      metadata: {
-        leadKey: payload.trace.leadKey,
-        blueprintId: payload.trace.blueprintId,
+  try {
+    const response = await postJson(
+      "https://api.emailit.com/v1/emails",
+      {
+        from: process.env.LEAD_OS_FROM_EMAIL ?? process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "LeadOS <support@example.com>",
+        to: payload.to,
+        subject: payload.subject,
+        html: payload.html,
+        metadata: {
+          leadKey: payload.trace.leadKey,
+          blueprintId: payload.trace.blueprintId,
+        },
       },
-    },
-    { Authorization: `Bearer ${process.env.EMAILIT_API_KEY ?? embeddedSecrets.emailit.apiKey}` },
-  );
+      { Authorization: `Bearer ${process.env.EMAILIT_API_KEY ?? embeddedSecrets.emailit.apiKey}` },
+    );
 
-  return {
-    ok: response.ok,
-    provider: "Emailit",
-    mode: "live",
-    detail: response.ok ? "Email sent" : `Email failed: ${response.status}`,
-  } satisfies ProviderResult;
+    return {
+      ok: response.ok,
+      provider: "Emailit",
+      mode: "live",
+      detail: response.ok ? "Email sent" : `Email failed: ${response.status}`,
+    } satisfies ProviderResult;
+  } catch (error) {
+    return {
+      ok: false,
+      provider: "Emailit",
+      mode: "live",
+      detail: error instanceof Error && error.message
+        ? `Email failed: ${error.message}`
+        : "Email failed",
+    } satisfies ProviderResult;
+  }
 }
 
 export async function sendWhatsAppAction(payload: { phone: string; body: string }) {
