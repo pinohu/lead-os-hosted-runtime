@@ -1,7 +1,13 @@
 import { summarizeMilestoneProgress } from "./automation.ts";
 import { isSystemCanonicalEvent, isSystemLeadRecord } from "./operator-view.ts";
 import type { CanonicalEvent } from "./trace.ts";
-import type { StoredLeadRecord } from "./runtime-store.ts";
+import type {
+  BookingJobRecord,
+  ProviderExecutionRecord,
+  StoredLeadRecord,
+  WorkflowRunRecord,
+} from "./runtime-store.ts";
+import type { PlumbingLeadContext, PlumbingUrgencyBand } from "./runtime-schema.ts";
 
 function countBy<T extends string>(values: T[]) {
   return values.reduce<Record<string, number>>((acc, value) => {
@@ -20,6 +26,151 @@ function topBreakdown(values: string[]) {
 function ratio(value: number, total: number) {
   if (total <= 0) return 0;
   return Number(((value / total) * 100).toFixed(1));
+}
+
+function asPlumbingContext(lead: StoredLeadRecord) {
+  const plumbing = lead.metadata.plumbing;
+  return plumbing && typeof plumbing === "object" ? plumbing as PlumbingLeadContext : null;
+}
+
+function buildDispatchAction(lead: StoredLeadRecord, plumbing: PlumbingLeadContext | null) {
+  if (!plumbing) {
+    return lead.hot ? "Manual fast-path review" : "Standard review";
+  }
+  if (["booked", "converted", "active"].includes(lead.stage)) {
+    return "Monitor completion";
+  }
+  switch (plumbing.dispatchMode) {
+    case "dispatch-now":
+      return "Call or assign emergency provider now";
+    case "same-day-booking":
+      return "Confirm same-day slot";
+    case "commercial-intake":
+      return "Route to commercial desk";
+    case "triage":
+      return "Open triage conversation";
+    case "estimate-path":
+    default:
+      return "Book estimate or quote callback";
+  }
+}
+
+function buildDispatchReadiness(lead: StoredLeadRecord, plumbing: PlumbingLeadContext | null) {
+  let score = lead.hot ? 55 : 25;
+  if (lead.phone) score += 10;
+  if (plumbing?.urgencyBand === "emergency-now") score += 20;
+  if (plumbing?.urgencyBand === "same-day") score += 12;
+  if (plumbing?.propertyType === "commercial") score += 8;
+  if (["booked", "converted", "active"].includes(lead.stage)) score -= 30;
+  return Math.max(0, Math.min(100, score));
+}
+
+function buildQueueByUrgency(
+  items: Array<{
+    urgencyBand: PlumbingUrgencyBand;
+  }>,
+  urgencyBand: PlumbingUrgencyBand,
+) {
+  return items.filter((item) => item.urgencyBand === urgencyBand);
+}
+
+function buildPlumbingDispatchSnapshot(
+  leads: StoredLeadRecord[],
+  bookingJobs: BookingJobRecord[],
+  providerExecutions: ProviderExecutionRecord[],
+  workflowRuns: WorkflowRunRecord[],
+) {
+  const plumbingLeads = leads
+    .map((lead) => ({ lead, plumbing: asPlumbingContext(lead) }))
+    .filter((item) => item.plumbing);
+
+  const queueItems = plumbingLeads
+    .map(({ lead, plumbing }) => ({
+      leadKey: lead.leadKey,
+      stage: lead.stage,
+      hot: lead.hot,
+      score: lead.score,
+      updatedAt: lead.updatedAt,
+      urgencyBand: plumbing!.urgencyBand,
+      issueType: plumbing!.issueType,
+      dispatchMode: plumbing!.dispatchMode,
+      propertyType: plumbing!.propertyType,
+      readinessScore: buildDispatchReadiness(lead, plumbing),
+      operatorAction: buildDispatchAction(lead, plumbing),
+      routingReasons: plumbing!.routingReasons,
+    }))
+    .sort((left, right) => {
+      if (right.readinessScore !== left.readinessScore) {
+        return right.readinessScore - left.readinessScore;
+      }
+      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+    });
+
+  const unresolved = queueItems.filter((item) => !["booked", "converted", "active"].includes(item.stage));
+
+  const providerScores = Object.entries(
+    providerExecutions.reduce<Record<string, {
+      provider: string;
+      attempts: number;
+      ok: number;
+      live: number;
+    }>>((acc, execution) => {
+      const entry = acc[execution.provider] ?? {
+        provider: execution.provider,
+        attempts: 0,
+        ok: 0,
+        live: 0,
+      };
+      entry.attempts += 1;
+      entry.ok += execution.ok ? 1 : 0;
+      entry.live += execution.mode === "live" ? 1 : 0;
+      acc[execution.provider] = entry;
+      return acc;
+    }, {}),
+  )
+    .map(([, entry]) => {
+      const providerBookingJobs = bookingJobs.filter((job) => job.provider === entry.provider);
+      const bookedJobs = providerBookingJobs.filter((job) => ["booked", "availability-found", "handoff-ready"].includes(job.status)).length;
+      const workflowFailures = workflowRuns.filter((run) => run.provider === entry.provider && !run.ok).length;
+      const reliabilityScore = Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            ratio(entry.ok, entry.attempts) * 0.55 +
+            ratio(entry.live, entry.attempts) * 0.2 +
+            ratio(bookedJobs, Math.max(providerBookingJobs.length, 1)) * 0.2 -
+            workflowFailures * 4,
+          ),
+        ),
+      );
+
+      return {
+        provider: entry.provider,
+        attempts: entry.attempts,
+        reliabilityScore,
+        successRate: ratio(entry.ok, entry.attempts),
+        bookingFillRate: ratio(bookedJobs, Math.max(providerBookingJobs.length, 1)),
+        workflowFailures,
+        bookingJobs: providerBookingJobs.length,
+      };
+    })
+    .sort((left, right) => right.reliabilityScore - left.reliabilityScore);
+
+  return {
+    totalPlumbingLeads: plumbingLeads.length,
+    unresolvedCount: unresolved.length,
+    emergencyQueue: buildQueueByUrgency(unresolved, "emergency-now").slice(0, 5),
+    sameDayQueue: buildQueueByUrgency(unresolved, "same-day").slice(0, 5),
+    estimateQueue: buildQueueByUrgency(unresolved, "estimate").slice(0, 5),
+    commercialQueue: buildQueueByUrgency(unresolved, "commercial").slice(0, 5),
+    maintenanceQueue: buildQueueByUrgency(unresolved, "maintenance").slice(0, 5),
+    urgencyBreakdown: topBreakdown(queueItems.map((item) => item.urgencyBand)),
+    issueBreakdown: topBreakdown(queueItems.map((item) => item.issueType)),
+    dispatchModeBreakdown: topBreakdown(queueItems.map((item) => item.dispatchMode)),
+    topQueue: unresolved.slice(0, 8),
+    providerScores,
+  };
 }
 
 export function buildDashboardSnapshot(leads: StoredLeadRecord[], events: CanonicalEvent[]) {
@@ -165,5 +316,29 @@ export function buildDashboardSnapshotWithOptions(
     recentMilestoneEvents,
     leadTimeline,
     experimentPerformance,
+  };
+}
+
+export function buildOperatorConsoleSnapshot(
+  leads: StoredLeadRecord[],
+  events: CanonicalEvent[],
+  bookingJobs: BookingJobRecord[],
+  providerExecutions: ProviderExecutionRecord[],
+  workflowRuns: WorkflowRunRecord[],
+  options: { includeSystemTraffic?: boolean },
+) {
+  const base = buildDashboardSnapshotWithOptions(leads, events, options);
+  const visibleLeads = options.includeSystemTraffic
+    ? leads
+    : leads.filter((lead) => !isSystemLeadRecord(lead));
+
+  return {
+    ...base,
+    plumbingDispatch: buildPlumbingDispatchSnapshot(
+      visibleLeads,
+      bookingJobs,
+      providerExecutions,
+      workflowRuns,
+    ),
   };
 }

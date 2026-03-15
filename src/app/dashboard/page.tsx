@@ -1,11 +1,17 @@
 import Link from "next/link";
-import { THREE_VISIT_FRAMEWORK } from "@/lib/automation";
-import { buildDashboardSnapshotWithOptions } from "@/lib/dashboard";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
-import { getAutomationHealth } from "@/lib/providers";
-import { getBookingJobs, getCanonicalEvents, getDocumentJobs, getLeadRecords, getWorkflowRuns } from "@/lib/runtime-store";
-import { tenantConfig } from "@/lib/tenant";
 import { isSystemBookingJob, isSystemDocumentJob, isSystemWorkflowRun } from "@/lib/operator-view";
+import { getAutomationHealth } from "@/lib/providers";
+import {
+  getBookingJobs,
+  getCanonicalEvents,
+  getDocumentJobs,
+  getLeadRecords,
+  getProviderExecutions,
+  getWorkflowRuns,
+} from "@/lib/runtime-store";
+import { tenantConfig } from "@/lib/tenant";
+import { buildOperatorConsoleSnapshot } from "@/lib/dashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -17,19 +23,37 @@ function asString(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function formatLabel(value: string) {
+  return value.replace(/-/g, " ");
+}
+
+function formatPercent(value: number) {
+  return `${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;
+}
+
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const session = await requireOperatorPageSession("/dashboard");
   const params = (await searchParams) ?? {};
   const includeSystemTraffic = asString(params.include) === "system";
-  const [leads, events, bookingJobs, documentJobs, workflowRuns] = await Promise.all([
+  const [leads, events, bookingJobs, documentJobs, workflowRuns, providerExecutions] = await Promise.all([
     getLeadRecords(),
     getCanonicalEvents(),
     getBookingJobs(),
     getDocumentJobs(),
     getWorkflowRuns(),
+    getProviderExecutions(),
   ]);
-  const snapshot = buildDashboardSnapshotWithOptions(leads, events, { includeSystemTraffic });
+
+  const snapshot = buildOperatorConsoleSnapshot(
+    leads,
+    events,
+    bookingJobs,
+    providerExecutions,
+    workflowRuns,
+    { includeSystemTraffic },
+  );
   const health = getAutomationHealth();
+
   const visibleBookingJobs = includeSystemTraffic
     ? bookingJobs
     : bookingJobs.filter((job) => !isSystemBookingJob(job));
@@ -39,16 +63,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const visibleWorkflowRuns = includeSystemTraffic
     ? workflowRuns
     : workflowRuns.filter((run) => !isSystemWorkflowRun(run));
-  const hotLeadQueue = snapshot.leadTimeline.filter((lead) => lead.hot).slice(0, 5);
+
   const bookingFailures = visibleBookingJobs
     .filter((job) => !["booked", "availability-found", "ready", "handoff-ready"].includes(job.status))
-    .slice(0, 5);
-  const documentFailures = visibleDocumentJobs
-    .filter((job) => job.status === "failed")
-    .slice(0, 5);
-  const workflowFailures = visibleWorkflowRuns
-    .filter((run) => !run.ok)
-    .slice(0, 5);
+    .slice(0, 6);
+  const documentFailures = visibleDocumentJobs.filter((job) => job.status === "failed").slice(0, 6);
+  const workflowFailures = visibleWorkflowRuns.filter((run) => !run.ok).slice(0, 6);
+  const dispatch = snapshot.plumbingDispatch;
 
   return (
     <main className="experience-page">
@@ -60,8 +81,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </h2>
           <p className="muted">
             {includeSystemTraffic
-              ? `This view includes ${snapshot.systemTraffic.hiddenLeads} internal verification leads and ${snapshot.systemTraffic.hiddenEvents} internal events alongside human traffic.`
-              : `LeadOS is hiding ${snapshot.systemTraffic.hiddenLeads} internal verification leads and ${snapshot.systemTraffic.hiddenEvents} internal events so the default dashboard reflects human traffic first.`}
+              ? `This view includes ${snapshot.systemTraffic.hiddenLeads} internal verification leads and ${snapshot.systemTraffic.hiddenEvents} internal events alongside live dispatch traffic.`
+              : `LeadOS is hiding ${snapshot.systemTraffic.hiddenLeads} internal verification leads and ${snapshot.systemTraffic.hiddenEvents} internal events so operators see real plumbing demand first.`}
           </p>
           <div className="cta-row">
             {includeSystemTraffic ? (
@@ -79,16 +100,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
       <section className="experience-hero">
         <div className="hero-copy">
-          <p className="eyebrow">Operator command center</p>
-          <h1>{tenantConfig.brandName} milestone dashboard</h1>
+          <p className="eyebrow">Dispatch command center</p>
+          <h1>{tenantConfig.brandName} PlumbingOS</h1>
           <p className="lede">
-            LeadOS is optimizing for milestone two and milestone three, not just the first capture
-            event. This console shows what is moving, what is leaking, and where the next operator
-            intervention belongs.
+            Run urgent plumbing demand like a dispatch desk, not a form pipeline. This console
+            keeps emergency work first, surfaces unfulfilled demand, and highlights which providers
+            can actually convert jobs into completed revenue.
           </p>
           <div className="cta-row">
             <Link href="/dashboard/providers" className="primary">
-              Provider health
+              Provider readiness
             </Link>
             <Link href="/dashboard/settings" className="secondary">
               Runtime settings
@@ -96,14 +117,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <Link href="/dashboard/bookings" className="secondary">
               Booking jobs
             </Link>
-            <Link href="/dashboard/documents" className="secondary">
-              Document jobs
-            </Link>
             <Link href="/dashboard/workflows" className="secondary">
               Workflow runs
             </Link>
-            <Link href="/dashboard/experiments" className="secondary">
-              Experiments
+            <Link href="/dashboard/documents" className="secondary">
+              Document jobs
             </Link>
             <a href="/auth/sign-out" className="secondary">
               Sign out
@@ -113,47 +131,88 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <aside className="hero-rail">
           <p className="eyebrow">Operator session</p>
           <h2>{session.email}</h2>
-          <p className="muted">
-            Live mode: {health.liveMode ? "enabled" : "dry run"} | Visible leads: {snapshot.totals.leads} | Hot leads: {snapshot.totals.hotLeads}
-          </p>
-          {snapshot.systemTraffic.hiddenLeads > 0 && !includeSystemTraffic ? (
-            <p className="muted">
-              Hidden system leads: {snapshot.systemTraffic.hiddenLeads}
-            </p>
-          ) : null}
           <ul className="journey-rail">
-            {THREE_VISIT_FRAMEWORK.lead.map((milestone) => (
-              <li key={milestone.id}>
-                <strong>M{milestone.ordinal}: {milestone.label}</strong>
-                <span>{milestone.description}</span>
-              </li>
-            ))}
+            <li>
+              <strong>Live mode</strong>
+              <span>{health.liveMode ? "enabled" : "dry run"}</span>
+            </li>
+            <li>
+              <strong>Visible leads</strong>
+              <span>{snapshot.totals.leads}</span>
+            </li>
+            <li>
+              <strong>Plumbing leads</strong>
+              <span>{dispatch.totalPlumbingLeads}</span>
+            </li>
+            <li>
+              <strong>Unresolved plumbing leads</strong>
+              <span>{dispatch.unresolvedCount}</span>
+            </li>
+            <li>
+              <strong>Hot leads</strong>
+              <span>{snapshot.totals.hotLeads}</span>
+            </li>
           </ul>
         </aside>
       </section>
 
+      <section className="metric-grid">
+        <article className="metric-card">
+          <p className="eyebrow">Emergency queue</p>
+          <h2>{dispatch.emergencyQueue.length}</h2>
+          <p className="muted">Urgent demand that should be called or assigned immediately.</p>
+        </article>
+        <article className="metric-card">
+          <p className="eyebrow">Same-day queue</p>
+          <h2>{dispatch.sameDayQueue.length}</h2>
+          <p className="muted">High-intent jobs needing same-day scheduling attention.</p>
+        </article>
+        <article className="metric-card">
+          <p className="eyebrow">Estimate queue</p>
+          <h2>{dispatch.estimateQueue.length}</h2>
+          <p className="muted">Quote-driven leads that need a scheduled estimate path.</p>
+        </article>
+        <article className="metric-card">
+          <p className="eyebrow">Commercial queue</p>
+          <h2>{dispatch.commercialQueue.length}</h2>
+          <p className="muted">Commercial jobs that should bypass consumer-style routing.</p>
+        </article>
+      </section>
+
       <section className="grid two">
         <article className="panel">
-          <p className="eyebrow">Immediate intervention</p>
-          <h2>Hot leads and unresolved execution problems</h2>
+          <p className="eyebrow">Dispatch first</p>
+          <h2>Plumbing demand waiting for action</h2>
+          {dispatch.topQueue.length === 0 ? (
+            <p className="muted">No unresolved plumbing leads are waiting right now.</p>
+          ) : (
+            <div className="stack-grid">
+              {dispatch.topQueue.map((item) => (
+                <article key={item.leadKey} className="stack-card">
+                  <p className="eyebrow">{formatLabel(item.urgencyBand)}</p>
+                  <h3>{item.leadKey}</h3>
+                  <p className="muted">
+                    Issue: {formatLabel(item.issueType)} | Mode: {formatLabel(item.dispatchMode)}
+                  </p>
+                  <p className="muted">
+                    Readiness: {item.readinessScore} | Stage: {item.stage}
+                  </p>
+                  <p className="muted">Next move: {item.operatorAction}</p>
+                  <div className="cta-row">
+                    <Link href={`/dashboard/leads/${encodeURIComponent(item.leadKey)}`} className="secondary">
+                      Open lead detail
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </article>
+
+        <article className="panel">
+          <p className="eyebrow">Failure recovery</p>
+          <h2>Operational friction that can block revenue</h2>
           <div className="stack-grid">
-            <article className="stack-card">
-              <p className="eyebrow">Hot lead queue</p>
-              {hotLeadQueue.length === 0 ? (
-                <p className="muted">No hot leads are waiting right now.</p>
-              ) : (
-                <ul className="check-list">
-                  {hotLeadQueue.map((lead) => (
-                    <li key={lead.leadKey}>
-                      <Link href={`/dashboard/leads/${encodeURIComponent(lead.leadKey)}`}>
-                        {lead.leadKey}
-                      </Link>{" "}
-                      — {lead.stage}, {lead.nextLeadMilestone ?? "Complete"}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </article>
             <article className="stack-card">
               <p className="eyebrow">Booking failures</p>
               {bookingFailures.length === 0 ? (
@@ -165,31 +224,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       <Link href={`/dashboard/leads/${encodeURIComponent(job.leadKey)}`}>
                         {job.leadKey}
                       </Link>{" "}
-                      — {job.status}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </article>
-          </div>
-        </article>
-
-        <article className="panel">
-          <p className="eyebrow">Recovery queue</p>
-          <h2>Documents and workflows needing attention</h2>
-          <div className="stack-grid">
-            <article className="stack-card">
-              <p className="eyebrow">Document failures</p>
-              {documentFailures.length === 0 ? (
-                <p className="muted">No failed document jobs waiting.</p>
-              ) : (
-                <ul className="check-list">
-                  {documentFailures.map((job) => (
-                    <li key={job.id}>
-                      <Link href={`/dashboard/leads/${encodeURIComponent(job.leadKey)}`}>
-                        {job.leadKey}
-                      </Link>{" "}
-                      — {job.status}
+                      - {job.status}
                     </li>
                   ))}
                 </ul>
@@ -210,7 +245,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       ) : (
                         <span>Unknown lead</span>
                       )}{" "}
-                      — {run.eventName}
+                      - {run.eventName}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+            <article className="stack-card">
+              <p className="eyebrow">Document failures</p>
+              {documentFailures.length === 0 ? (
+                <p className="muted">No failed document jobs waiting.</p>
+              ) : (
+                <ul className="check-list">
+                  {documentFailures.map((job) => (
+                    <li key={job.id}>
+                      <Link href={`/dashboard/leads/${encodeURIComponent(job.leadKey)}`}>
+                        {job.leadKey}
+                      </Link>{" "}
+                      - {job.status}
                     </li>
                   ))}
                 </ul>
@@ -220,140 +272,93 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </article>
       </section>
 
-      <section className="metric-grid">
-        <article className="metric-card">
-          <p className="eyebrow">Lead M1 to M2</p>
-          <h2>{snapshot.conversionRates.leadM1ToM2}%</h2>
-          <p className="muted">Returning-engaged rate from captured leads.</p>
-        </article>
-        <article className="metric-card">
-          <p className="eyebrow">Lead M2 to M3</p>
-          <h2>{snapshot.conversionRates.leadM2ToM3}%</h2>
-          <p className="muted">Booked or offered rate from returning leads.</p>
-        </article>
-        <article className="metric-card">
-          <p className="eyebrow">Customer M1 to M2</p>
-          <h2>{snapshot.conversionRates.customerM1ToM2}%</h2>
-          <p className="muted">Activation rate from onboarded customers.</p>
-        </article>
-        <article className="metric-card">
-          <p className="eyebrow">Customer M2 to M3</p>
-          <h2>{snapshot.conversionRates.customerM2ToM3}%</h2>
-          <p className="muted">Value-realized rate from activated customers.</p>
-        </article>
-      </section>
-
       <section className="grid two">
         <article className="panel">
-          <p className="eyebrow">Execution queues</p>
-          <h2>What operators can act on right now</h2>
+          <p className="eyebrow">Queue mix</p>
+          <h2>Where dispatch pressure is building</h2>
           <div className="stack-grid">
             <article className="stack-card">
-              <p className="eyebrow">Bookings</p>
-              <h3>{visibleBookingJobs.length}</h3>
-              <p className="muted">Scheduling jobs recorded in the runtime.</p>
-              <Link href="/dashboard/bookings" className="secondary">
-                Open booking queue
-              </Link>
-            </article>
-            <article className="stack-card">
-              <p className="eyebrow">Documents</p>
-              <h3>{visibleDocumentJobs.length}</h3>
-              <p className="muted">Proposal, agreement, and onboarding document jobs.</p>
-              <Link href="/dashboard/documents" className="secondary">
-                Open document queue
-              </Link>
-            </article>
-            <article className="stack-card">
-              <p className="eyebrow">Workflow runs</p>
-              <h3>{visibleWorkflowRuns.length}</h3>
-              <p className="muted">n8n and internal workflow emissions logged by LeadOS.</p>
-              <Link href="/dashboard/workflows" className="secondary">
-                Open workflow history
-              </Link>
-            </article>
-            <article className="stack-card">
-              <p className="eyebrow">Experiments</p>
-              <h3>{snapshot.experimentPerformance.length}</h3>
-              <p className="muted">Active experiment buckets currently represented in lead traffic.</p>
-              <Link href="/dashboard/experiments" className="secondary">
-                Open experiment view
-              </Link>
-            </article>
-          </div>
-        </article>
-
-        <article className="panel">
-          <p className="eyebrow">Operator focus</p>
-          <h2>Fast links for intervention</h2>
-          <ul className="check-list">
-            <li><Link href="/dashboard/providers">Provider health and channel readiness</Link></li>
-            <li><Link href="/dashboard/settings">Runtime settings for provider mappings and template IDs</Link></li>
-            <li><Link href="/dashboard/bookings">Scheduling requests and availability lookups</Link></li>
-            <li><Link href="/dashboard/documents">Proposal, agreement, and onboarding document jobs</Link></li>
-            <li><Link href="/dashboard/workflows">Workflow emissions and execution outcomes</Link></li>
-            <li><Link href="/dashboard/experiments">Variant and milestone performance by experiment</Link></li>
-          </ul>
-        </article>
-      </section>
-
-      <section className="grid two">
-        <article className="panel">
-          <p className="eyebrow">Segment view</p>
-          <h2>Where momentum is coming from</h2>
-          <div className="stack-grid">
-            <article className="stack-card">
-              <h3>Top sources</h3>
+              <h3>Urgency mix</h3>
               <ul className="check-list">
-                {snapshot.topSources.length === 0 ? (
-                  <li>No traffic yet</li>
+                {dispatch.urgencyBreakdown.length === 0 ? (
+                  <li>No plumbing traffic yet</li>
                 ) : (
-                  snapshot.topSources.map((entry) => (
+                  dispatch.urgencyBreakdown.map((entry) => (
                     <li key={entry.label}>
-                      {entry.label}: {entry.count}
+                      {formatLabel(entry.label)}: {entry.count}
                     </li>
                   ))
                 )}
               </ul>
             </article>
             <article className="stack-card">
-              <h3>Top niches</h3>
+              <h3>Issue mix</h3>
               <ul className="check-list">
-                {snapshot.topNiches.length === 0 ? (
-                  <li>No traffic yet</li>
+                {dispatch.issueBreakdown.length === 0 ? (
+                  <li>No issue classifications yet</li>
                 ) : (
-                  snapshot.topNiches.map((entry) => (
+                  dispatch.issueBreakdown.map((entry) => (
                     <li key={entry.label}>
-                      {entry.label}: {entry.count}
+                      {formatLabel(entry.label)}: {entry.count}
                     </li>
                   ))
                 )}
+              </ul>
+            </article>
+            <article className="stack-card">
+              <h3>Dispatch mode mix</h3>
+              <ul className="check-list">
+                {dispatch.dispatchModeBreakdown.length === 0 ? (
+                  <li>No dispatch modes recorded yet</li>
+                ) : (
+                  dispatch.dispatchModeBreakdown.map((entry) => (
+                    <li key={entry.label}>
+                      {formatLabel(entry.label)}: {entry.count}
+                    </li>
+                  ))
+                )}
+              </ul>
+            </article>
+            <article className="stack-card">
+              <h3>Fast links</h3>
+              <ul className="check-list">
+                <li><Link href="/dashboard/bookings">Open booking queue</Link></li>
+                <li><Link href="/dashboard/providers">Review provider readiness</Link></li>
+                <li><Link href="/dashboard/settings">Adjust runtime mappings</Link></li>
+                <li><Link href="/dashboard/workflows">Inspect workflow history</Link></li>
               </ul>
             </article>
           </div>
         </article>
 
         <article className="panel">
-          <p className="eyebrow">Funnel mix</p>
-          <h2>Families attracting the most movement</h2>
-          <ul className="check-list">
-            {snapshot.topFamilies.length === 0 ? (
-              <li>No funnel traffic yet</li>
-            ) : (
-              snapshot.topFamilies.map((entry) => (
-                <li key={entry.family}>
-                  {entry.family}: {entry.count}
-                </li>
-              ))
-            )}
-          </ul>
+          <p className="eyebrow">Provider scorecards</p>
+          <h2>Who looks safe to route traffic to</h2>
+          {dispatch.providerScores.length === 0 ? (
+            <p className="muted">No provider execution history is available yet.</p>
+          ) : (
+            <div className="stack-grid">
+              {dispatch.providerScores.slice(0, 6).map((provider) => (
+                <article key={provider.provider} className="stack-card">
+                  <p className="eyebrow">{provider.provider}</p>
+                  <h3>{provider.reliabilityScore}</h3>
+                  <p className="muted">
+                    Success rate: {formatPercent(provider.successRate)} | Booking fill: {formatPercent(provider.bookingFillRate)}
+                  </p>
+                  <p className="muted">
+                    Attempts: {provider.attempts} | Workflow failures: {provider.workflowFailures}
+                  </p>
+                </article>
+              ))}
+            </div>
+          )}
         </article>
       </section>
 
       <section className="grid two">
         <article className="panel">
-          <p className="eyebrow">Recent leads</p>
-          <h2>Lead detail drill-down</h2>
+          <p className="eyebrow">Recent lead drill-down</p>
+          <h2>Who moved last and what comes next</h2>
           {snapshot.leadTimeline.length === 0 ? (
             <p className="muted">No leads have been captured in this runtime yet.</p>
           ) : (
@@ -362,7 +367,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <article key={lead.leadKey} className="stack-card">
                   <p className="eyebrow">{lead.family}</p>
                   <h3>{lead.leadKey}</h3>
-                  <p className="muted">Stage: {lead.stage} | Visits: {lead.visitCount}</p>
+                  <p className="muted">
+                    Stage: {lead.stage} | Visits: {lead.visitCount} | Score: {lead.score}
+                  </p>
                   <p className="muted">Next lead milestone: {lead.nextLeadMilestone ?? "Complete"}</p>
                   <div className="cta-row">
                     <Link href={`/dashboard/leads/${encodeURIComponent(lead.leadKey)}`} className="secondary">
@@ -376,8 +383,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </article>
 
         <article className="panel">
-          <p className="eyebrow">Recent milestone events</p>
-          <h2>Latest trust and conversion signals</h2>
+          <p className="eyebrow">Milestone signals</p>
+          <h2>Trust and conversion movement</h2>
           {snapshot.recentMilestoneEvents.length === 0 ? (
             <p className="muted">Milestone events will appear here as the runtime captures activity.</p>
           ) : (
@@ -387,7 +394,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <p className="eyebrow">{event.type}</p>
                   <h3>{event.milestoneId}</h3>
                   <p className="muted">{event.leadKey}</p>
-                  <p className="muted">Visit count: {event.visitCount} | Stage: {event.stage}</p>
+                  <p className="muted">
+                    Visit count: {event.visitCount} | Stage: {event.stage}
+                  </p>
                 </article>
               ))}
             </div>

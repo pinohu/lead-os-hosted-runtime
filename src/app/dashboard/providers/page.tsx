@@ -1,19 +1,47 @@
 import Link from "next/link";
+import { buildOperatorConsoleSnapshot } from "@/lib/dashboard";
 import { getConfigStatusSummary } from "@/lib/config-status";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { getAutomationHealth } from "@/lib/providers";
-import { getRuntimePersistenceMode } from "@/lib/runtime-store";
+import {
+  getBookingJobs,
+  getCanonicalEvents,
+  getLeadRecords,
+  getProviderExecutions,
+  getRuntimePersistenceMode,
+  getWorkflowRuns,
+} from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProviderHealthPage() {
   await requireOperatorPageSession("/dashboard/providers");
-  const health = getAutomationHealth();
+  const [health, leads, events, bookingJobs, providerExecutions, workflowRuns] = await Promise.all([
+    Promise.resolve(getAutomationHealth()),
+    getLeadRecords(),
+    getCanonicalEvents(),
+    getBookingJobs(),
+    getProviderExecutions(),
+    getWorkflowRuns(),
+  ]);
   const persistenceMode = getRuntimePersistenceMode();
   const configSummary = getConfigStatusSummary();
   const providerEntries = Object.entries(health.providers)
     .sort(([left], [right]) => left.localeCompare(right));
+  const consoleSnapshot = buildOperatorConsoleSnapshot(
+    leads,
+    events,
+    bookingJobs,
+    providerExecutions,
+    workflowRuns,
+    {},
+  );
+  const providerScores = consoleSnapshot.plumbingDispatch.providerScores.slice(0, 8);
+
+  function formatPercent(value: number) {
+    return `${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;
+  }
 
   return (
     <main className="experience-page">
@@ -55,6 +83,27 @@ export default async function ProviderHealthPage() {
           </ul>
         </aside>
       </section>
+
+      {providerScores.length > 0 ? (
+        <section className="panel">
+          <p className="eyebrow">Routing confidence</p>
+          <h2>Provider reliability for live plumbing demand</h2>
+          <div className="stack-grid">
+            {providerScores.map((provider) => (
+              <article key={provider.provider} className="stack-card">
+                <p className="eyebrow">{provider.provider}</p>
+                <h3>{provider.reliabilityScore}</h3>
+                <p className="muted">
+                  Success rate: {formatPercent(provider.successRate)} | Booking fill: {formatPercent(provider.bookingFillRate)}
+                </p>
+                <p className="muted">
+                  Attempts: {provider.attempts} | Workflow failures: {provider.workflowFailures}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {!configSummary.envOnlyReady ? (
         <section className="panel">

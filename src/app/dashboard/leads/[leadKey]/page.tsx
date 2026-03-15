@@ -15,6 +15,7 @@ import {
   getWorkflowRuns,
 } from "@/lib/runtime-store";
 import type { CanonicalEvent } from "@/lib/trace";
+import type { PlumbingLeadContext } from "@/lib/runtime-schema";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,16 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   const bookingItems = bookingJobs as BookingJobRecord[];
   const documentItems = documentJobs as DocumentJobRecord[];
   const progress = summarizeMilestoneProgress(lead);
+  const plumbing = lead.metadata.plumbing && typeof lead.metadata.plumbing === "object"
+    ? lead.metadata.plumbing as PlumbingLeadContext
+    : null;
+  const operatingModel = typeof lead.metadata.operatingModel === "string"
+    ? lead.metadata.operatingModel
+    : "generic-growth";
+
+  function formatLabel(value: string) {
+    return value.replace(/-/g, " ");
+  }
 
   return (
     <main className="experience-page">
@@ -114,6 +125,37 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
           </ul>
         </article>
       </section>
+
+      {plumbing ? (
+        <section className="grid two">
+          <article className="panel">
+            <p className="eyebrow">PlumbingOS context</p>
+            <h2>Dispatch classification</h2>
+            <ul className="check-list">
+              <li>Operating model: {formatLabel(operatingModel)}</li>
+              <li>Urgency band: {formatLabel(plumbing.urgencyBand)}</li>
+              <li>Issue type: {formatLabel(plumbing.issueType)}</li>
+              <li>Dispatch mode: {formatLabel(plumbing.dispatchMode)}</li>
+              <li>Property type: {formatLabel(plumbing.propertyType)}</li>
+              <li>Location: {[lead.metadata.city, lead.metadata.county, lead.metadata.state].filter(Boolean).join(", ") || "Not captured"}</li>
+            </ul>
+          </article>
+
+          <article className="panel">
+            <p className="eyebrow">Operator guidance</p>
+            <h2>Why this lead was routed this way</h2>
+            <ul className="check-list">
+              {plumbing.routingReasons.length === 0 ? (
+                <li>No routing reasons were recorded.</li>
+              ) : (
+                plumbing.routingReasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))
+              )}
+            </ul>
+          </article>
+        </section>
+      ) : null}
 
       <section className="grid two">
         <article className="panel">

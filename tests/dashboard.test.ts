@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildDashboardSnapshot, buildDashboardSnapshotWithOptions } from "../src/lib/dashboard.ts";
-import type { StoredLeadRecord } from "../src/lib/runtime-store.ts";
+import { buildDashboardSnapshot, buildDashboardSnapshotWithOptions, buildOperatorConsoleSnapshot } from "../src/lib/dashboard.ts";
+import type {
+  BookingJobRecord,
+  ProviderExecutionRecord,
+  StoredLeadRecord,
+  WorkflowRunRecord,
+} from "../src/lib/runtime-store.ts";
 import type { CanonicalEvent } from "../src/lib/trace.ts";
 
 test("dashboard snapshot summarizes milestone progress and recent events", () => {
@@ -225,4 +230,103 @@ test("dashboard snapshot hides system verification traffic by default and can in
   assert.equal(fullSnapshot.totals.leads, 2);
   assert.equal(fullSnapshot.systemTraffic.included, true);
   assert.equal(fullSnapshot.systemTraffic.hiddenLeads, 0);
+});
+
+test("operator console snapshot exposes plumbing dispatch queues and provider scores", () => {
+  const leads: StoredLeadRecord[] = [
+    {
+      leadKey: "email:burst@example.com",
+      trace: {
+        visitorId: "visitor-3",
+        sessionId: "session-3",
+        leadKey: "email:burst@example.com",
+        tenant: "tenant",
+        source: "search",
+        service: "emergency-plumbing",
+        niche: "plumbing",
+        blueprintId: "qualification-default",
+        stepId: "qualification-1",
+      },
+      firstName: "Burst",
+      lastName: "Pipe",
+      email: "burst@example.com",
+      phone: "+15555550333",
+      service: "emergency-plumbing",
+      niche: "plumbing",
+      source: "search",
+      score: 98,
+      family: "qualification",
+      blueprintId: "qualification-default",
+      destination: "/funnel/qualification",
+      ctaLabel: "Start Dispatch",
+      stage: "qualified",
+      hot: true,
+      createdAt: new Date("2026-03-15T01:00:00Z").toISOString(),
+      updatedAt: new Date("2026-03-15T01:05:00Z").toISOString(),
+      status: "LEAD-QUALIFIED",
+      sentNurtureStages: [],
+      milestones: {
+        visitCount: 1,
+        leadMilestones: ["lead-m1-captured"],
+        customerMilestones: [],
+      },
+      metadata: {
+        operatingModel: "plumbing-dispatch",
+        plumbing: {
+          urgencyBand: "emergency-now",
+          issueType: "burst-pipe",
+          dispatchMode: "dispatch-now",
+          propertyType: "residential",
+          routingReasons: ["Emergency keywords detected", "Phone present for dispatch"],
+        },
+      },
+    },
+  ];
+
+  const bookingJobs: BookingJobRecord[] = [
+    {
+      id: "booking-1",
+      leadKey: "email:burst@example.com",
+      provider: "Trafft",
+      status: "booked",
+      detail: "Booked emergency slot",
+      createdAt: new Date("2026-03-15T01:06:00Z").toISOString(),
+      updatedAt: new Date("2026-03-15T01:06:00Z").toISOString(),
+    },
+  ];
+
+  const providerExecutions: ProviderExecutionRecord[] = [
+    {
+      id: "provider-1",
+      leadKey: "email:burst@example.com",
+      provider: "Trafft",
+      kind: "booking",
+      ok: true,
+      mode: "live",
+      detail: "Emergency dispatch executed",
+      createdAt: new Date("2026-03-15T01:06:00Z").toISOString(),
+    },
+  ];
+
+  const workflowRuns: WorkflowRunRecord[] = [
+    {
+      id: "workflow-1",
+      leadKey: "email:burst@example.com",
+      eventName: "dispatch_path_selected",
+      provider: "n8n",
+      ok: true,
+      mode: "live",
+      detail: "Urgent dispatch workflow emitted",
+      createdAt: new Date("2026-03-15T01:05:30Z").toISOString(),
+    },
+  ];
+
+  const snapshot = buildOperatorConsoleSnapshot(leads, [], bookingJobs, providerExecutions, workflowRuns, {});
+
+  assert.equal(snapshot.plumbingDispatch.totalPlumbingLeads, 1);
+  assert.equal(snapshot.plumbingDispatch.emergencyQueue.length, 1);
+  assert.equal(snapshot.plumbingDispatch.emergencyQueue[0]?.dispatchMode, "dispatch-now");
+  assert.equal(snapshot.plumbingDispatch.emergencyQueue[0]?.operatorAction, "Call or assign emergency provider now");
+  assert.equal(snapshot.plumbingDispatch.providerScores[0]?.provider, "Trafft");
+  assert.equal(snapshot.plumbingDispatch.providerScores[0]?.bookingFillRate, 100);
 });
