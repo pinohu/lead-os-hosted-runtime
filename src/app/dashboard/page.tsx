@@ -128,6 +128,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             can actually convert jobs into completed revenue.
           </p>
           <div className="cta-row">
+            <Link href="/dashboard/overview" className="primary">
+              System overview
+            </Link>
             <Link href="/dashboard/providers" className="primary">
               Provider readiness
             </Link>

@@ -739,6 +739,28 @@ button[disabled] {
   background: rgba(255, 255, 255, 0.68);
 }
 
+.tone-warning,
+.severity-warning {
+  border-color: rgba(196, 99, 45, 0.22);
+  background: rgba(255, 245, 235, 0.88);
+}
+
+.tone-danger,
+.severity-danger {
+  border-color: rgba(161, 39, 47, 0.22);
+  background: rgba(255, 243, 244, 0.92);
+}
+
+.tone-success,
+.severity-success {
+  border-color: rgba(29, 111, 81, 0.2);
+  background: rgba(243, 252, 247, 0.9);
+}
+
+.tone-neutral {
+  background: rgba(255, 255, 255, 0.68);
+}
+
 .panel h2,
 .panel h3,
 .stack-card h2,
@@ -858,6 +880,69 @@ button[disabled] {
   font-weight: 700;
 }
 
+.journey-timeline {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.journey-node {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.journey-node__rail {
+  position: relative;
+  border-radius: 999px;
+  background: rgba(20, 33, 29, 0.08);
+}
+
+.journey-node__rail::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--secondary);
+  transform: translateX(-50%);
+  box-shadow: 0 0 0 4px rgba(34, 95, 84, 0.14);
+}
+
+.severity-warning .journey-node__rail::before,
+.portal-issue-card.severity-warning {
+  background: rgba(255, 247, 238, 0.92);
+}
+
+.severity-danger .journey-node__rail::before {
+  background: var(--danger);
+  box-shadow: 0 0 0 4px rgba(161, 39, 47, 0.14);
+}
+
+.severity-success .journey-node__rail::before {
+  background: var(--success);
+  box-shadow: 0 0 0 4px rgba(29, 111, 81, 0.14);
+}
+
+.journey-node__content,
+.portal-issue-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(20, 33, 29, 0.1);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.portal-issue-card h3,
+.journey-node__content h3 {
+  margin-bottom: 0;
+}
+
 .mobile-action-bar {
   position: sticky;
   bottom: 14px;
@@ -929,6 +1014,15 @@ button[disabled] {
 
   .mapping-row__actions {
     justify-content: flex-start;
+  }
+
+  .journey-node {
+    grid-template-columns: 12px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .portal-data-list.compact {
+    grid-template-columns: 1fr;
   }
 }
 

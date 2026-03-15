@@ -3,15 +3,15 @@ import { notFound } from "next/navigation";
 import { DispatchActionPanel } from "@/components/DispatchActionPanel";
 import { summarizeMilestoneProgress } from "@/lib/automation";
 import { recommendDispatchProviders } from "@/lib/dispatch-routing";
-import { getDispatchSlaSnapshot } from "@/lib/dispatch-sla";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import {
-  buildLeadDisplayName,
-  buildLeadSubline,
+  buildLeadJourneySnapshot,
+  buildLeadStageSummary,
+} from "@/lib/operator-observability";
+import {
   formatCurrency,
-  formatLeadKeyForDisplay,
-  formatOptionalDateTime,
   formatMilestoneIdForDisplay,
+  formatOptionalDateTime,
   formatPortalLabel,
   formatReviewRating,
 } from "@/lib/operator-ui";
@@ -19,11 +19,13 @@ import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import {
   type BookingJobRecord,
   type DocumentJobRecord,
-  getOperatorActions,
+  type ExecutionTaskRecord,
   getBookingJobs,
   getCanonicalEvents,
   getDocumentJobs,
+  getExecutionTasks,
   getLeadRecord,
+  getOperatorActions,
   getProviderDispatchRequests,
   getProviderExecutions,
   type ProviderExecutionRecord,
@@ -31,7 +33,6 @@ import {
   getWorkflowRuns,
 } from "@/lib/runtime-store";
 import type { CanonicalEvent } from "@/lib/trace";
-import type { PlumbingJobOutcome, PlumbingLeadContext } from "@/lib/runtime-schema";
 
 export const dynamic = "force-dynamic";
 
@@ -49,16 +50,28 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
     notFound();
   }
 
-  const [events, workflows, providerExecutions, bookingJobs, documentJobs, operatorActions, runtimeConfig, providerDispatchRequests] = await Promise.all([
+  const [
+    events,
+    workflows,
+    providerExecutions,
+    bookingJobs,
+    documentJobs,
+    executionTasks,
+    operatorActions,
+    runtimeConfig,
+    providerDispatchRequests,
+  ] = await Promise.all([
     getCanonicalEvents(),
     getWorkflowRuns(decodedLeadKey),
     getProviderExecutions(decodedLeadKey),
     getBookingJobs(decodedLeadKey),
     getDocumentJobs(decodedLeadKey),
+    getExecutionTasks({ leadKey: decodedLeadKey }),
     getOperatorActions(decodedLeadKey),
     getOperationalRuntimeConfig(),
     getProviderDispatchRequests({ leadKey: decodedLeadKey }),
   ]);
+
   const filteredEvents = (events as CanonicalEvent[])
     .filter((event) => event.leadKey === decodedLeadKey)
     .sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
@@ -66,30 +79,28 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   const providerItems = providerExecutions as ProviderExecutionRecord[];
   const bookingItems = bookingJobs as BookingJobRecord[];
   const documentItems = documentJobs as DocumentJobRecord[];
+  const executionItems = executionTasks as ExecutionTaskRecord[];
   const progress = summarizeMilestoneProgress(lead);
-  const plumbing = lead.metadata.plumbing && typeof lead.metadata.plumbing === "object"
-    ? lead.metadata.plumbing as PlumbingLeadContext
-    : null;
-  const plumbingOutcome = lead.metadata.plumbingOutcome && typeof lead.metadata.plumbingOutcome === "object"
-    ? lead.metadata.plumbingOutcome as PlumbingJobOutcome
-    : null;
+  const stageSummary = buildLeadStageSummary(lead);
+  const plumbing = stageSummary.plumbing;
+  const plumbingOutcome = stageSummary.outcome;
   const operatingModel = typeof lead.metadata.operatingModel === "string"
     ? lead.metadata.operatingModel
     : "generic-growth";
-  const plumbingSla = plumbing
-    ? getDispatchSlaSnapshot({
-        updatedAt: lead.updatedAt,
-        stage: lead.stage,
-        plumbing,
-        outcome: plumbingOutcome,
-      })
-    : null;
   const recommendedProviders = plumbing
     ? recommendDispatchProviders(plumbing, runtimeConfig.dispatch.providers)
     : [];
-  const displayLeadKey = formatLeadKeyForDisplay(decodedLeadKey);
-  const displayLeadName = buildLeadDisplayName(lead);
-  const displayLeadSubline = buildLeadSubline(lead);
+  const journey = buildLeadJourneySnapshot({
+    lead,
+    events: filteredEvents,
+    workflows: workflowItems,
+    providerExecutions: providerItems,
+    bookingJobs: bookingItems,
+    documentJobs: documentItems,
+    executionTasks: executionItems,
+    providerRequests: providerDispatchRequests,
+    operatorActions,
+  });
   const leadMilestones = lead.milestones.leadMilestones.map((milestoneId) => formatMilestoneIdForDisplay(milestoneId));
   const customerMilestones = lead.milestones.customerMilestones.map((milestoneId) =>
     formatMilestoneIdForDisplay(milestoneId),
@@ -101,16 +112,22 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
         <div className="hero-copy">
           <p className="eyebrow">Lead detail</p>
           <h1 className="portal-identifier" title={decodedLeadKey}>
-            {displayLeadName}
+            {stageSummary.displayLeadName}
           </h1>
-          {displayLeadSubline ? <p className="muted portal-breakable">{displayLeadSubline}</p> : null}
+          {stageSummary.displayLeadSubline ? (
+            <p className="muted portal-breakable">{stageSummary.displayLeadSubline}</p>
+          ) : null}
           <p className="lede">
-            {lead.firstName} is currently in the <strong>{lead.family}</strong> family at the{" "}
-            <strong>{lead.stage}</strong> stage.
+            This lead is in the <strong>{lead.family}</strong> family at the{" "}
+            <strong>{lead.stage}</strong> stage. The timeline below stitches together capture,
+            automation, provider activity, booking, and operator intervention into one readable journey.
           </p>
           <div className="cta-row">
             <Link href="/dashboard" className="secondary">
               Back to dashboard
+            </Link>
+            <Link href="/dashboard/overview" className="secondary">
+              Open overview
             </Link>
             <a href={lead.destination} className="primary">
               Open current destination
@@ -132,8 +149,82 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
               <strong>Next customer milestone</strong>
               <span>{progress.nextCustomerMilestone?.label ?? "Not started"}</span>
             </li>
+            <li>
+              <strong>Journey touchpoints</strong>
+              <span>{journey.stats.touchpoints}</span>
+            </li>
+            <li>
+              <strong>Active issues</strong>
+              <span>{journey.stats.activeFailures}</span>
+            </li>
           </ul>
         </aside>
+      </section>
+
+      <section className="grid two">
+        <article className="panel">
+          <p className="eyebrow">Journey summary</p>
+          <h2>What happened from first capture to now</h2>
+          <dl className="portal-data-list compact">
+            <div><dt>First seen</dt><dd>{journey.firstSeenAt}</dd></div>
+            <div><dt>Last activity</dt><dd>{journey.lastSeenAt}</dd></div>
+            <div><dt>Last successful step</dt><dd>{journey.lastSuccessAt ?? "Not recorded"}</dd></div>
+            <div><dt>Touchpoints</dt><dd>{journey.stats.touchpoints}</dd></div>
+            <div><dt>Completed steps</dt><dd>{journey.stats.completedSteps}</dd></div>
+            <div><dt>Provider requests</dt><dd>{journey.stats.providerRequests}</dd></div>
+          </dl>
+          {journey.timeline.length === 0 ? (
+            <p className="muted">No observable journey activity has been recorded for this lead yet.</p>
+          ) : (
+            <div className="journey-timeline">
+              {journey.timeline.map((item) => (
+                <article key={item.id} className={`journey-node severity-${item.severity}`}>
+                  <div className="journey-node__rail" aria-hidden="true" />
+                  <div className="journey-node__content">
+                    <div className="portal-status-row">
+                      <span className="portal-chip">{item.category}</span>
+                      <span className="portal-chip">{formatPortalLabel(item.status)}</span>
+                      <span className="portal-chip">{formatOptionalDateTime(item.timestamp)}</span>
+                    </div>
+                    <h3>{item.title}</h3>
+                    <p className="muted portal-breakable">{item.summary}</p>
+                    {item.detail ? <p className="muted portal-breakable">{item.detail}</p> : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </article>
+
+        <article className="panel">
+          <p className="eyebrow">Errors and recovery</p>
+          <h2>Why something broke and how to fix it</h2>
+          {journey.issues.length === 0 ? (
+            <div className="portal-empty">
+              <p className="muted">No active lead-level failures are open right now.</p>
+              <p className="muted">
+                You still have the full timeline on the left, so a healthy path remains visible without noise.
+              </p>
+            </div>
+          ) : (
+            <div className="stack-grid">
+              {journey.issues.map((issue) => (
+                <article key={issue.id} className={`portal-issue-card severity-${issue.severity}`}>
+                  <div className="portal-status-row">
+                    <span className="portal-chip">{issue.source}</span>
+                    <span className="portal-chip">{issue.severity}</span>
+                    {issue.timestamp ? <span className="portal-chip">{formatOptionalDateTime(issue.timestamp)}</span> : null}
+                  </div>
+                  <h3>{issue.title}</h3>
+                  <div className="portal-summary">
+                    <p className="muted portal-breakable"><strong>Reason:</strong> {issue.reason}</p>
+                    <p className="muted portal-breakable"><strong>Resolution:</strong> {issue.resolution}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </article>
       </section>
 
       <section className="grid two">
@@ -198,15 +289,15 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
         </section>
       ) : null}
 
-      {plumbingSla ? (
+      {stageSummary.sla ? (
         <section className="panel">
           <p className="eyebrow">Dispatch SLA</p>
           <h2>Response and escalation timing</h2>
           <ul className="check-list">
-            <li>Response due at: {plumbingSla.dueAt}</li>
-            <li>Escalation target: {plumbingSla.escalationAt}</li>
-            <li>Overdue: {plumbingSla.overdue ? `yes, by ${plumbingSla.minutesPastDue} minutes` : "no"}</li>
-            <li>Automatic backup escalation: {plumbingSla.escalationReady ? "ready" : "not ready"}</li>
+            <li>Response due at: {stageSummary.sla.dueAt}</li>
+            <li>Escalation target: {stageSummary.sla.escalationAt}</li>
+            <li>Overdue: {stageSummary.sla.overdue ? `yes, by ${stageSummary.sla.minutesPastDue} minutes` : "no"}</li>
+            <li>Automatic backup escalation: {stageSummary.sla.escalationReady ? "ready" : "not ready"}</li>
           </ul>
         </section>
       ) : null}
@@ -217,7 +308,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
           <h2>Best roster matches for this job</h2>
           {recommendedProviders.length === 0 ? (
             <p className="muted">
-              No configured dispatch provider currently matches this lead's coverage and capacity profile.
+              No configured dispatch provider currently matches this lead&apos;s coverage and capacity profile.
             </p>
           ) : (
             <div className="stack-grid">
@@ -387,27 +478,6 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
                 <h3>{formatPortalLabel(event.eventType)}</h3>
                 <p className="muted">{event.timestamp}</p>
                 <p className="muted">Status: {formatPortalLabel(event.status)}</p>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="panel">
-        <p className="eyebrow">Operator audit trail</p>
-        <h2>Manual dispatch actions</h2>
-        {operatorActions.length === 0 ? (
-          <p className="muted">No operator dispatch actions have been recorded for this lead yet.</p>
-        ) : (
-          <div className="stack-grid">
-            {operatorActions.map((action) => (
-              <article key={action.id} className="stack-card">
-                <p className="eyebrow">{formatPortalLabel(action.actionType)}</p>
-                <h3 className="portal-identifier" title={action.actorEmail}>
-                  {action.actorEmail}
-                </h3>
-                <p className="muted portal-breakable">{action.detail}</p>
-                <p className="muted">{formatOptionalDateTime(action.createdAt)}</p>
               </article>
             ))}
           </div>
