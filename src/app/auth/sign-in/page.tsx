@@ -1,9 +1,38 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { isAllowedOperatorEmail, sanitizeNextPath, sendOperatorMagicLink } from "@/lib/operator-auth";
+
 type SignInPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 function asString(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+async function requestMagicLinkAction(formData: FormData) {
+  "use server";
+
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const nextPath = sanitizeNextPath(String(formData.get("next") ?? "/dashboard"));
+
+  if (!email || !isAllowedOperatorEmail(email)) {
+    redirect(`/auth/sign-in?error=unauthorized&next=${encodeURIComponent(nextPath)}`);
+  }
+
+  const headerStore = await headers();
+  const forwardedHost = headerStore.get("x-forwarded-host");
+  const host = forwardedHost ?? headerStore.get("host") ?? "leados.yourdeputy.com";
+  const forwardedProto = headerStore.get("x-forwarded-proto");
+  const protocol = forwardedProto ?? "https";
+  const origin = `${protocol}://${host}`;
+
+  const result = await sendOperatorMagicLink(email, origin, nextPath);
+  if (!result.ok) {
+    redirect(`/auth/sign-in?error=delivery-failed&next=${encodeURIComponent(nextPath)}`);
+  }
+
+  redirect(`/auth/check-email?email=${encodeURIComponent(email)}`);
 }
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
@@ -29,7 +58,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           </div>
         ) : null}
 
-        <form action="/api/auth/request-link" method="post" className="auth-form">
+        <form action={requestMagicLinkAction} className="auth-form">
           <input type="hidden" name="next" value={nextPath} />
           <label htmlFor="email">Operator email</label>
           <input
