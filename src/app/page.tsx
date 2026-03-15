@@ -49,7 +49,9 @@ function asFamily(value: string | string[] | undefined): FunnelFamily | undefine
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = (await searchParams) ?? {};
-  const niche = getNiche(asString(params.niche) ?? tenantConfig.defaultNiche);
+  const requestedNiche = asString(params.niche);
+  const rootNiche = requestedNiche === "general" ? "general" : requestedNiche ?? "plumbing";
+  const niche = getNiche(rootNiche);
   const headerStore = await headers();
   const graphs = buildDefaultFunnelGraphs(tenantConfig.tenantId);
   const health = getAutomationHealth();
@@ -67,7 +69,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         detail: `${graph.nodes.length} canonical nodes, ${graph.goal} goal`,
       }));
   const profile = resolveExperienceProfile({
-    family: asFamily(params.family),
+    family: asFamily(params.family) ?? (plumbingLike ? "qualification" : undefined),
     niche,
     supportEmail: tenantConfig.supportEmail,
     source: asString(params.source),
