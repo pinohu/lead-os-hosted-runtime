@@ -11,6 +11,7 @@ export default async function CheckEmailPage({ searchParams }: CheckEmailPagePro
   const email = asString(params.email);
   const delivery = asString(params.delivery);
   const nextPath = asString(params.next) ?? "/dashboard";
+  const reason = asString(params.reason);
   const deliveryFailed = delivery === "failed";
 
   return (
@@ -36,6 +37,9 @@ export default async function CheckEmailPage({ searchParams }: CheckEmailPagePro
               Email delivery is currently unavailable. This fallback only works in the same browser
               that requested the magic link and expires in 15 minutes.
             </div>
+            {reason ? (
+              <p className="muted">Provider detail: {reason}</p>
+            ) : null}
             <form action="/auth/browser-verify" method="post" className="auth-form">
               <input type="hidden" name="next" value={nextPath} />
               <button type="submit" className="primary">

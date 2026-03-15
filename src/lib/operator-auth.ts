@@ -27,6 +27,11 @@ type PublicOriginOptions = {
   forwardedProto?: string | null;
 };
 
+type DeliveryResultLike = {
+  detail: string;
+  payload?: Record<string, unknown>;
+};
+
 function getAuthSecret() {
   return process.env.LEAD_OS_AUTH_SECRET ?? process.env.CRON_SECRET ?? embeddedSecrets.cron.secret;
 }
@@ -132,6 +137,22 @@ export async function sendOperatorMagicLink(email: string, origin: string, nextP
       detail,
     } as const;
   }
+}
+
+export function summarizeOperatorDeliveryFailure(result: DeliveryResultLike) {
+  const response = result.payload?.response;
+  const responseText = typeof response === "string"
+    ? response
+    : response
+      ? JSON.stringify(response)
+      : "";
+
+  return [result.detail, responseText]
+    .filter(Boolean)
+    .join(" | ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
 }
 
 export async function createSessionToken(email: string) {

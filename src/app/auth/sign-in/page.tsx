@@ -8,6 +8,7 @@ import {
   isAllowedOperatorEmail,
   sanitizeNextPath,
   sendOperatorMagicLink,
+  summarizeOperatorDeliveryFailure,
 } from "@/lib/operator-auth";
 
 type SignInPageProps = {
@@ -48,7 +49,7 @@ async function requestMagicLinkAction(formData: FormData) {
       path: "/",
       maxAge: 15 * 60,
     });
-    redirect(buildOperatorAbsoluteUrl(`/auth/check-email?email=${encodeURIComponent(email)}&delivery=failed&next=${encodeURIComponent(nextPath)}`));
+    redirect(buildOperatorAbsoluteUrl(`/auth/check-email?email=${encodeURIComponent(email)}&delivery=failed&next=${encodeURIComponent(nextPath)}&reason=${encodeURIComponent(summarizeOperatorDeliveryFailure(result))}`));
   }
 
   redirect(buildOperatorAbsoluteUrl(`/auth/check-email?email=${encodeURIComponent(email)}`));

@@ -7,6 +7,7 @@ import {
   isAllowedOperatorEmail,
   sanitizeNextPath,
   sendOperatorMagicLink,
+  summarizeOperatorDeliveryFailure,
 } from "@/lib/operator-auth";
 
 function redirectWithError(request: Request, message: string, nextPath: string) {
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
     url.searchParams.set("email", email);
     url.searchParams.set("delivery", "failed");
     url.searchParams.set("next", nextPath);
+    url.searchParams.set("reason", summarizeOperatorDeliveryFailure(result));
     const response = NextResponse.redirect(url);
     applyOperatorBrowserFallback(response, await createBrowserFallbackToken(email, origin, nextPath));
     return response;
