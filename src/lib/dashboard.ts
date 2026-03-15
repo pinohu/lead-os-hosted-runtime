@@ -39,6 +39,11 @@ function average(values: number[]) {
   return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2));
 }
 
+function computeRate(value: number, total: number) {
+  if (total <= 0) return 0;
+  return Number(((value / total) * 100).toFixed(1));
+}
+
 function buildOutcomeEconomics(outcomes: PlumbingJobOutcome[]) {
   const completedOutcomes = outcomes.filter((outcome) => outcome.status === "completed");
   const completedRevenue = completedOutcomes.reduce((sum, outcome) => (
@@ -176,9 +181,65 @@ function matchesZipCell(cell: string, zipPrefixes: string[]) {
   return zipPrefixes.some((prefix) => zip.startsWith(prefix));
 }
 
+function resolveZipAcquisitionCost(
+  plumbing: PlumbingLeadContext,
+  marketplace: OperationalRuntimeConfig["marketplace"],
+) {
+  const zip = plumbing.geo.zip?.trim().toLowerCase();
+  if (!zip) {
+    return marketplace.defaultLeadAcquisitionCost ?? 0;
+  }
+  const entries = Object.entries(marketplace.zipLeadAcquisitionCosts)
+    .sort((left, right) => right[0].length - left[0].length);
+  const match = entries.find(([prefix]) => zip.startsWith(prefix));
+  return match?.[1] ?? marketplace.defaultLeadAcquisitionCost ?? 0;
+}
+
+function estimateProviderPayout(
+  providerLabel: string | undefined,
+  revenueValue: number | undefined,
+  dispatchProviders: OperationalRuntimeConfig["dispatch"]["providers"],
+) {
+  if (!providerLabel) {
+    return 0;
+  }
+  const provider = dispatchProviders.find((entry) => entry.label === providerLabel);
+  if (!provider) {
+    return 0;
+  }
+  if (provider.payoutModel === "revenue-share") {
+    const pct = provider.payoutSharePercent ?? 0;
+    return typeof revenueValue === "number" ? Number(((revenueValue * pct) / 100).toFixed(2)) : 0;
+  }
+  return provider.payoutFlatFee ?? 0;
+}
+
+function computeContributionMargin(
+  completedRevenue: number,
+  acquisitionCost: number,
+  providerPayout: number,
+  refunds: number,
+) {
+  return completedRevenue - acquisitionCost - providerPayout - (refunds * 25);
+}
+
+function classifyContributionStatus(contributionMarginRate: number) {
+  if (contributionMarginRate < 0) {
+    return "loss-making";
+  }
+  if (contributionMarginRate < 15) {
+    return "thin";
+  }
+  if (contributionMarginRate < 35) {
+    return "healthy";
+  }
+  return "exceptional";
+}
+
 function buildZipCellLiquiditySnapshot(
   plumbingLeads: Array<{ lead: StoredLeadRecord; plumbing: PlumbingLeadContext; outcome: PlumbingJobOutcome | null }>,
   dispatchProviders: OperationalRuntimeConfig["dispatch"]["providers"],
+  marketplace: OperationalRuntimeConfig["marketplace"],
 ) {
   const candidateCells = new Set<string>();
   for (const item of plumbingLeads) {
@@ -210,6 +271,17 @@ function buildZipCellLiquiditySnapshot(
           .map((item) => item.outcome)
           .filter((outcome): outcome is PlumbingJobOutcome => Boolean(outcome)),
       );
+      const acquisitionCost = leadItems.reduce((sum, item) => sum + resolveZipAcquisitionCost(item.plumbing, marketplace), 0);
+      const providerPayout = leadItems.reduce((sum, item) => (
+        sum + estimateProviderPayout(item.outcome?.provider, item.outcome?.revenueValue, dispatchProviders)
+      ), 0);
+      const contributionMargin = computeContributionMargin(
+        cellEconomics.completedRevenue,
+        acquisitionCost,
+        providerPayout,
+        cellEconomics.refunds,
+      );
+      const contributionMarginRate = computeRate(contributionMargin, cellEconomics.completedRevenue);
       const demandPressure = urgentLeadCount * 2 + sameDayLeadCount + leadItems.length;
       const supplyPressure = acceptingProviders.length * 20 + knownOpenCapacity * 8;
       const liquidityScore = Math.max(0, Math.min(100, Math.round((supplyPressure / Math.max(demandPressure, 1)) * 20)));
@@ -232,6 +304,11 @@ function buildZipCellLiquiditySnapshot(
         completedRevenue: cellEconomics.completedRevenue,
         completedMargin: cellEconomics.completedMargin,
         marginRate: cellEconomics.marginRate,
+        acquisitionCost,
+        providerPayout,
+        contributionMargin,
+        contributionMarginRate,
+        contributionStatus: classifyContributionStatus(contributionMarginRate),
         negativeComplaints: cellEconomics.negativeComplaints,
         refunds: cellEconomics.refunds,
         providersCovering: matchingProviders.length,
@@ -263,6 +340,7 @@ function buildPlumbingDispatchSnapshot(
   providerExecutions: ProviderExecutionRecord[],
   workflowRuns: WorkflowRunRecord[],
   dispatchProviders: OperationalRuntimeConfig["dispatch"]["providers"] = [],
+  marketplace: OperationalRuntimeConfig["marketplace"],
 ) {
   const plumbingLeads = leads
     .map((lead) => ({ lead, plumbing: asPlumbingContext(lead), outcome: asPlumbingOutcome(lead) }))
@@ -359,6 +437,20 @@ function buildPlumbingDispatchSnapshot(
         .map((item) => item.outcome)
         .filter((outcome): outcome is PlumbingJobOutcome => Boolean(outcome) && outcome?.provider === entry.provider);
       const economics = buildOutcomeEconomics(providerOutcomes);
+      const providerLeadItems = plumbingLeads.filter((item): item is { lead: StoredLeadRecord; plumbing: PlumbingLeadContext; outcome: PlumbingJobOutcome | null } =>
+        Boolean(item.plumbing) && item.outcome?.provider === entry.provider
+      );
+      const acquisitionCost = providerLeadItems.reduce((sum, item) => sum + resolveZipAcquisitionCost(item.plumbing, marketplace), 0);
+      const providerPayout = providerOutcomes.reduce((sum, outcome) => (
+        sum + estimateProviderPayout(entry.provider, outcome.revenueValue, dispatchProviders)
+      ), 0);
+      const contributionMargin = computeContributionMargin(
+        economics.completedRevenue,
+        acquisitionCost,
+        providerPayout,
+        economics.refunds,
+      );
+      const contributionMarginRate = computeRate(contributionMargin, economics.completedRevenue);
       const completedOutcomes = economics.completedOutcomes.length;
       const bookedOutcomes = providerOutcomes.filter((outcome) => outcome.status === "booked").length;
       const reliabilityScore = Math.max(
@@ -379,7 +471,8 @@ function buildPlumbingDispatchSnapshot(
         Math.min(
           100,
           Math.round(
-            Math.max(0, economics.marginRate) * 0.7 +
+            Math.max(0, economics.marginRate) * 0.35 +
+            Math.max(0, contributionMarginRate) * 0.35 +
             Math.max(0, economics.averageReviewRating) * 12 +
             economics.positiveReviews * 4 +
             economics.mixedReviews * 1 -
@@ -407,6 +500,11 @@ function buildPlumbingDispatchSnapshot(
         completedMargin: economics.completedMargin,
         averageCompletedMargin: economics.averageCompletedMargin,
         marginRate: economics.marginRate,
+        acquisitionCost,
+        providerPayout,
+        contributionMargin,
+        contributionMarginRate,
+        contributionStatus: classifyContributionStatus(contributionMarginRate),
         averageReviewRating: economics.averageReviewRating,
         positiveReviews: economics.positiveReviews,
         mixedReviews: economics.mixedReviews,
@@ -446,7 +544,27 @@ function buildPlumbingDispatchSnapshot(
   const zipCellLiquidity = buildZipCellLiquiditySnapshot(
     plumbingLeads as Array<{ lead: StoredLeadRecord; plumbing: PlumbingLeadContext; outcome: PlumbingJobOutcome | null }>,
     dispatchProviders,
+    marketplace,
   );
+  const providerContributionTotal = rankedProviderScores.reduce((sum, provider) => sum + provider.contributionMargin, 0);
+  const providerAcquisitionTotal = rankedProviderScores.reduce((sum, provider) => sum + provider.acquisitionCost, 0);
+  const providerPayoutTotal = rankedProviderScores.reduce((sum, provider) => sum + provider.providerPayout, 0);
+  const providerRevenueTotal = rankedProviderScores.reduce((sum, provider) => sum + provider.completedRevenue, 0);
+  const providerMarginTotal = rankedProviderScores.reduce((sum, provider) => sum + provider.completedMargin, 0);
+  const unprofitableProviders = rankedProviderScores.filter((provider) => provider.contributionMargin < 0);
+  const constrainedCells = zipCellLiquidity.topCells.filter((cell) => cell.liquidityScore < 45);
+  const unprofitableCells = zipCellLiquidity.topCells.filter((cell) => cell.contributionMargin < 0);
+  const financeRecommendations = [
+    unprofitableProviders[0]
+      ? `Reset payout or routing on ${unprofitableProviders[0].provider} before scaling more demand; contribution margin is currently negative.`
+      : null,
+    constrainedCells[0]
+      ? `Recruit backup coverage in ${constrainedCells[0].label} before increasing acquisition there.`
+      : null,
+    !unprofitableProviders[0] && zipCellLiquidity.expansionCells[0]
+      ? `Shift more buyer traffic into ${zipCellLiquidity.expansionCells[0].label}; it has surplus liquidity and healthier economics.`
+      : null,
+  ].filter((value): value is string => Boolean(value));
 
   return {
     totalPlumbingLeads: plumbingLeads.length,
@@ -462,6 +580,20 @@ function buildPlumbingDispatchSnapshot(
     metroBreakdown,
     metroRevenueBreakdown,
     zipCellLiquidity,
+    finance: {
+      completedRevenue: providerRevenueTotal,
+      completedMargin: providerMarginTotal,
+      acquisitionCost: providerAcquisitionTotal,
+      providerPayout: providerPayoutTotal,
+      contributionMargin: providerContributionTotal,
+      contributionMarginRate: computeRate(providerContributionTotal, providerRevenueTotal),
+      defaultLeadAcquisitionCost: marketplace.defaultLeadAcquisitionCost ?? 0,
+      profitableProviders: rankedProviderScores.filter((provider) => provider.contributionMargin >= 0).length,
+      unprofitableProviders: unprofitableProviders.length,
+      constrainedCells: constrainedCells.length,
+      unprofitableCells: unprofitableCells.length,
+      recommendations: financeRecommendations,
+    },
     topQueue: unresolved.slice(0, 8),
     providerScores: rankedProviderScores,
     configuredDispatchProviders: dispatchProviders.length,
@@ -487,7 +619,11 @@ export function buildDashboardSnapshot(leads: StoredLeadRecord[], events: Canoni
 export function buildDashboardSnapshotWithOptions(
   leads: StoredLeadRecord[],
   events: CanonicalEvent[],
-  options: { includeSystemTraffic?: boolean },
+  options: {
+    includeSystemTraffic?: boolean;
+    dispatchProviders?: OperationalRuntimeConfig["dispatch"]["providers"];
+    marketplace?: OperationalRuntimeConfig["marketplace"];
+  },
 ) {
   const visibleLeads = options.includeSystemTraffic
     ? leads
@@ -568,11 +704,15 @@ export function buildDashboardSnapshotWithOptions(
       negativeReviews: number;
       majorComplaints: number;
       refunds: number;
+      acquisitionCost: number;
+      providerPayout: number;
+      contributionMargin: number;
       variants: Record<string, number>;
     }>>((acc, lead) => {
       const experimentId = lead.trace.experimentId ?? "default";
       const variantId = lead.trace.variantId ?? "default";
       const outcome = asPlumbingOutcome(lead);
+      const plumbing = asPlumbingContext(lead);
       const entry = acc[experimentId] ?? {
         experimentId,
         entries: 0,
@@ -586,6 +726,9 @@ export function buildDashboardSnapshotWithOptions(
         negativeReviews: 0,
         majorComplaints: 0,
         refunds: 0,
+        acquisitionCost: 0,
+        providerPayout: 0,
+        contributionMargin: 0,
         variants: {},
       };
       entry.entries += 1;
@@ -594,12 +737,27 @@ export function buildDashboardSnapshotWithOptions(
       entry.m3 += lead.milestones.leadMilestones.includes("lead-m3-booked-or-offered") ? 1 : 0;
       entry.converted += ["converted", "onboarding", "active", "retention-risk", "referral-ready"].includes(lead.stage) ? 1 : 0;
       if (outcome?.status === "completed") {
+        const acquisitionCost = plumbing && options.marketplace
+          ? resolveZipAcquisitionCost(plumbing, options.marketplace)
+          : 0;
+        const providerPayout = options.dispatchProviders
+          ? estimateProviderPayout(outcome.provider, outcome.revenueValue, options.dispatchProviders)
+          : 0;
+        const revenueValue = typeof outcome.revenueValue === "number" ? outcome.revenueValue : 0;
         entry.completedRevenue += typeof outcome.revenueValue === "number" ? outcome.revenueValue : 0;
         entry.completedMargin += typeof outcome.marginValue === "number" ? outcome.marginValue : 0;
         entry.positiveReviews += outcome.reviewStatus === "positive" ? 1 : 0;
         entry.negativeReviews += outcome.reviewStatus === "negative" ? 1 : 0;
         entry.majorComplaints += outcome.complaintStatus === "major" ? 1 : 0;
         entry.refunds += outcome.refundIssued ? 1 : 0;
+        entry.acquisitionCost += acquisitionCost;
+        entry.providerPayout += providerPayout;
+        entry.contributionMargin += computeContributionMargin(
+          revenueValue,
+          acquisitionCost,
+          providerPayout,
+          outcome.refundIssued ? 1 : 0,
+        );
       }
       entry.variants[variantId] = (entry.variants[variantId] ?? 0) + 1;
       acc[experimentId] = entry;
@@ -616,6 +774,11 @@ export function buildDashboardSnapshotWithOptions(
       completedRevenue: experiment.completedRevenue,
       completedMargin: experiment.completedMargin,
       marginRate: experiment.completedRevenue > 0 ? Number(((experiment.completedMargin / experiment.completedRevenue) * 100).toFixed(1)) : 0,
+      acquisitionCost: experiment.acquisitionCost,
+      providerPayout: experiment.providerPayout,
+      contributionMargin: experiment.contributionMargin,
+      contributionMarginRate: computeRate(experiment.contributionMargin, experiment.completedRevenue),
+      contributionStatus: classifyContributionStatus(computeRate(experiment.contributionMargin, experiment.completedRevenue)),
       positiveReviews: experiment.positiveReviews,
       negativeReviews: experiment.negativeReviews,
       majorComplaints: experiment.majorComplaints,
@@ -671,6 +834,7 @@ export function buildOperatorConsoleSnapshot(
   providerExecutions: ProviderExecutionRecord[],
   workflowRuns: WorkflowRunRecord[],
   dispatchProviders: OperationalRuntimeConfig["dispatch"]["providers"] = [],
+  marketplace: OperationalRuntimeConfig["marketplace"],
   options: { includeSystemTraffic?: boolean },
 ) {
   const base = buildDashboardSnapshotWithOptions(leads, events, options);
@@ -688,6 +852,7 @@ export function buildOperatorConsoleSnapshot(
       providerExecutions,
       workflowRuns,
       dispatchProviders,
+      marketplace,
     ),
   };
 }

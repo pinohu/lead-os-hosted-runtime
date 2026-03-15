@@ -46,8 +46,17 @@ test("runtime config persists normalized provider mappings", async () => {
           cities: ["Dallas "],
           zipPrefixes: ["752", "752"],
           emergencyCoverageWindow: " 24/7 ",
+          payoutModel: "revenue-share",
+          payoutSharePercent: 35,
+          payoutNotes: " emergency work ",
         },
       ],
+    },
+    marketplace: {
+      defaultLeadAcquisitionCost: 42,
+      zipLeadAcquisitionCosts: {
+        "752": 31,
+      },
     },
   }, "operator@example.com");
 
@@ -80,8 +89,14 @@ test("runtime config persists normalized provider mappings", async () => {
     cities: ["dallas"],
     zipPrefixes: ["752"],
     emergencyCoverageWindow: "24/7",
+    payoutModel: "revenue-share",
+    payoutFlatFee: undefined,
+    payoutSharePercent: 35,
+    payoutNotes: "emergency work",
     lastSelfUpdatedAt: undefined,
   });
+  assert.equal(config.marketplace.defaultLeadAcquisitionCost, 42);
+  assert.deepEqual(config.marketplace.zipLeadAcquisitionCosts, { "752": 31 });
 });
 
 test("runtime config summary reports executable coverage", async () => {
@@ -115,6 +130,8 @@ test("runtime config summary reports executable coverage", async () => {
           counties: [],
           cities: [],
           zipPrefixes: [],
+          payoutModel: "flat-fee",
+          payoutFlatFee: 120,
         },
         {
           id: "crew-b",
@@ -130,8 +147,17 @@ test("runtime config summary reports executable coverage", async () => {
           counties: [],
           cities: [],
           zipPrefixes: [],
+          payoutModel: "revenue-share",
+          payoutSharePercent: 30,
         },
       ],
+    },
+    marketplace: {
+      defaultLeadAcquisitionCost: 33,
+      zipLeadAcquisitionCosts: {
+        "752": 28,
+        "191": 44,
+      },
     },
   });
 
@@ -141,6 +167,9 @@ test("runtime config summary reports executable coverage", async () => {
   assert.equal(summary.dispatch.activeProviders, 1);
   assert.equal(summary.dispatch.emergencyReadyProviders, 1);
   assert.equal(summary.dispatch.selfServeEnabledProviders, 1);
+  assert.equal(summary.dispatch.payoutConfiguredProviders, 2);
+  assert.equal(summary.marketplace.defaultLeadAcquisitionCost, 33);
+  assert.equal(summary.marketplace.zipCostOverrides, 2);
   assert.equal(summary.documentero.hasProposalTemplate, true);
   assert.equal(summary.crove.hasWebhookUrl, true);
 });

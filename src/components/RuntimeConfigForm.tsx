@@ -29,6 +29,16 @@ type DispatchProviderRow = {
   cities: string;
   zipPrefixes: string;
   emergencyCoverageWindow: string;
+  payoutModel: "flat-fee" | "revenue-share";
+  payoutFlatFee: string;
+  payoutSharePercent: string;
+  payoutNotes: string;
+};
+
+type ZipAcquisitionCostRow = {
+  id: string;
+  zipPrefix: string;
+  acquisitionCost: string;
 };
 
 type Props = {
@@ -71,6 +81,23 @@ function createDispatchProviderRow(
     cities: row.cities ?? "",
     zipPrefixes: row.zipPrefixes ?? "",
     emergencyCoverageWindow: row.emergencyCoverageWindow ?? "",
+    payoutModel: row.payoutModel ?? "flat-fee",
+    payoutFlatFee: row.payoutFlatFee ?? "",
+    payoutSharePercent: row.payoutSharePercent ?? "",
+    payoutNotes: row.payoutNotes ?? "",
+  };
+}
+
+function createZipAcquisitionCostRow(
+  row: Partial<ZipAcquisitionCostRow> = {},
+): ZipAcquisitionCostRow {
+  return {
+    id:
+      row.id
+      ?? globalThis.crypto?.randomUUID?.()
+      ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    zipPrefix: row.zipPrefix ?? "",
+    acquisitionCost: row.acquisitionCost ?? "",
   };
 }
 
@@ -98,7 +125,20 @@ function buildDispatchProviderRows(providers: OperationalRuntimeConfig["dispatch
     cities: provider.cities.join(", "),
     zipPrefixes: provider.zipPrefixes.join(", "),
     emergencyCoverageWindow: provider.emergencyCoverageWindow ?? "",
+    payoutModel: provider.payoutModel ?? "flat-fee",
+    payoutFlatFee: provider.payoutFlatFee == null ? "" : String(provider.payoutFlatFee),
+    payoutSharePercent: provider.payoutSharePercent == null ? "" : String(provider.payoutSharePercent),
+    payoutNotes: provider.payoutNotes ?? "",
   }));
+}
+
+function buildZipAcquisitionCostRows(costs: Record<string, number>) {
+  return Object.entries(costs).map(([zipPrefix, acquisitionCost]) =>
+    createZipAcquisitionCostRow({
+      zipPrefix,
+      acquisitionCost: String(acquisitionCost),
+    })
+  );
 }
 
 function normalizeServiceLabel(value: string) {
@@ -131,6 +171,8 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
   const [trafftDefaultServiceId, setTrafftDefaultServiceId] = useState(initialConfig.trafft.defaultServiceId ?? "");
   const [trafftServiceMapRows, setTrafftServiceMapRows] = useState<ServiceMapRow[]>(() => buildServiceMapRows(initialConfig.trafft.serviceMap));
   const [dispatchProviderRows, setDispatchProviderRows] = useState<DispatchProviderRow[]>(() => buildDispatchProviderRows(initialConfig.dispatch.providers));
+  const [defaultLeadAcquisitionCost, setDefaultLeadAcquisitionCost] = useState(initialConfig.marketplace.defaultLeadAcquisitionCost == null ? "" : String(initialConfig.marketplace.defaultLeadAcquisitionCost));
+  const [zipAcquisitionCostRows, setZipAcquisitionCostRows] = useState<ZipAcquisitionCostRow[]>(() => buildZipAcquisitionCostRows(initialConfig.marketplace.zipLeadAcquisitionCosts));
   const [trafftServiceSearch, setTrafftServiceSearch] = useState("");
   const [documenteroDefaultFormat, setDocumenteroDefaultFormat] = useState(initialConfig.documentero.defaultFormat ?? "pdf");
   const [documenteroProposalTemplateId, setDocumenteroProposalTemplateId] = useState(initialConfig.documentero.proposalTemplateId ?? "");
@@ -178,6 +220,18 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
     setDispatchProviderRows((rows) => [...rows, createDispatchProviderRow()]);
   }
 
+  function updateZipAcquisitionCostRow(rowId: string, patch: Partial<ZipAcquisitionCostRow>) {
+    setZipAcquisitionCostRows((rows) => rows.map((row) => (row.id === rowId ? { ...row, ...patch } : row)));
+  }
+
+  function removeZipAcquisitionCostRow(rowId: string) {
+    setZipAcquisitionCostRows((rows) => rows.filter((row) => row.id !== rowId));
+  }
+
+  function addZipAcquisitionCostRow() {
+    setZipAcquisitionCostRows((rows) => [...rows, createZipAcquisitionCostRow()]);
+  }
+
   function addSuggestedMapping(service: TrafftServiceOption) {
     const normalizedLabel = normalizeServiceLabel(service.label);
     setTrafftServiceMapRows((rows) => {
@@ -202,6 +256,7 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
     const parsedServiceMap: Record<string, string> = {};
     const seenLabels = new Set<string>();
     const parsedDispatchProviders: OperationalRuntimeConfig["dispatch"]["providers"] = [];
+    const parsedZipAcquisitionCosts: Record<string, number> = {};
 
     for (const row of trafftServiceMapRows) {
       const label = row.label.trim();
@@ -262,7 +317,28 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
         cities: normalizeList(row.cities),
         zipPrefixes: normalizeList(row.zipPrefixes),
         emergencyCoverageWindow: row.emergencyCoverageWindow.trim() || undefined,
+        payoutModel: row.payoutModel,
+        payoutFlatFee: row.payoutFlatFee.trim() ? Number(row.payoutFlatFee) : undefined,
+        payoutSharePercent: row.payoutSharePercent.trim() ? Number(row.payoutSharePercent) : undefined,
+        payoutNotes: row.payoutNotes.trim() || undefined,
       });
+    }
+
+    for (const row of zipAcquisitionCostRows) {
+      const zipPrefix = row.zipPrefix.trim().toLowerCase();
+      if (!zipPrefix && !row.acquisitionCost.trim()) {
+        continue;
+      }
+      if (!zipPrefix || !row.acquisitionCost.trim()) {
+        setError("Each ZIP acquisition row needs both a ZIP prefix and an acquisition cost.");
+        return;
+      }
+      const acquisitionCost = Number(row.acquisitionCost);
+      if (!Number.isFinite(acquisitionCost) || acquisitionCost < 0) {
+        setError(`Acquisition cost for "${zipPrefix}" must be a non-negative number.`);
+        return;
+      }
+      parsedZipAcquisitionCosts[zipPrefix] = acquisitionCost;
     }
 
     startTransition(async () => {
@@ -279,6 +355,10 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
           },
           dispatch: {
             providers: parsedDispatchProviders,
+          },
+          marketplace: {
+            defaultLeadAcquisitionCost: defaultLeadAcquisitionCost.trim() ? Number(defaultLeadAcquisitionCost) : undefined,
+            zipLeadAcquisitionCosts: parsedZipAcquisitionCosts,
           },
           documentero: {
             defaultFormat: documenteroDefaultFormat,
@@ -460,6 +540,72 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
       </div>
 
       <div className="panel">
+        <p className="eyebrow">Marketplace finance</p>
+        <div className="form-grid">
+          <label>
+            Default lead acquisition cost
+            <input
+              value={defaultLeadAcquisitionCost}
+              onChange={(event) => setDefaultLeadAcquisitionCost(event.target.value)}
+              inputMode="decimal"
+              placeholder="Fallback CAC when a ZIP override is not present"
+            />
+          </label>
+        </div>
+
+        <div className="settings-section">
+          <div className="settings-section__header">
+            <div>
+              <h3>ZIP-cell acquisition costs</h3>
+              <p className="muted">
+                Override default CAC by ZIP prefix so LeadOS can calculate contribution margin by cell instead of relying on gross revenue.
+              </p>
+            </div>
+            <span className="settings-count">
+              {zipAcquisitionCostRows.length} ZIP cost{zipAcquisitionCostRows.length === 1 ? "" : "s"}
+            </span>
+          </div>
+
+          <div className="mapping-stack">
+            {zipAcquisitionCostRows.map((row) => (
+              <div key={row.id} className="mapping-row">
+                <div className="form-grid">
+                  <label>
+                    ZIP prefix
+                    <input
+                      value={row.zipPrefix}
+                      onChange={(event) => updateZipAcquisitionCostRow(row.id, { zipPrefix: event.target.value })}
+                      placeholder="191 or 75201"
+                    />
+                  </label>
+                  <label>
+                    Acquisition cost
+                    <input
+                      value={row.acquisitionCost}
+                      onChange={(event) => updateZipAcquisitionCostRow(row.id, { acquisitionCost: event.target.value })}
+                      inputMode="decimal"
+                      placeholder="39"
+                    />
+                  </label>
+                </div>
+                <div className="mapping-row__actions">
+                  <button type="button" className="secondary" onClick={() => removeZipAcquisitionCostRow(row.id)}>
+                    Remove ZIP cost
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="catalog-card__actions">
+            <button type="button" className="secondary" onClick={addZipAcquisitionCostRow}>
+              Add ZIP acquisition cost
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="panel">
         <div className="settings-section">
           <div className="settings-section__header">
             <div>
@@ -584,6 +730,42 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
                       value={row.emergencyCoverageWindow}
                       onChange={(event) => updateDispatchProviderRow(row.id, { emergencyCoverageWindow: event.target.value })}
                       placeholder="24/7 or Mon-Sun 6pm-6am"
+                    />
+                  </label>
+                  <label>
+                    Payout model
+                    <select
+                      value={row.payoutModel}
+                      onChange={(event) => updateDispatchProviderRow(row.id, { payoutModel: event.target.value as "flat-fee" | "revenue-share" })}
+                    >
+                      <option value="flat-fee">Flat fee</option>
+                      <option value="revenue-share">Revenue share</option>
+                    </select>
+                  </label>
+                  <label>
+                    Payout flat fee
+                    <input
+                      value={row.payoutFlatFee}
+                      onChange={(event) => updateDispatchProviderRow(row.id, { payoutFlatFee: event.target.value })}
+                      inputMode="decimal"
+                      placeholder="120"
+                    />
+                  </label>
+                  <label>
+                    Payout share %
+                    <input
+                      value={row.payoutSharePercent}
+                      onChange={(event) => updateDispatchProviderRow(row.id, { payoutSharePercent: event.target.value })}
+                      inputMode="decimal"
+                      placeholder="35"
+                    />
+                  </label>
+                  <label className="span-two">
+                    Payout notes
+                    <input
+                      value={row.payoutNotes}
+                      onChange={(event) => updateDispatchProviderRow(row.id, { payoutNotes: event.target.value })}
+                      placeholder="Flat fee for emergency calls, revenue share for completed installs"
                     />
                   </label>
                   <div className="mapping-row__actions">

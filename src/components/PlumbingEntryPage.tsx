@@ -62,6 +62,7 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
     providerExecutions,
     workflowRuns,
     runtimeConfig.dispatch.providers,
+    runtimeConfig.marketplace,
     {},
   );
 

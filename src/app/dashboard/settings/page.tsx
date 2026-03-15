@@ -10,6 +10,7 @@ import {
   getOperationalRuntimeConfig,
 } from "@/lib/runtime-config";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
+import { formatCurrency } from "@/lib/operator-ui";
 import { tenantConfig } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
@@ -69,6 +70,10 @@ export default async function RuntimeSettingsPage() {
               </span>
             </li>
             <li>
+              <strong>ZIP CAC overrides</strong>
+              <span>{summary.marketplace.zipCostOverrides}</span>
+            </li>
+            <li>
               <strong>Crove fallback</strong>
               <span>{summary.crove.hasWebhookUrl ? "Webhook ready" : "Needs webhook"}</span>
             </li>
@@ -84,7 +89,21 @@ export default async function RuntimeSettingsPage() {
             <li>Configured providers: {summary.dispatch.providerCount}</li>
             <li>Active providers: {summary.dispatch.activeProviders}</li>
             <li>Emergency-ready providers: {summary.dispatch.emergencyReadyProviders}</li>
+            <li>Payout-configured providers: {summary.dispatch.payoutConfiguredProviders}</li>
+            <li>Default lead acquisition cost: {formatCurrency(summary.marketplace.defaultLeadAcquisitionCost)}</li>
             <li>Use the dispatch roster below to model metro coverage, issue fit, and live capacity before routing jobs.</li>
+          </ul>
+        </article>
+
+        <article className="panel">
+          <p className="eyebrow">Marketplace finance</p>
+          <h2>Acquisition and payout policy</h2>
+          <ul className="check-list">
+            <li>Default lead acquisition cost: {formatCurrency(summary.marketplace.defaultLeadAcquisitionCost)}</li>
+            <li>ZIP acquisition overrides: {summary.marketplace.zipCostOverrides}</li>
+            <li>Payout-configured providers: {summary.dispatch.payoutConfiguredProviders}</li>
+            <li>Use ZIP overrides where paid acquisition cost materially differs by market cell.</li>
+            <li>Use flat-fee payouts for stable simple jobs and revenue-share where average ticket size varies heavily.</li>
           </ul>
         </article>
 

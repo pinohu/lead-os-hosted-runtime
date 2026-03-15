@@ -303,11 +303,43 @@ test("dashboard snapshot includes closed-loop economics in experiment reporting"
     },
   ];
 
-  const snapshot = buildDashboardSnapshot(leads, []);
+  const snapshot = buildDashboardSnapshotWithOptions(leads, [], {
+    dispatchProviders: [
+      {
+        id: "crew-dallas",
+        label: "Dallas Emergency Crew",
+        active: true,
+        priorityWeight: 80,
+        maxConcurrentJobs: 4,
+        activeJobs: 1,
+        acceptsEmergency: true,
+        acceptsCommercial: false,
+        propertyTypes: ["residential"],
+        issueTypes: ["burst-pipe"],
+        states: ["texas"],
+        counties: [],
+        cities: ["dallas"],
+        zipPrefixes: ["752"],
+        payoutModel: "flat-fee",
+        payoutFlatFee: 250,
+      },
+    ],
+    marketplace: {
+      defaultLeadAcquisitionCost: 40,
+      zipLeadAcquisitionCosts: {
+        "752": 30,
+      },
+    },
+  });
   assert.equal(snapshot.experimentPerformance[0]?.experimentId, "plumbing-client-entry-v1:desktop");
   assert.equal(snapshot.experimentPerformance[0]?.completedRevenue, 1800);
   assert.equal(snapshot.experimentPerformance[0]?.completedMargin, 700);
   assert.equal(snapshot.experimentPerformance[0]?.marginRate, 38.9);
+  assert.equal(snapshot.experimentPerformance[0]?.acquisitionCost, 30);
+  assert.equal(snapshot.experimentPerformance[0]?.providerPayout, 250);
+  assert.equal(snapshot.experimentPerformance[0]?.contributionMargin, 1520);
+  assert.equal(snapshot.experimentPerformance[0]?.contributionMarginRate, 84.4);
+  assert.equal(snapshot.experimentPerformance[0]?.contributionStatus, "exceptional");
   assert.equal(snapshot.experimentPerformance[0]?.positiveReviews, 1);
   assert.equal(snapshot.experimentPerformance[0]?.majorComplaints, 0);
 });
@@ -488,7 +520,12 @@ test("operator console snapshot exposes plumbing dispatch queues and provider sc
       zipPrefixes: [],
       emergencyCoverageWindow: "24/7",
     },
-  ], {});
+  ], {
+    defaultLeadAcquisitionCost: 40,
+    zipLeadAcquisitionCosts: {
+      "752": 30,
+    },
+  }, {});
 
   assert.equal(snapshot.plumbingDispatch.totalPlumbingLeads, 2);
   assert.equal(snapshot.plumbingDispatch.unresolvedCount, 1);
@@ -501,6 +538,9 @@ test("operator console snapshot exposes plumbing dispatch queues and provider sc
   assert.equal(snapshot.plumbingDispatch.providerScores[0]?.completedRevenue, 1450);
   assert.equal(snapshot.plumbingDispatch.providerScores[0]?.completedMargin, 620);
   assert.equal(snapshot.plumbingDispatch.providerScores[0]?.marginRate, 42.8);
+  assert.equal(snapshot.plumbingDispatch.providerScores[0]?.acquisitionCost, 30);
+  assert.equal(snapshot.plumbingDispatch.providerScores[0]?.providerPayout, 0);
+  assert.equal(snapshot.plumbingDispatch.providerScores[0]?.contributionMargin, 1420);
   assert.equal(snapshot.plumbingDispatch.providerScores[0]?.positiveReviews, 1);
   assert.equal(snapshot.plumbingDispatch.providerScores[0]?.negativeComplaints, 0);
   assert.equal(snapshot.plumbingDispatch.providerScores[0]?.economicQualityScore > 0, true);
@@ -512,9 +552,17 @@ test("operator console snapshot exposes plumbing dispatch queues and provider sc
   assert.equal(snapshot.plumbingDispatch.zipCellLiquidity.topCells[0]?.label, "dallas, texas");
   assert.equal(snapshot.plumbingDispatch.zipCellLiquidity.topCells[0]?.completedMargin, 620);
   assert.equal(snapshot.plumbingDispatch.zipCellLiquidity.topCells[0]?.marginRate, 42.8);
+  assert.equal(snapshot.plumbingDispatch.zipCellLiquidity.topCells[0]?.acquisitionCost, 60);
+  assert.equal(snapshot.plumbingDispatch.zipCellLiquidity.topCells[0]?.contributionMargin, 1390);
+  assert.equal(snapshot.plumbingDispatch.zipCellLiquidity.topCells[0]?.contributionMarginRate, 95.9);
+  assert.equal(snapshot.plumbingDispatch.zipCellLiquidity.topCells[0]?.contributionStatus, "exceptional");
   assert.match(snapshot.plumbingDispatch.zipCellLiquidity.topCells[0]?.recommendedAction ?? "", /supply|balance/i);
   assert.equal(snapshot.plumbingDispatch.providerRequestQueue.pendingCount, 0);
   assert.equal(snapshot.plumbingDispatch.executionQueue.pendingCount, 0);
+  assert.equal(snapshot.plumbingDispatch.finance.completedRevenue, 1450);
+  assert.equal(snapshot.plumbingDispatch.finance.acquisitionCost, 30);
+  assert.equal(snapshot.plumbingDispatch.finance.contributionMargin, 1420);
+  assert.equal(snapshot.plumbingDispatch.finance.profitableProviders, 1);
 });
 
 test("dispatch routing recommends providers by capacity and job fit", () => {

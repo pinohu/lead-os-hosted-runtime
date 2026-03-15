@@ -58,6 +58,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     providerExecutions,
     workflowRuns,
     runtimeConfig.dispatch.providers,
+    runtimeConfig.marketplace,
     { includeSystemTraffic },
   );
   const health = getAutomationHealth();
@@ -219,6 +220,49 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <p className="eyebrow">Provider responses waiting</p>
           <h2>{dispatch.providerRequestQueue.pendingCount}</h2>
           <p className="muted">Pending provider claim decisions that still need a fast yes or no.</p>
+        </article>
+        <article className="metric-card">
+          <p className="eyebrow">Default CAC</p>
+          <h2>{formatCurrency(runtimeConfig.marketplace.defaultLeadAcquisitionCost)}</h2>
+          <p className="muted">Fallback acquisition cost used when a ZIP cell has no explicit override.</p>
+        </article>
+        <article className="metric-card">
+          <p className="eyebrow">Contribution margin</p>
+          <h2>{formatCurrency(dispatch.finance.contributionMargin)}</h2>
+          <p className="muted">Revenue left after acquisition cost, provider payout, and refund penalties.</p>
+        </article>
+      </section>
+
+      <section className="grid two">
+        <article className="panel">
+          <p className="eyebrow">Marketplace finance</p>
+          <h2>Profitability guardrails for plumbing growth</h2>
+          <ul className="check-list">
+            <li>Completed revenue: {formatCurrency(dispatch.finance.completedRevenue)}</li>
+            <li>Completed margin: {formatCurrency(dispatch.finance.completedMargin)}</li>
+            <li>Acquisition cost: {formatCurrency(dispatch.finance.acquisitionCost)}</li>
+            <li>Provider payout: {formatCurrency(dispatch.finance.providerPayout)}</li>
+            <li>Contribution margin: {formatCurrency(dispatch.finance.contributionMargin)}</li>
+            <li>Contribution rate: {formatPercent(dispatch.finance.contributionMarginRate)}</li>
+            <li>Profitable providers: {dispatch.finance.profitableProviders}</li>
+            <li>Unprofitable providers: {dispatch.finance.unprofitableProviders}</li>
+            <li>Constrained ZIP cells: {dispatch.finance.constrainedCells}</li>
+            <li>Loss-making ZIP cells: {dispatch.finance.unprofitableCells}</li>
+          </ul>
+        </article>
+
+        <article className="panel">
+          <p className="eyebrow">Recommended moves</p>
+          <h2>Where operators should intervene next</h2>
+          {dispatch.finance.recommendations.length === 0 ? (
+            <p className="muted">No urgent finance interventions are being flagged right now.</p>
+          ) : (
+            <ul className="check-list">
+              {dispatch.finance.recommendations.map((recommendation) => (
+                <li key={recommendation}>{recommendation}</li>
+              ))}
+            </ul>
+          )}
         </article>
       </section>
 
@@ -427,6 +471,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <p className="muted">
                     Margin: {formatCurrency(cell.completedMargin)} | Margin rate: {formatPercent(cell.marginRate)}
                   </p>
+                  <p className="muted">
+                    CAC: {formatCurrency(cell.acquisitionCost)} | Payout: {formatCurrency(cell.providerPayout)} | Contribution: {formatCurrency(cell.contributionMargin)}
+                  </p>
                   <p className="muted">Major complaints: {cell.negativeComplaints} | Refunds: {cell.refunds}</p>
                   <p className="muted portal-breakable">{cell.recommendedAction}</p>
                 </article>
@@ -454,6 +501,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </p>
                   <p className="muted">
                     Margin: {formatCurrency(cell.completedMargin)} | Margin rate: {formatPercent(cell.marginRate)}
+                  </p>
+                  <p className="muted">
+                    CAC: {formatCurrency(cell.acquisitionCost)} | Payout: {formatCurrency(cell.providerPayout)} | Contribution: {formatCurrency(cell.contributionMargin)}
                   </p>
                   <p className="muted">Major complaints: {cell.negativeComplaints} | Refunds: {cell.refunds}</p>
                   <p className="muted portal-breakable">{cell.recommendedAction}</p>
@@ -551,6 +601,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     </p>
                     <p className="muted portal-breakable">
                       Margin: {formatCurrency(provider.completedMargin)} | Avg margin: {formatCurrency(provider.averageCompletedMargin)} | Margin rate: {formatPercent(provider.marginRate)}
+                    </p>
+                    <p className="muted portal-breakable">
+                      Acquisition cost: {formatCurrency(provider.acquisitionCost)} | Provider payout: {formatCurrency(provider.providerPayout)}
+                    </p>
+                    <p className="muted portal-breakable">
+                      Contribution margin: {formatCurrency(provider.contributionMargin)} | Contribution rate: {formatPercent(provider.contributionMarginRate)}
                     </p>
                     <p className="muted">
                       Reviews: +{provider.positiveReviews} / ±{provider.mixedReviews} / -{provider.negativeReviews} | Avg rating: {formatReviewRating(provider.averageReviewRating)}

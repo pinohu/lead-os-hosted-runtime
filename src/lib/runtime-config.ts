@@ -30,8 +30,16 @@ export type OperationalRuntimeConfig = {
       cities: string[];
       zipPrefixes: string[];
       emergencyCoverageWindow?: string;
+      payoutModel?: "flat-fee" | "revenue-share";
+      payoutFlatFee?: number;
+      payoutSharePercent?: number;
+      payoutNotes?: string;
       lastSelfUpdatedAt?: string;
     }>;
+  };
+  marketplace: {
+    defaultLeadAcquisitionCost?: number;
+    zipLeadAcquisitionCosts: Record<string, number>;
   };
   documentero: {
     defaultFormat?: string;
@@ -56,6 +64,9 @@ const DEFAULT_CONFIG: OperationalRuntimeConfig = {
   dispatch: {
     providers: [],
   },
+  marketplace: {
+    zipLeadAcquisitionCosts: {},
+  },
   documentero: {},
   crove: {},
 };
@@ -63,6 +74,7 @@ const DEFAULT_CONFIG: OperationalRuntimeConfig = {
 const RECORD_KEYS: Record<RuntimeConfigSectionKey, string> = {
   trafft: "provider.trafft",
   dispatch: "provider.dispatch",
+  marketplace: "provider.marketplace",
   documentero: "provider.documentero",
   crove: "provider.crove",
 };
@@ -90,6 +102,24 @@ function sanitizeMap(value: unknown) {
   }, {});
 }
 
+function sanitizeNumberMap(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {} as Record<string, number>;
+  }
+
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, number>>((acc, [key, entry]) => {
+    const normalizedKey = key.trim().toLowerCase();
+    if (!normalizedKey) {
+      return acc;
+    }
+    const parsed = typeof entry === "number" ? entry : typeof entry === "string" ? Number(entry.trim()) : NaN;
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      acc[normalizedKey] = Number(parsed);
+    }
+    return acc;
+  }, {});
+}
+
 function sanitizeStringArray(value: unknown) {
   if (!Array.isArray(value)) {
     return [] as string[];
@@ -109,33 +139,47 @@ function sanitizeDispatchProviders(value: unknown) {
   return value
     .map((entry) => entry && typeof entry === "object" ? entry as Record<string, unknown> : null)
     .filter((entry): entry is Record<string, unknown> => Boolean(entry))
-    .map((entry) => ({
-      id: getStringValue(entry.id) ?? crypto.randomUUID(),
-      label: getStringValue(entry.label) ?? "Unnamed provider",
-      contactEmail: getStringValue(entry.contactEmail)?.toLowerCase(),
-      phone: getStringValue(entry.phone),
-      active: entry.active !== false,
-      acceptingNewJobs: entry.acceptingNewJobs !== false,
-      priorityWeight: typeof entry.priorityWeight === "number" && Number.isFinite(entry.priorityWeight)
-        ? Math.max(0, Math.min(100, entry.priorityWeight))
-        : 50,
-      maxConcurrentJobs: typeof entry.maxConcurrentJobs === "number" && Number.isFinite(entry.maxConcurrentJobs)
-        ? Math.max(0, entry.maxConcurrentJobs)
-        : undefined,
-      activeJobs: typeof entry.activeJobs === "number" && Number.isFinite(entry.activeJobs)
-        ? Math.max(0, entry.activeJobs)
-        : undefined,
-      acceptsEmergency: entry.acceptsEmergency !== false,
-      acceptsCommercial: entry.acceptsCommercial === true,
-      propertyTypes: sanitizeStringArray(entry.propertyTypes),
-      issueTypes: sanitizeStringArray(entry.issueTypes),
-      states: sanitizeStringArray(entry.states),
-      counties: sanitizeStringArray(entry.counties),
-      cities: sanitizeStringArray(entry.cities),
-      zipPrefixes: sanitizeStringArray(entry.zipPrefixes),
-      emergencyCoverageWindow: getStringValue(entry.emergencyCoverageWindow),
-      lastSelfUpdatedAt: getStringValue(entry.lastSelfUpdatedAt),
-    }))
+    .map((entry): OperationalRuntimeConfig["dispatch"]["providers"][number] => {
+      const payoutModel: "flat-fee" | "revenue-share" = entry.payoutModel === "revenue-share"
+        ? "revenue-share"
+        : "flat-fee";
+
+      return {
+        id: getStringValue(entry.id) ?? crypto.randomUUID(),
+        label: getStringValue(entry.label) ?? "Unnamed provider",
+        contactEmail: getStringValue(entry.contactEmail)?.toLowerCase(),
+        phone: getStringValue(entry.phone),
+        active: entry.active !== false,
+        acceptingNewJobs: entry.acceptingNewJobs !== false,
+        priorityWeight: typeof entry.priorityWeight === "number" && Number.isFinite(entry.priorityWeight)
+          ? Math.max(0, Math.min(100, entry.priorityWeight))
+          : 50,
+        maxConcurrentJobs: typeof entry.maxConcurrentJobs === "number" && Number.isFinite(entry.maxConcurrentJobs)
+          ? Math.max(0, entry.maxConcurrentJobs)
+          : undefined,
+        activeJobs: typeof entry.activeJobs === "number" && Number.isFinite(entry.activeJobs)
+          ? Math.max(0, entry.activeJobs)
+          : undefined,
+        acceptsEmergency: entry.acceptsEmergency !== false,
+        acceptsCommercial: entry.acceptsCommercial === true,
+        propertyTypes: sanitizeStringArray(entry.propertyTypes),
+        issueTypes: sanitizeStringArray(entry.issueTypes),
+        states: sanitizeStringArray(entry.states),
+        counties: sanitizeStringArray(entry.counties),
+        cities: sanitizeStringArray(entry.cities),
+        zipPrefixes: sanitizeStringArray(entry.zipPrefixes),
+        emergencyCoverageWindow: getStringValue(entry.emergencyCoverageWindow),
+        payoutModel,
+        payoutFlatFee: typeof entry.payoutFlatFee === "number" && Number.isFinite(entry.payoutFlatFee)
+          ? Math.max(0, entry.payoutFlatFee)
+          : undefined,
+        payoutSharePercent: typeof entry.payoutSharePercent === "number" && Number.isFinite(entry.payoutSharePercent)
+          ? Math.max(0, Math.min(100, entry.payoutSharePercent))
+          : undefined,
+        payoutNotes: getStringValue(entry.payoutNotes),
+        lastSelfUpdatedAt: getStringValue(entry.lastSelfUpdatedAt),
+      };
+    })
     .sort((left, right) => right.priorityWeight - left.priorityWeight);
 }
 
@@ -159,6 +203,22 @@ function sanitizeDispatchSection(value: Partial<OperationalRuntimeConfig["dispat
   return {
     providers: sanitizeDispatchProviders(value.providers),
   } satisfies OperationalRuntimeConfig["dispatch"];
+}
+
+function sanitizeMarketplaceSection(value: Partial<OperationalRuntimeConfig["marketplace"]> | undefined) {
+  if (!value) {
+    return DEFAULT_CONFIG.marketplace;
+  }
+
+  const defaultLeadAcquisitionCost =
+    typeof value.defaultLeadAcquisitionCost === "number" && Number.isFinite(value.defaultLeadAcquisitionCost)
+      ? Math.max(0, value.defaultLeadAcquisitionCost)
+      : undefined;
+
+  return {
+    defaultLeadAcquisitionCost,
+    zipLeadAcquisitionCosts: sanitizeNumberMap(value.zipLeadAcquisitionCosts),
+  } satisfies OperationalRuntimeConfig["marketplace"];
 }
 
 function sanitizeDocumenteroSection(value: Partial<OperationalRuntimeConfig["documentero"]> | undefined) {
@@ -188,9 +248,10 @@ function sanitizeCroveSection(value: Partial<OperationalRuntimeConfig["crove"]> 
 }
 
 export async function getOperationalRuntimeConfig(): Promise<OperationalRuntimeConfig> {
-  const [trafft, dispatch, documentero, crove] = await Promise.all([
+  const [trafft, dispatch, marketplace, documentero, crove] = await Promise.all([
     getRuntimeConfig(RECORD_KEYS.trafft),
     getRuntimeConfig(RECORD_KEYS.dispatch),
+    getRuntimeConfig(RECORD_KEYS.marketplace),
     getRuntimeConfig(RECORD_KEYS.documentero),
     getRuntimeConfig(RECORD_KEYS.crove),
   ]);
@@ -198,6 +259,7 @@ export async function getOperationalRuntimeConfig(): Promise<OperationalRuntimeC
   return {
     trafft: sanitizeTrafftSection(getRecordValue(trafft) as OperationalRuntimeConfig["trafft"]),
     dispatch: sanitizeDispatchSection(getRecordValue(dispatch) as OperationalRuntimeConfig["dispatch"]),
+    marketplace: sanitizeMarketplaceSection(getRecordValue(marketplace) as OperationalRuntimeConfig["marketplace"]),
     documentero: sanitizeDocumenteroSection(getRecordValue(documentero) as OperationalRuntimeConfig["documentero"]),
     crove: sanitizeCroveSection(getRecordValue(crove) as OperationalRuntimeConfig["crove"]),
   };
@@ -211,6 +273,7 @@ export async function updateOperationalRuntimeConfig(
   const next: OperationalRuntimeConfig = {
     trafft: sanitizeTrafftSection({ ...current.trafft, ...config.trafft }),
     dispatch: sanitizeDispatchSection({ ...current.dispatch, ...config.dispatch }),
+    marketplace: sanitizeMarketplaceSection({ ...current.marketplace, ...config.marketplace }),
     documentero: sanitizeDocumenteroSection({ ...current.documentero, ...config.documentero }),
     crove: sanitizeCroveSection({ ...current.crove, ...config.crove }),
   };
@@ -224,6 +287,11 @@ export async function updateOperationalRuntimeConfig(
     upsertRuntimeConfig({
       key: RECORD_KEYS.dispatch,
       value: next.dispatch,
+      updatedBy,
+    }),
+    upsertRuntimeConfig({
+      key: RECORD_KEYS.marketplace,
+      value: next.marketplace,
       updatedBy,
     }),
     upsertRuntimeConfig({
@@ -253,6 +321,14 @@ export function buildRuntimeConfigSummary(config: OperationalRuntimeConfig) {
       activeProviders: config.dispatch.providers.filter((provider) => provider.active).length,
       emergencyReadyProviders: config.dispatch.providers.filter((provider) => provider.active && provider.acceptsEmergency).length,
       selfServeEnabledProviders: config.dispatch.providers.filter((provider) => Boolean(provider.contactEmail)).length,
+      payoutConfiguredProviders: config.dispatch.providers.filter((provider) =>
+        (provider.payoutModel === "revenue-share" && typeof provider.payoutSharePercent === "number") ||
+        (provider.payoutModel !== "revenue-share" && typeof provider.payoutFlatFee === "number")
+      ).length,
+    },
+    marketplace: {
+      defaultLeadAcquisitionCost: config.marketplace.defaultLeadAcquisitionCost ?? 0,
+      zipCostOverrides: Object.keys(config.marketplace.zipLeadAcquisitionCosts).length,
     },
     documentero: {
       hasProposalTemplate: Boolean(config.documentero.proposalTemplateId),

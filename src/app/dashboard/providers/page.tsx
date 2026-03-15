@@ -46,6 +46,7 @@ export default async function ProviderHealthPage() {
     providerExecutions,
     workflowRuns,
     runtimeConfig.dispatch.providers,
+    runtimeConfig.marketplace,
     {},
   );
   const providerScores = consoleSnapshot.plumbingDispatch.providerScores.slice(0, 8);
@@ -141,13 +142,22 @@ export default async function ProviderHealthPage() {
                   Margin: {formatCurrency(provider.completedMargin)} | Avg margin: {formatCurrency(provider.averageCompletedMargin)} | Margin rate: {formatPercent(provider.marginRate)}
                 </p>
                 <p className="muted">
-                  Reviews: +{provider.positiveReviews} / ±{provider.mixedReviews} / -{provider.negativeReviews} | Avg rating: {formatReviewRating(provider.averageReviewRating)}
+                  Acquisition cost: {formatCurrency(provider.acquisitionCost)} | Provider payout: {formatCurrency(provider.providerPayout)}
+                </p>
+                <p className="muted">
+                  Contribution margin: {formatCurrency(provider.contributionMargin)} | Contribution rate: {formatPercent(provider.contributionMarginRate)}
+                </p>
+                <p className="muted">
+                  Reviews: +{provider.positiveReviews} / mixed {provider.mixedReviews} / -{provider.negativeReviews} | Avg rating: {formatReviewRating(provider.averageReviewRating)}
                 </p>
                 <p className="muted">
                   Complaints: major {provider.negativeComplaints}, minor {provider.minorComplaints} | Refunds: {provider.refunds}
                 </p>
                 <p className="muted">
                   Attempts: {provider.attempts} | Workflow failures: {provider.workflowFailures}
+                </p>
+                <p className="muted">
+                  Finance status: {provider.contributionStatus}
                 </p>
               </article>
             ))}
@@ -196,6 +206,12 @@ export default async function ProviderHealthPage() {
                 </p>
                 <p className="muted">
                   Margin: {formatCurrency(cell.completedMargin)} | Margin rate: {formatPercent(cell.marginRate)}
+                </p>
+                <p className="muted">
+                  CAC: {formatCurrency(cell.acquisitionCost)} | Payout: {formatCurrency(cell.providerPayout)} | Contribution: {formatCurrency(cell.contributionMargin)}
+                </p>
+                <p className="muted">
+                  Contribution rate: {formatPercent(cell.contributionMarginRate)} | Finance status: {cell.contributionStatus}
                 </p>
                 <p className="muted">
                   Major complaints: {cell.negativeComplaints} | Refunds: {cell.refunds}

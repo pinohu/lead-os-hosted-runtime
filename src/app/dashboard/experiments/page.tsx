@@ -1,15 +1,24 @@
 import Link from "next/link";
-import { buildDashboardSnapshot } from "@/lib/dashboard";
+import { buildDashboardSnapshotWithOptions } from "@/lib/dashboard";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { formatCurrency } from "@/lib/operator-ui";
 import { getCanonicalEvents, getLeadRecords } from "@/lib/runtime-store";
+import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import { tenantConfig } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
 export default async function ExperimentsPage() {
   await requireOperatorPageSession("/dashboard/experiments");
-  const snapshot = buildDashboardSnapshot(await getLeadRecords(), await getCanonicalEvents());
+  const [leads, events, runtimeConfig] = await Promise.all([
+    getLeadRecords(),
+    getCanonicalEvents(),
+    getOperationalRuntimeConfig(),
+  ]);
+  const snapshot = buildDashboardSnapshotWithOptions(leads, events, {
+    dispatchProviders: runtimeConfig.dispatch.providers,
+    marketplace: runtimeConfig.marketplace,
+  });
 
   return (
     <main className="experience-page">
@@ -70,6 +79,12 @@ export default async function ExperimentsPage() {
               </p>
               <p className="muted">
                 Completed revenue: {formatCurrency(experiment.completedRevenue)} | Margin: {formatCurrency(experiment.completedMargin)} | Margin rate: {experiment.marginRate}%
+              </p>
+              <p className="muted">
+                Acquisition cost: {formatCurrency(experiment.acquisitionCost)} | Provider payout: {formatCurrency(experiment.providerPayout)} | Contribution: {formatCurrency(experiment.contributionMargin)}
+              </p>
+              <p className="muted">
+                Contribution rate: {experiment.contributionMarginRate}% | Economic status: {experiment.contributionStatus}
               </p>
               <p className="muted">
                 Positive reviews: {experiment.positiveReviews} | Negative reviews: {experiment.negativeReviews} | Major complaints: {experiment.majorComplaints} | Refunds: {experiment.refunds}

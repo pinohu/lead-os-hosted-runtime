@@ -49,6 +49,7 @@ export async function GET(request: Request) {
       providerExecutions,
       workflowRuns,
       runtimeConfig.dispatch.providers,
+      runtimeConfig.marketplace,
       { includeSystemTraffic },
     ),
   });
