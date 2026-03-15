@@ -76,3 +76,21 @@ export function formatMilestoneIdForDisplay(
 ) {
   return milestoneLabelMap.get(milestoneId) ?? formatPortalLabel(milestoneId);
 }
+
+export function formatCurrency(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "Not captured";
+  }
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+export function formatReviewRating(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "Not captured";
+  }
+  return `${value.toFixed(value % 1 === 0 ? 0 : 1)} / 5`;
+}

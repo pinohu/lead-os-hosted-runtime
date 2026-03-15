@@ -2,7 +2,7 @@ import Link from "next/link";
 import { DispatchActionPanel } from "@/components/DispatchActionPanel";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { isSystemBookingJob, isSystemDocumentJob, isSystemWorkflowRun } from "@/lib/operator-view";
-import { formatLeadKeyForDisplay, formatMilestoneIdForDisplay, formatPortalLabel } from "@/lib/operator-ui";
+import { formatCurrency, formatLeadKeyForDisplay, formatMilestoneIdForDisplay, formatPortalLabel, formatReviewRating } from "@/lib/operator-ui";
 import { getAutomationHealth } from "@/lib/providers";
 import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import {
@@ -398,7 +398,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <ul className="check-list">
               {dispatch.metroRevenueBreakdown.map((cell) => (
                 <li key={cell.label}>
-                  {cell.label}: {cell.revenue}
+                  {cell.label}: {formatCurrency(cell.revenue)}
                 </li>
               ))}
             </ul>
@@ -422,8 +422,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     Leads: {cell.leadCount} | Urgent: {cell.urgentLeadCount} | Open capacity: {cell.openCapacity}
                   </p>
                   <p className="muted">
-                    Accepting providers: {cell.acceptingProviders} | Revenue: {cell.completedRevenue}
+                    Accepting providers: {cell.acceptingProviders} | Revenue: {formatCurrency(cell.completedRevenue)}
                   </p>
+                  <p className="muted">
+                    Margin: {formatCurrency(cell.completedMargin)} | Margin rate: {formatPercent(cell.marginRate)}
+                  </p>
+                  <p className="muted">Major complaints: {cell.negativeComplaints} | Refunds: {cell.refunds}</p>
                   <p className="muted portal-breakable">{cell.recommendedAction}</p>
                 </article>
               ))}
@@ -446,8 +450,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     Leads: {cell.leadCount} | Urgent: {cell.urgentLeadCount} | Open capacity: {cell.openCapacity}
                   </p>
                   <p className="muted">
-                    Accepting providers: {cell.acceptingProviders} | Revenue: {cell.completedRevenue}
+                    Accepting providers: {cell.acceptingProviders} | Revenue: {formatCurrency(cell.completedRevenue)}
                   </p>
+                  <p className="muted">
+                    Margin: {formatCurrency(cell.completedMargin)} | Margin rate: {formatPercent(cell.marginRate)}
+                  </p>
+                  <p className="muted">Major complaints: {cell.negativeComplaints} | Refunds: {cell.refunds}</p>
                   <p className="muted portal-breakable">{cell.recommendedAction}</p>
                 </article>
               ))}
@@ -529,6 +537,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <div className="portal-status-row">
                     <span className="portal-chip">Reliability {provider.reliabilityScore}</span>
                     <span className="portal-chip">Revenue {provider.revenueScore}</span>
+                    <span className="portal-chip">Economics {provider.economicQualityScore}</span>
                   </div>
                   <div className="portal-meta">
                     <p className="muted">
@@ -538,7 +547,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       Completion: {formatPercent(provider.completionRate)} | Completed jobs: {provider.completedOutcomes}
                     </p>
                     <p className="muted portal-breakable">
-                      Completed revenue: {provider.completedRevenue} | Avg completed value: {provider.averageCompletedRevenue || "n/a"}
+                      Completed revenue: {formatCurrency(provider.completedRevenue)} | Avg completed value: {formatCurrency(provider.averageCompletedRevenue)}
+                    </p>
+                    <p className="muted portal-breakable">
+                      Margin: {formatCurrency(provider.completedMargin)} | Avg margin: {formatCurrency(provider.averageCompletedMargin)} | Margin rate: {formatPercent(provider.marginRate)}
+                    </p>
+                    <p className="muted">
+                      Reviews: +{provider.positiveReviews} / ±{provider.mixedReviews} / -{provider.negativeReviews} | Avg rating: {formatReviewRating(provider.averageReviewRating)}
+                    </p>
+                    <p className="muted">
+                      Complaints: major {provider.negativeComplaints}, minor {provider.minorComplaints} | Refunds: {provider.refunds}
                     </p>
                     <p className="muted">
                       Attempts: {provider.attempts} | Workflow failures: {provider.workflowFailures}

@@ -22,6 +22,11 @@ type ApplyPlumbingDispatchActionInput = {
   actorEmail: string;
   note?: string;
   revenueValue?: number;
+  marginValue?: number;
+  complaintStatus?: "none" | "minor" | "major";
+  reviewStatus?: "not-requested" | "requested" | "positive" | "mixed" | "negative";
+  reviewRating?: number;
+  refundIssued?: boolean;
 };
 
 type ActionMutation = {
@@ -62,8 +67,26 @@ function buildActionMutation(
   note: string | undefined,
   provider: string | undefined,
   revenueValue: number | undefined,
+  marginValue: number | undefined,
+  complaintStatus: "none" | "minor" | "major" | undefined,
+  reviewStatus: "not-requested" | "requested" | "positive" | "mixed" | "negative" | undefined,
+  reviewRating: number | undefined,
+  refundIssued: boolean | undefined,
 ): ActionMutation {
   const recordedAt = new Date().toISOString();
+  const derivedMarginBand =
+    typeof marginValue !== "number"
+      ? undefined
+      : marginValue < 0
+        ? "negative"
+        : marginValue < 150
+          ? "thin"
+          : marginValue < 500
+            ? "healthy"
+            : "exceptional";
+  const normalizedComplaintStatus = complaintStatus ?? "none";
+  const normalizedReviewStatus = reviewStatus ?? "not-requested";
+  const normalizedRefundIssued = refundIssued ?? false;
 
   switch (actionType) {
     case "dispatch-now":
@@ -79,6 +102,12 @@ function buildActionMutation(
           note,
           provider,
           revenueValue,
+          marginValue,
+          marginBand: derivedMarginBand,
+          complaintStatus: normalizedComplaintStatus,
+          reviewStatus: normalizedReviewStatus,
+          reviewRating,
+          refundIssued: normalizedRefundIssued,
         },
       };
     case "assign-backup-provider":
@@ -94,6 +123,12 @@ function buildActionMutation(
           note,
           provider,
           revenueValue,
+          marginValue,
+          marginBand: derivedMarginBand,
+          complaintStatus: normalizedComplaintStatus,
+          reviewStatus: normalizedReviewStatus,
+          reviewRating,
+          refundIssued: normalizedRefundIssued,
         },
       };
     case "retry-booking":
@@ -110,6 +145,12 @@ function buildActionMutation(
           note,
           provider,
           revenueValue,
+          marginValue,
+          marginBand: derivedMarginBand,
+          complaintStatus: normalizedComplaintStatus,
+          reviewStatus: normalizedReviewStatus,
+          reviewRating,
+          refundIssued: normalizedRefundIssued,
         },
       };
     case "mark-booked":
@@ -127,6 +168,12 @@ function buildActionMutation(
           note,
           provider,
           revenueValue,
+          marginValue,
+          marginBand: derivedMarginBand,
+          complaintStatus: normalizedComplaintStatus,
+          reviewStatus: normalizedReviewStatus,
+          reviewRating,
+          refundIssued: normalizedRefundIssued,
         },
       };
     case "mark-completed":
@@ -144,6 +191,12 @@ function buildActionMutation(
           note,
           provider,
           revenueValue,
+          marginValue,
+          marginBand: derivedMarginBand,
+          complaintStatus: normalizedComplaintStatus,
+          reviewStatus: normalizedReviewStatus,
+          reviewRating,
+          refundIssued: normalizedRefundIssued,
         },
       };
     case "mark-lost":
@@ -160,6 +213,12 @@ function buildActionMutation(
           note,
           provider,
           revenueValue,
+          marginValue,
+          marginBand: derivedMarginBand,
+          complaintStatus: normalizedComplaintStatus,
+          reviewStatus: normalizedReviewStatus,
+          reviewRating,
+          refundIssued: normalizedRefundIssued,
         },
       };
   }
@@ -171,6 +230,11 @@ export async function applyPlumbingDispatchAction({
   actorEmail,
   note,
   revenueValue,
+  marginValue,
+  complaintStatus,
+  reviewStatus,
+  reviewRating,
+  refundIssued,
 }: ApplyPlumbingDispatchActionInput) {
   const lead = await getLeadRecord(leadKey);
   if (!lead) {
@@ -184,7 +248,18 @@ export async function applyPlumbingDispatchAction({
 
   const bookingJobs = await getBookingJobs(leadKey);
   const currentProvider = bookingJobs[0]?.provider;
-  const mutation = buildActionMutation(actionType, actorEmail, note, currentProvider, revenueValue);
+  const mutation = buildActionMutation(
+    actionType,
+    actorEmail,
+    note,
+    currentProvider,
+    revenueValue,
+    marginValue,
+    complaintStatus,
+    reviewStatus,
+    reviewRating,
+    refundIssued,
+  );
   const now = mutation.outcome.recordedAt;
   const addedLeadMilestones: LeadMilestoneId[] = [];
   const addedCustomerMilestones: CustomerMilestoneId[] = [];
@@ -225,6 +300,12 @@ export async function applyPlumbingDispatchAction({
         actionType,
         actorEmail,
         outcomeStatus: mutation.outcome.status,
+        revenueValue,
+        marginValue,
+        complaintStatus: mutation.outcome.complaintStatus,
+        reviewStatus: mutation.outcome.reviewStatus,
+        reviewRating,
+        refundIssued: mutation.outcome.refundIssued,
       },
     });
   }
@@ -238,6 +319,11 @@ export async function applyPlumbingDispatchAction({
       note,
       provider: currentProvider,
       revenueValue,
+      marginValue,
+      complaintStatus: mutation.outcome.complaintStatus,
+      reviewStatus: mutation.outcome.reviewStatus,
+      reviewRating,
+      refundIssued: mutation.outcome.refundIssued,
       outcomeStatus: mutation.outcome.status,
     },
   });
@@ -248,6 +334,13 @@ export async function applyPlumbingDispatchAction({
       actorEmail,
       note,
       provider: currentProvider,
+      revenueValue,
+      marginValue,
+      marginBand: mutation.outcome.marginBand,
+      complaintStatus: mutation.outcome.complaintStatus,
+      reviewStatus: mutation.outcome.reviewStatus,
+      reviewRating,
+      refundIssued: mutation.outcome.refundIssued,
     }),
     createCanonicalEvent(lead.trace, "plumbing_job_outcome_recorded", "internal", "RECORDED", {
       outcomeStatus: mutation.outcome.status,
@@ -255,6 +348,12 @@ export async function applyPlumbingDispatchAction({
       note,
       provider: currentProvider,
       revenueValue,
+      marginValue,
+      marginBand: mutation.outcome.marginBand,
+      complaintStatus: mutation.outcome.complaintStatus,
+      reviewStatus: mutation.outcome.reviewStatus,
+      reviewRating,
+      refundIssued: mutation.outcome.refundIssued,
     }),
     ...addedLeadMilestones.map((milestoneId) =>
       createCanonicalEvent(lead.trace, "lead_milestone_reached", "internal", "MILESTONE", {

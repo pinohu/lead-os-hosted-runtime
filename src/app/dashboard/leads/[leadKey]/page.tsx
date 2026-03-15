@@ -8,10 +8,12 @@ import { requireOperatorPageSession } from "@/lib/operator-auth";
 import {
   buildLeadDisplayName,
   buildLeadSubline,
+  formatCurrency,
   formatLeadKeyForDisplay,
   formatOptionalDateTime,
   formatMilestoneIdForDisplay,
   formatPortalLabel,
+  formatReviewRating,
 } from "@/lib/operator-ui";
 import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import {
@@ -276,7 +278,13 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
                 <li className="portal-breakable">Actor: {plumbingOutcome.actorEmail}</li>
                 <li>Recorded: {formatOptionalDateTime(plumbingOutcome.recordedAt)}</li>
                 <li>Provider: {plumbingOutcome.provider ? formatPortalLabel(plumbingOutcome.provider) : "Not captured"}</li>
-                <li>Revenue: {typeof plumbingOutcome.revenueValue === "number" ? plumbingOutcome.revenueValue : "Not captured"}</li>
+                <li>Revenue: {formatCurrency(plumbingOutcome.revenueValue)}</li>
+                <li>Margin: {formatCurrency(plumbingOutcome.marginValue)}</li>
+                <li>Margin band: {plumbingOutcome.marginBand ? formatPortalLabel(plumbingOutcome.marginBand) : "Not captured"}</li>
+                <li>Complaint level: {plumbingOutcome.complaintStatus ? formatPortalLabel(plumbingOutcome.complaintStatus) : "Not captured"}</li>
+                <li>Review outcome: {plumbingOutcome.reviewStatus ? formatPortalLabel(plumbingOutcome.reviewStatus) : "Not captured"}</li>
+                <li>Review rating: {formatReviewRating(plumbingOutcome.reviewRating)}</li>
+                <li>Refund issued: {typeof plumbingOutcome.refundIssued === "boolean" ? (plumbingOutcome.refundIssued ? "Yes" : "No") : "Not captured"}</li>
                 <li className="portal-breakable">Note: {plumbingOutcome.note ?? "No note recorded"}</li>
               </ul>
             ) : (

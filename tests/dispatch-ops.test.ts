@@ -113,6 +113,11 @@ test("dispatch completion records customer value milestones and revenue", async 
     actionType: "mark-completed",
     actorEmail: "operator@example.com",
     revenueValue: 850,
+    marginValue: 320,
+    complaintStatus: "minor",
+    reviewStatus: "positive",
+    reviewRating: 4.8,
+    refundIssued: false,
     note: "Emergency job completed and invoiced.",
   });
 
@@ -126,5 +131,17 @@ test("dispatch completion records customer value milestones and revenue", async 
   assert.equal(
     (storedLead?.metadata.plumbingOutcome as { revenueValue?: number } | undefined)?.revenueValue,
     850,
+  );
+  assert.equal(
+    (storedLead?.metadata.plumbingOutcome as { marginValue?: number } | undefined)?.marginValue,
+    320,
+  );
+  assert.equal(
+    (storedLead?.metadata.plumbingOutcome as { reviewStatus?: string } | undefined)?.reviewStatus,
+    "positive",
+  );
+  assert.equal(
+    (storedLead?.metadata.plumbingOutcome as { complaintStatus?: string } | undefined)?.complaintStatus,
+    "minor",
   );
 });

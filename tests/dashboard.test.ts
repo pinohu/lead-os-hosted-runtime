@@ -233,6 +233,85 @@ test("dashboard snapshot hides system verification traffic by default and can in
   assert.equal(fullSnapshot.systemTraffic.hiddenLeads, 0);
 });
 
+test("dashboard snapshot includes closed-loop economics in experiment reporting", () => {
+  const leads: StoredLeadRecord[] = [
+    {
+      leadKey: "email:experiment@example.com",
+      trace: {
+        visitorId: "visitor-exp",
+        sessionId: "session-exp",
+        leadKey: "email:experiment@example.com",
+        tenant: "tenant",
+        source: "search",
+        service: "emergency-plumbing",
+        niche: "plumbing",
+        blueprintId: "qualification-default",
+        stepId: "qualification-1",
+        experimentId: "plumbing-client-entry-v1:desktop",
+        variantId: "dispatch-proof",
+      },
+      firstName: "Experiment",
+      lastName: "Lead",
+      email: "experiment@example.com",
+      phone: "+15555550555",
+      service: "emergency-plumbing",
+      niche: "plumbing",
+      source: "search",
+      score: 92,
+      family: "qualification",
+      blueprintId: "qualification-default",
+      destination: "/funnel/qualification",
+      ctaLabel: "Start Dispatch",
+      stage: "active",
+      hot: true,
+      createdAt: new Date("2026-03-15T03:00:00Z").toISOString(),
+      updatedAt: new Date("2026-03-15T03:30:00Z").toISOString(),
+      status: "JOB-COMPLETED",
+      sentNurtureStages: [],
+      milestones: {
+        visitCount: 3,
+        leadMilestones: ["lead-m1-captured", "lead-m2-return-engaged", "lead-m3-booked-or-offered"],
+        customerMilestones: ["customer-m1-onboarded", "customer-m2-activated", "customer-m3-value-realized"],
+      },
+      metadata: {
+        operatingModel: "plumbing-dispatch",
+        plumbing: {
+          urgencyBand: "emergency-now",
+          issueType: "burst-pipe",
+          dispatchMode: "dispatch-now",
+          propertyType: "residential",
+          geo: {
+            city: "Dallas",
+            state: "Texas",
+            zip: "75201",
+          },
+          routingReasons: ["Emergency keywords detected"],
+        },
+        plumbingOutcome: {
+          status: "completed",
+          actorEmail: "operator@example.com",
+          recordedAt: new Date("2026-03-15T03:30:00Z").toISOString(),
+          provider: "Dallas Emergency Crew",
+          revenueValue: 1800,
+          marginValue: 700,
+          complaintStatus: "none",
+          reviewStatus: "positive",
+          reviewRating: 5,
+          refundIssued: false,
+        },
+      },
+    },
+  ];
+
+  const snapshot = buildDashboardSnapshot(leads, []);
+  assert.equal(snapshot.experimentPerformance[0]?.experimentId, "plumbing-client-entry-v1:desktop");
+  assert.equal(snapshot.experimentPerformance[0]?.completedRevenue, 1800);
+  assert.equal(snapshot.experimentPerformance[0]?.completedMargin, 700);
+  assert.equal(snapshot.experimentPerformance[0]?.marginRate, 38.9);
+  assert.equal(snapshot.experimentPerformance[0]?.positiveReviews, 1);
+  assert.equal(snapshot.experimentPerformance[0]?.majorComplaints, 0);
+});
+
 test("operator console snapshot exposes plumbing dispatch queues and provider scores", () => {
   const leads: StoredLeadRecord[] = [
     {
@@ -343,6 +422,11 @@ test("operator console snapshot exposes plumbing dispatch queues and provider sc
           recordedAt: new Date("2026-03-15T01:15:00Z").toISOString(),
           provider: "Trafft",
           revenueValue: 1450,
+          marginValue: 620,
+          complaintStatus: "none",
+          reviewStatus: "positive",
+          reviewRating: 4.9,
+          refundIssued: false,
         },
       },
     },
@@ -415,11 +499,19 @@ test("operator console snapshot exposes plumbing dispatch queues and provider sc
   assert.equal(snapshot.plumbingDispatch.providerScores[0]?.provider, "Trafft");
   assert.equal(snapshot.plumbingDispatch.providerScores[0]?.bookingFillRate, 100);
   assert.equal(snapshot.plumbingDispatch.providerScores[0]?.completedRevenue, 1450);
-  assert.equal(snapshot.plumbingDispatch.providerScores[0]?.routingScore >= snapshot.plumbingDispatch.providerScores[0]!.reliabilityScore, true);
+  assert.equal(snapshot.plumbingDispatch.providerScores[0]?.completedMargin, 620);
+  assert.equal(snapshot.plumbingDispatch.providerScores[0]?.marginRate, 42.8);
+  assert.equal(snapshot.plumbingDispatch.providerScores[0]?.positiveReviews, 1);
+  assert.equal(snapshot.plumbingDispatch.providerScores[0]?.negativeComplaints, 0);
+  assert.equal(snapshot.plumbingDispatch.providerScores[0]?.economicQualityScore > 0, true);
+  assert.equal(snapshot.plumbingDispatch.providerScores[0]?.routingScore > 0, true);
+  assert.equal(snapshot.plumbingDispatch.providerScores[0]?.routingScore <= 100, true);
   assert.equal(snapshot.plumbingDispatch.metroBreakdown[0]?.label, "dallas, texas");
   assert.equal(snapshot.plumbingDispatch.metroRevenueBreakdown[0]?.label, "dallas, texas");
   assert.equal(snapshot.plumbingDispatch.metroRevenueBreakdown[0]?.revenue, 1450);
   assert.equal(snapshot.plumbingDispatch.zipCellLiquidity.topCells[0]?.label, "dallas, texas");
+  assert.equal(snapshot.plumbingDispatch.zipCellLiquidity.topCells[0]?.completedMargin, 620);
+  assert.equal(snapshot.plumbingDispatch.zipCellLiquidity.topCells[0]?.marginRate, 42.8);
   assert.match(snapshot.plumbingDispatch.zipCellLiquidity.topCells[0]?.recommendedAction ?? "", /supply|balance/i);
   assert.equal(snapshot.plumbingDispatch.providerRequestQueue.pendingCount, 0);
   assert.equal(snapshot.plumbingDispatch.executionQueue.pendingCount, 0);

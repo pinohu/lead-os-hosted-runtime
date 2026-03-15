@@ -23,6 +23,11 @@ export async function POST(request: Request) {
     actionType?: PlumbingOperatorActionType;
     note?: string;
     revenueValue?: number;
+    marginValue?: number;
+    complaintStatus?: "none" | "minor" | "major";
+    reviewStatus?: "not-requested" | "requested" | "positive" | "mixed" | "negative";
+    reviewRating?: number;
+    refundIssued?: boolean;
   };
 
   try {
@@ -37,6 +42,19 @@ export async function POST(request: Request) {
   const revenueValue = typeof body.revenueValue === "number" && Number.isFinite(body.revenueValue)
     ? body.revenueValue
     : undefined;
+  const marginValue = typeof body.marginValue === "number" && Number.isFinite(body.marginValue)
+    ? body.marginValue
+    : undefined;
+  const complaintStatus = body.complaintStatus === "none" || body.complaintStatus === "minor" || body.complaintStatus === "major"
+    ? body.complaintStatus
+    : undefined;
+  const reviewStatus = body.reviewStatus === "not-requested" || body.reviewStatus === "requested" || body.reviewStatus === "positive" || body.reviewStatus === "mixed" || body.reviewStatus === "negative"
+    ? body.reviewStatus
+    : undefined;
+  const reviewRating = typeof body.reviewRating === "number" && Number.isFinite(body.reviewRating)
+    ? Math.max(0, Math.min(5, body.reviewRating))
+    : undefined;
+  const refundIssued = typeof body.refundIssued === "boolean" ? body.refundIssued : undefined;
 
   if (!leadKey) {
     return NextResponse.json({ success: false, error: "leadKey is required" }, { status: 400 });
@@ -52,6 +70,11 @@ export async function POST(request: Request) {
       actorEmail: auth.session.email,
       note,
       revenueValue,
+      marginValue,
+      complaintStatus,
+      reviewStatus,
+      reviewRating,
+      refundIssued,
     });
     return NextResponse.json({
       success: true,

@@ -34,6 +34,54 @@ function ratio(value: number, total: number) {
   return Number(((value / total) * 100).toFixed(1));
 }
 
+function average(values: number[]) {
+  if (values.length === 0) return 0;
+  return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2));
+}
+
+function buildOutcomeEconomics(outcomes: PlumbingJobOutcome[]) {
+  const completedOutcomes = outcomes.filter((outcome) => outcome.status === "completed");
+  const completedRevenue = completedOutcomes.reduce((sum, outcome) => (
+    typeof outcome.revenueValue === "number" ? sum + outcome.revenueValue : sum
+  ), 0);
+  const completedMargin = completedOutcomes.reduce((sum, outcome) => (
+    typeof outcome.marginValue === "number" ? sum + outcome.marginValue : sum
+  ), 0);
+  const negativeComplaints = completedOutcomes.filter((outcome) => outcome.complaintStatus === "major").length;
+  const minorComplaints = completedOutcomes.filter((outcome) => outcome.complaintStatus === "minor").length;
+  const refunds = completedOutcomes.filter((outcome) => outcome.refundIssued).length;
+  const positiveReviews = completedOutcomes.filter((outcome) => outcome.reviewStatus === "positive").length;
+  const mixedReviews = completedOutcomes.filter((outcome) => outcome.reviewStatus === "mixed").length;
+  const negativeReviews = completedOutcomes.filter((outcome) => outcome.reviewStatus === "negative").length;
+  const reviewRatings = completedOutcomes
+    .map((outcome) => outcome.reviewRating)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+
+  return {
+    completedOutcomes,
+    completedRevenue,
+    completedMargin,
+    averageCompletedRevenue: average(
+      completedOutcomes
+        .map((outcome) => outcome.revenueValue)
+        .filter((value): value is number => typeof value === "number" && Number.isFinite(value)),
+    ),
+    averageCompletedMargin: average(
+      completedOutcomes
+        .map((outcome) => outcome.marginValue)
+        .filter((value): value is number => typeof value === "number" && Number.isFinite(value)),
+    ),
+    marginRate: completedRevenue > 0 ? Number(((completedMargin / completedRevenue) * 100).toFixed(1)) : 0,
+    positiveReviews,
+    mixedReviews,
+    negativeReviews,
+    negativeComplaints,
+    minorComplaints,
+    refunds,
+    averageReviewRating: average(reviewRatings),
+  };
+}
+
 function asPlumbingContext(lead: StoredLeadRecord) {
   const plumbing = lead.metadata.plumbing;
   return plumbing && typeof plumbing === "object" ? plumbing as PlumbingLeadContext : null;
@@ -157,11 +205,11 @@ function buildZipCellLiquiditySnapshot(
       }, 0);
       const urgentLeadCount = leadItems.filter((item) => item.plumbing.urgencyBand === "emergency-now").length;
       const sameDayLeadCount = leadItems.filter((item) => item.plumbing.urgencyBand === "same-day").length;
-      const completedRevenue = leadItems.reduce((sum, item) => (
-        item.outcome?.status === "completed" && typeof item.outcome.revenueValue === "number"
-          ? sum + item.outcome.revenueValue
-          : sum
-      ), 0);
+      const cellEconomics = buildOutcomeEconomics(
+        leadItems
+          .map((item) => item.outcome)
+          .filter((outcome): outcome is PlumbingJobOutcome => Boolean(outcome)),
+      );
       const demandPressure = urgentLeadCount * 2 + sameDayLeadCount + leadItems.length;
       const supplyPressure = acceptingProviders.length * 20 + knownOpenCapacity * 8;
       const liquidityScore = Math.max(0, Math.min(100, Math.round((supplyPressure / Math.max(demandPressure, 1)) * 20)));
@@ -181,7 +229,11 @@ function buildZipCellLiquiditySnapshot(
         leadCount: leadItems.length,
         urgentLeadCount,
         sameDayLeadCount,
-        completedRevenue,
+        completedRevenue: cellEconomics.completedRevenue,
+        completedMargin: cellEconomics.completedMargin,
+        marginRate: cellEconomics.marginRate,
+        negativeComplaints: cellEconomics.negativeComplaints,
+        refunds: cellEconomics.refunds,
         providersCovering: matchingProviders.length,
         acceptingProviders: acceptingProviders.length,
         openCapacity: knownOpenCapacity,
@@ -306,16 +358,9 @@ function buildPlumbingDispatchSnapshot(
       const providerOutcomes = plumbingLeads
         .map((item) => item.outcome)
         .filter((outcome): outcome is PlumbingJobOutcome => Boolean(outcome) && outcome?.provider === entry.provider);
-      const completedOutcomes = providerOutcomes.filter((outcome) => outcome.status === "completed").length;
+      const economics = buildOutcomeEconomics(providerOutcomes);
+      const completedOutcomes = economics.completedOutcomes.length;
       const bookedOutcomes = providerOutcomes.filter((outcome) => outcome.status === "booked").length;
-      const completedRevenue = providerOutcomes.reduce((sum, outcome) => (
-        outcome.status === "completed" && typeof outcome.revenueValue === "number"
-          ? sum + outcome.revenueValue
-          : sum
-      ), 0);
-      const averageCompletedRevenue = completedOutcomes > 0
-        ? Number((completedRevenue / completedOutcomes).toFixed(2))
-        : 0;
       const reliabilityScore = Math.max(
         0,
         Math.min(
@@ -326,6 +371,22 @@ function buildPlumbingDispatchSnapshot(
             ratio(bookedJobs, Math.max(providerBookingJobs.length, 1)) * 0.15 +
             ratio(bookedOutcomes + completedOutcomes, Math.max(providerOutcomes.length, 1)) * 0.1 -
             workflowFailures * 4,
+          ),
+        ),
+      );
+      const economicQualityScore = Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            Math.max(0, economics.marginRate) * 0.7 +
+            Math.max(0, economics.averageReviewRating) * 12 +
+            economics.positiveReviews * 4 +
+            economics.mixedReviews * 1 -
+            economics.negativeReviews * 8 -
+            economics.minorComplaints * 6 -
+            economics.negativeComplaints * 14 -
+            economics.refunds * 18,
           ),
         ),
       );
@@ -341,8 +402,19 @@ function buildPlumbingDispatchSnapshot(
         bookingJobs: providerBookingJobs.length,
         bookedOutcomes,
         completedOutcomes,
-        completedRevenue,
-        averageCompletedRevenue,
+        completedRevenue: economics.completedRevenue,
+        averageCompletedRevenue: economics.averageCompletedRevenue,
+        completedMargin: economics.completedMargin,
+        averageCompletedMargin: economics.averageCompletedMargin,
+        marginRate: economics.marginRate,
+        averageReviewRating: economics.averageReviewRating,
+        positiveReviews: economics.positiveReviews,
+        mixedReviews: economics.mixedReviews,
+        negativeReviews: economics.negativeReviews,
+        negativeComplaints: economics.negativeComplaints,
+        minorComplaints: economics.minorComplaints,
+        refunds: economics.refunds,
+        economicQualityScore,
       };
     });
 
@@ -360,7 +432,7 @@ function buildPlumbingDispatchSnapshot(
         0,
         Math.min(
           100,
-          Math.round(provider.reliabilityScore * 0.72 + revenueScore * 0.28),
+          Math.round(provider.reliabilityScore * 0.5 + revenueScore * 0.2 + provider.economicQualityScore * 0.3),
         ),
       );
 
@@ -490,10 +562,17 @@ export function buildDashboardSnapshotWithOptions(
       m2: number;
       m3: number;
       converted: number;
+      completedRevenue: number;
+      completedMargin: number;
+      positiveReviews: number;
+      negativeReviews: number;
+      majorComplaints: number;
+      refunds: number;
       variants: Record<string, number>;
     }>>((acc, lead) => {
       const experimentId = lead.trace.experimentId ?? "default";
       const variantId = lead.trace.variantId ?? "default";
+      const outcome = asPlumbingOutcome(lead);
       const entry = acc[experimentId] ?? {
         experimentId,
         entries: 0,
@@ -501,6 +580,12 @@ export function buildDashboardSnapshotWithOptions(
         m2: 0,
         m3: 0,
         converted: 0,
+        completedRevenue: 0,
+        completedMargin: 0,
+        positiveReviews: 0,
+        negativeReviews: 0,
+        majorComplaints: 0,
+        refunds: 0,
         variants: {},
       };
       entry.entries += 1;
@@ -508,6 +593,14 @@ export function buildDashboardSnapshotWithOptions(
       entry.m2 += lead.milestones.leadMilestones.includes("lead-m2-return-engaged") ? 1 : 0;
       entry.m3 += lead.milestones.leadMilestones.includes("lead-m3-booked-or-offered") ? 1 : 0;
       entry.converted += ["converted", "onboarding", "active", "retention-risk", "referral-ready"].includes(lead.stage) ? 1 : 0;
+      if (outcome?.status === "completed") {
+        entry.completedRevenue += typeof outcome.revenueValue === "number" ? outcome.revenueValue : 0;
+        entry.completedMargin += typeof outcome.marginValue === "number" ? outcome.marginValue : 0;
+        entry.positiveReviews += outcome.reviewStatus === "positive" ? 1 : 0;
+        entry.negativeReviews += outcome.reviewStatus === "negative" ? 1 : 0;
+        entry.majorComplaints += outcome.complaintStatus === "major" ? 1 : 0;
+        entry.refunds += outcome.refundIssued ? 1 : 0;
+      }
       entry.variants[variantId] = (entry.variants[variantId] ?? 0) + 1;
       acc[experimentId] = entry;
       return acc;
@@ -520,6 +613,13 @@ export function buildDashboardSnapshotWithOptions(
       m1ToM2: ratio(experiment.m2, experiment.entries),
       m1ToM3: ratio(experiment.m3, experiment.entries),
       conversionRate: ratio(experiment.converted, experiment.entries),
+      completedRevenue: experiment.completedRevenue,
+      completedMargin: experiment.completedMargin,
+      marginRate: experiment.completedRevenue > 0 ? Number(((experiment.completedMargin / experiment.completedRevenue) * 100).toFixed(1)) : 0,
+      positiveReviews: experiment.positiveReviews,
+      negativeReviews: experiment.negativeReviews,
+      majorComplaints: experiment.majorComplaints,
+      refunds: experiment.refunds,
       topVariants: Object.entries(experiment.variants)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 3)

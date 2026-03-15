@@ -108,6 +108,12 @@ export interface PlumbingJobOutcome {
   recordedAt: string;
   note?: string;
   revenueValue?: number;
+  marginValue?: number;
+  marginBand?: "negative" | "thin" | "healthy" | "exceptional";
+  complaintStatus?: "none" | "minor" | "major";
+  reviewStatus?: "not-requested" | "requested" | "positive" | "mixed" | "negative";
+  reviewRating?: number;
+  refundIssued?: boolean;
   provider?: string;
 }
 

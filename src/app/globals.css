@@ -801,6 +801,10 @@ button[disabled] {
   margin: 0;
 }
 
+.portal-data-list.compact {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
 .portal-data-list div {
   display: grid;
   gap: 2px;
@@ -824,6 +828,17 @@ button[disabled] {
   word-break: break-word;
 }
 
+.portal-data-list dd input,
+.portal-data-list dd select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(203, 226, 220, 0.12);
+  background: rgba(10, 13, 16, 0.55);
+  color: var(--text-inverse);
+}
+
 .portal-status-row {
   display: flex;
   flex-wrap: wrap;
@@ -833,6 +848,7 @@ button[disabled] {
 .portal-chip {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   min-height: 32px;
   padding: 6px 10px;
   border-radius: 999px;

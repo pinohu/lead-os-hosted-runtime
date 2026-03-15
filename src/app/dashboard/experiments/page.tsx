@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { buildDashboardSnapshot } from "@/lib/dashboard";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
+import { formatCurrency } from "@/lib/operator-ui";
 import { getCanonicalEvents, getLeadRecords } from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
 
@@ -17,9 +18,9 @@ export default async function ExperimentsPage() {
           <p className="eyebrow">Experiment assignment</p>
           <h1>{tenantConfig.brandName} randomized experience reporting</h1>
           <p className="lede">
-            Review which assigned experience variants are showing stronger milestone movement. LeadOS now
-            supports randomized visitor assignment for key plumbing entry paths, though final winner logic
-            still needs more samples and stronger closed-loop revenue weighting.
+            Review which assigned experience variants are showing stronger milestone movement and better
+            closed-loop plumbing outcomes. LeadOS now weights experiments against completed revenue,
+            margin quality, review signals, and complaint risk instead of stopping at top-funnel motion.
           </p>
           <div className="cta-row">
             <Link href="/dashboard" className="secondary">
@@ -51,8 +52,8 @@ export default async function ExperimentsPage() {
           <strong>Interpret these results as early experimental evidence.</strong>
           <p className="muted">
             Assignment is now randomized for key plumbing entry experiences when a stable visitor key
-            is available, but revenue winner selection should still wait for stronger sample sizes and
-            more completed-job data.
+            is available. Treat these as decision support until samples are large enough to trust the
+            revenue, margin, review, and complaint signals.
           </p>
         </article>
         {snapshot.experimentPerformance.length === 0 ? (
@@ -66,6 +67,12 @@ export default async function ExperimentsPage() {
               <h2>{experiment.entries} entries</h2>
               <p className="muted">
                 Hot rate: {experiment.hotRate}% | M1 to M2: {experiment.m1ToM2}% | M1 to M3: {experiment.m1ToM3}% | Conversion: {experiment.conversionRate}%
+              </p>
+              <p className="muted">
+                Completed revenue: {formatCurrency(experiment.completedRevenue)} | Margin: {formatCurrency(experiment.completedMargin)} | Margin rate: {experiment.marginRate}%
+              </p>
+              <p className="muted">
+                Positive reviews: {experiment.positiveReviews} | Negative reviews: {experiment.negativeReviews} | Major complaints: {experiment.majorComplaints} | Refunds: {experiment.refunds}
               </p>
               <ul className="check-list">
                 {experiment.topVariants.map((variant) => (

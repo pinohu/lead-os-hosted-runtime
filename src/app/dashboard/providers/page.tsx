@@ -2,7 +2,7 @@ import Link from "next/link";
 import { buildOperatorConsoleSnapshot } from "@/lib/dashboard";
 import { getConfigStatusSummary } from "@/lib/config-status";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
-import { formatPortalLabel } from "@/lib/operator-ui";
+import { formatCurrency, formatPortalLabel, formatReviewRating } from "@/lib/operator-ui";
 import { createProviderPortalLink } from "@/lib/provider-portal-auth";
 import { getAutomationHealth } from "@/lib/providers";
 import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
@@ -126,6 +126,7 @@ export default async function ProviderHealthPage() {
                 <div className="portal-status-row">
                   <span className="portal-chip">Reliability {provider.reliabilityScore}</span>
                   <span className="portal-chip">Revenue {provider.revenueScore}</span>
+                  <span className="portal-chip">Economics {provider.economicQualityScore}</span>
                 </div>
                 <p className="muted">
                   Success rate: {formatPercent(provider.successRate)} | Booking fill: {formatPercent(provider.bookingFillRate)}
@@ -134,7 +135,16 @@ export default async function ProviderHealthPage() {
                   Completion: {formatPercent(provider.completionRate)} | Completed jobs: {provider.completedOutcomes}
                 </p>
                 <p className="muted">
-                  Completed revenue: {provider.completedRevenue} | Avg completed value: {provider.averageCompletedRevenue || "n/a"}
+                  Completed revenue: {formatCurrency(provider.completedRevenue)} | Avg completed value: {formatCurrency(provider.averageCompletedRevenue)}
+                </p>
+                <p className="muted">
+                  Margin: {formatCurrency(provider.completedMargin)} | Avg margin: {formatCurrency(provider.averageCompletedMargin)} | Margin rate: {formatPercent(provider.marginRate)}
+                </p>
+                <p className="muted">
+                  Reviews: +{provider.positiveReviews} / ±{provider.mixedReviews} / -{provider.negativeReviews} | Avg rating: {formatReviewRating(provider.averageReviewRating)}
+                </p>
+                <p className="muted">
+                  Complaints: major {provider.negativeComplaints}, minor {provider.minorComplaints} | Refunds: {provider.refunds}
                 </p>
                 <p className="muted">
                   Attempts: {provider.attempts} | Workflow failures: {provider.workflowFailures}
@@ -182,7 +192,13 @@ export default async function ProviderHealthPage() {
                   Leads: {cell.leadCount} | Urgent: {cell.urgentLeadCount} | Accepting providers: {cell.acceptingProviders}
                 </p>
                 <p className="muted">
-                  Open capacity: {cell.openCapacity} | Completed revenue: {cell.completedRevenue}
+                  Open capacity: {cell.openCapacity} | Completed revenue: {formatCurrency(cell.completedRevenue)}
+                </p>
+                <p className="muted">
+                  Margin: {formatCurrency(cell.completedMargin)} | Margin rate: {formatPercent(cell.marginRate)}
+                </p>
+                <p className="muted">
+                  Major complaints: {cell.negativeComplaints} | Refunds: {cell.refunds}
                 </p>
                 <p className="muted portal-breakable">{cell.recommendedAction}</p>
               </article>
