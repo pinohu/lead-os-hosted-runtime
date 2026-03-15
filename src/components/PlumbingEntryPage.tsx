@@ -14,6 +14,7 @@ import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import {
   getBookingJobs,
   getCanonicalEvents,
+  getExecutionTasks,
   getLeadRecords,
   getProviderExecutions,
   getWorkflowRuns,
@@ -37,12 +38,13 @@ function asBoolean(value: string | string[] | undefined) {
 export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEntryPageProps) {
   const niche = getNiche("plumbing");
   const headerStore = await headers();
-  const [health, leads, events, bookingJobs, providerExecutions, workflowRuns, runtimeConfig] =
+  const [health, leads, events, bookingJobs, executionTasks, providerExecutions, workflowRuns, runtimeConfig] =
     await Promise.all([
       Promise.resolve(getAutomationHealth()),
       getLeadRecords(),
       getCanonicalEvents(),
       getBookingJobs(),
+      getExecutionTasks(),
       getProviderExecutions(),
       getWorkflowRuns(),
       getOperationalRuntimeConfig(),
@@ -52,6 +54,7 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
     leads,
     events,
     bookingJobs,
+    executionTasks,
     providerExecutions,
     workflowRuns,
     runtimeConfig.dispatch.providers,

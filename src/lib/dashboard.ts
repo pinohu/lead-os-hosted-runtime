@@ -7,6 +7,7 @@ import type { CanonicalEvent } from "./trace.ts";
 import type { OperationalRuntimeConfig } from "./runtime-config.ts";
 import type {
   BookingJobRecord,
+  ExecutionTaskRecord,
   ProviderExecutionRecord,
   StoredLeadRecord,
   WorkflowRunRecord,
@@ -118,6 +119,7 @@ function formatPlumbingGeoCell(plumbing: PlumbingLeadContext | null) {
 function buildPlumbingDispatchSnapshot(
   leads: StoredLeadRecord[],
   bookingJobs: BookingJobRecord[],
+  executionTasks: ExecutionTaskRecord[],
   providerExecutions: ProviderExecutionRecord[],
   workflowRuns: WorkflowRunRecord[],
   dispatchProviders: OperationalRuntimeConfig["dispatch"]["providers"] = [],
@@ -171,6 +173,8 @@ function buildPlumbingDispatchSnapshot(
     });
 
   const unresolved = queueItems.filter((item) => !["booked", "converted", "active"].includes(item.stage));
+  const pendingExecutionTasks = executionTasks.filter((task) => task.status === "pending");
+  const failedExecutionTasks = executionTasks.filter((task) => task.status === "failed");
   const metroBreakdown = topBreakdown(plumbingLeads.map((item) => formatPlumbingGeoCell(item.plumbing)));
   const metroRevenueBreakdown = Object.entries(
     plumbingLeads.reduce<Record<string, number>>((acc, item) => {
@@ -295,6 +299,12 @@ function buildPlumbingDispatchSnapshot(
     topQueue: unresolved.slice(0, 8),
     providerScores: rankedProviderScores,
     configuredDispatchProviders: dispatchProviders.length,
+    executionQueue: {
+      pendingCount: pendingExecutionTasks.length,
+      failedCount: failedExecutionTasks.length,
+      pendingByKind: topBreakdown(pendingExecutionTasks.map((task) => task.kind)),
+      topPending: pendingExecutionTasks.slice(0, 6),
+    },
   };
 }
 
@@ -456,6 +466,7 @@ export function buildOperatorConsoleSnapshot(
   leads: StoredLeadRecord[],
   events: CanonicalEvent[],
   bookingJobs: BookingJobRecord[],
+  executionTasks: ExecutionTaskRecord[],
   providerExecutions: ProviderExecutionRecord[],
   workflowRuns: WorkflowRunRecord[],
   dispatchProviders: OperationalRuntimeConfig["dispatch"]["providers"] = [],
@@ -471,6 +482,7 @@ export function buildOperatorConsoleSnapshot(
     plumbingDispatch: buildPlumbingDispatchSnapshot(
       visibleLeads,
       bookingJobs,
+      executionTasks,
       providerExecutions,
       workflowRuns,
       dispatchProviders,

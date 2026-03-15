@@ -7,6 +7,7 @@ import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import {
   getBookingJobs,
   getCanonicalEvents,
+  getExecutionTasks,
   getLeadRecords,
   getProviderExecutions,
   getRuntimePersistenceMode,
@@ -21,10 +22,11 @@ export async function GET(request: Request) {
   }
 
   const includeSystemTraffic = new URL(request.url).searchParams.get("include") === "system";
-  const [leads, events, bookingJobs, providerExecutions, workflowRuns, runtimeConfig] = await Promise.all([
+  const [leads, events, bookingJobs, executionTasks, providerExecutions, workflowRuns, runtimeConfig] = await Promise.all([
     getLeadRecords(),
     getCanonicalEvents(),
     getBookingJobs(),
+    getExecutionTasks(),
     getProviderExecutions(),
     getWorkflowRuns(),
     getOperationalRuntimeConfig(),
@@ -40,6 +42,7 @@ export async function GET(request: Request) {
       leads,
       events,
       bookingJobs,
+      executionTasks,
       providerExecutions,
       workflowRuns,
       runtimeConfig.dispatch.providers,

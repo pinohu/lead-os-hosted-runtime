@@ -8,6 +8,7 @@ import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import {
   getBookingJobs,
   getCanonicalEvents,
+  getExecutionTasks,
   getLeadRecords,
   getProviderExecutions,
   getRuntimePersistenceMode,
@@ -19,11 +20,12 @@ export const dynamic = "force-dynamic";
 
 export default async function ProviderHealthPage() {
   await requireOperatorPageSession("/dashboard/providers");
-  const [health, leads, events, bookingJobs, providerExecutions, workflowRuns, runtimeConfig] = await Promise.all([
+  const [health, leads, events, bookingJobs, executionTasks, providerExecutions, workflowRuns, runtimeConfig] = await Promise.all([
     Promise.resolve(getAutomationHealth()),
     getLeadRecords(),
     getCanonicalEvents(),
     getBookingJobs(),
+    getExecutionTasks(),
     getProviderExecutions(),
     getWorkflowRuns(),
     getOperationalRuntimeConfig(),
@@ -36,6 +38,7 @@ export default async function ProviderHealthPage() {
     leads,
     events,
     bookingJobs,
+    executionTasks,
     providerExecutions,
     workflowRuns,
     runtimeConfig.dispatch.providers,

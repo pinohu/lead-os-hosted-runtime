@@ -9,6 +9,7 @@ import {
   getBookingJobs,
   getCanonicalEvents,
   getDocumentJobs,
+  getExecutionTasks,
   getLeadRecords,
   getProviderExecutions,
   getWorkflowRuns,
@@ -35,11 +36,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const params = (await searchParams) ?? {};
   const includeSystemTraffic = asString(params.include) === "system";
   const dashboardError = asString(params.error);
-  const [leads, events, bookingJobs, documentJobs, workflowRuns, providerExecutions, runtimeConfig] = await Promise.all([
+  const [leads, events, bookingJobs, documentJobs, executionTasks, workflowRuns, providerExecutions, runtimeConfig] = await Promise.all([
     getLeadRecords(),
     getCanonicalEvents(),
     getBookingJobs(),
     getDocumentJobs(),
+    getExecutionTasks(),
     getWorkflowRuns(),
     getProviderExecutions(),
     getOperationalRuntimeConfig(),
@@ -49,6 +51,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     leads,
     events,
     bookingJobs,
+    executionTasks,
     providerExecutions,
     workflowRuns,
     runtimeConfig.dispatch.providers,
@@ -204,6 +207,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <h2>{dispatch.configuredDispatchProviders}</h2>
           <p className="muted">Configured providers available for capacity-aware assignment.</p>
         </article>
+        <article className="metric-card">
+          <p className="eyebrow">Queued execution</p>
+          <h2>{dispatch.executionQueue.pendingCount}</h2>
+          <p className="muted">Workflow, booking, and document tasks waiting for the executor.</p>
+        </article>
       </section>
 
       <section className="grid two">
@@ -299,6 +307,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         <span>Unknown lead</span>
                       )}{" "}
                       - {formatPortalLabel(run.eventName)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+            <article className="stack-card">
+              <p className="eyebrow">Execution queue</p>
+              {dispatch.executionQueue.pendingCount === 0 ? (
+                <p className="muted">No queued execution work is waiting.</p>
+              ) : (
+                <ul className="check-list">
+                  {dispatch.executionQueue.pendingByKind.map((entry) => (
+                    <li key={entry.label}>
+                      {formatPortalLabel(entry.label)}: {entry.count}
                     </li>
                   ))}
                 </ul>

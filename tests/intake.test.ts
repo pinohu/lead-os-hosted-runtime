@@ -1,8 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { processExecutionTasks } from "../src/lib/execution-queue.ts";
 import { getDefaultFunnelGraph } from "../src/lib/funnel-library.ts";
 import { buildPublicIntakeResponse, persistLead, validateLeadPayload } from "../src/lib/intake.ts";
-import { claimIntakeReplayKey, getBookingJobs, getDocumentJobs, resetRuntimeStore } from "../src/lib/runtime-store.ts";
+import {
+  claimIntakeReplayKey,
+  getBookingJobs,
+  getDocumentJobs,
+  getExecutionTasks,
+  getWorkflowRuns,
+  resetRuntimeStore,
+} from "../src/lib/runtime-store.ts";
 import { tenantConfig } from "../src/lib/tenant.ts";
 
 test("validateLeadPayload requires a source and identity", () => {
@@ -161,6 +169,45 @@ test("recent replays do not create duplicate booking jobs or refire side effects
   assert.equal(second.existing, true);
   assert.equal(second.workflow.detail, "Replay suppressed before workflow emission.");
   assert.equal(second.jobs.booking?.id, first.jobs.booking?.id);
+});
+
+test("persistLead queues durable execution tasks for live booking and workflow work", async () => {
+  await resetRuntimeStore();
+  const result = await persistLead({
+    source: "assessment",
+    email: "queue@test.com",
+    firstName: "Queue",
+    wantsBooking: true,
+  });
+
+  const executionTasks = await getExecutionTasks({ leadKey: result.leadKey });
+  assert.ok(executionTasks.some((task) => task.kind === "workflow" && task.status === "pending"));
+  assert.ok(executionTasks.some((task) => task.kind === "booking" && task.status === "pending"));
+  assert.equal(result.jobs.booking?.status, "queued");
+  assert.equal(result.workflow.mode, "prepared");
+});
+
+test("processExecutionTasks drains queued workflow and booking work", async () => {
+  await resetRuntimeStore();
+  const result = await persistLead({
+    source: "assessment",
+    email: "worker@test.com",
+    firstName: "Worker",
+    wantsBooking: true,
+  });
+
+  const processed = await processExecutionTasks(20);
+  assert.ok(processed.count >= 2);
+
+  const remaining = await getExecutionTasks({ leadKey: result.leadKey, status: "pending" });
+  assert.equal(remaining.length, 0);
+
+  const runs = await getWorkflowRuns(result.leadKey);
+  assert.ok(runs.some((run) => run.eventName === "lead.captured"));
+
+  const jobs = await getBookingJobs(result.leadKey);
+  assert.equal(jobs.length, 1);
+  assert.notEqual(jobs[0]?.status, "queued");
 });
 
 test("claimIntakeReplayKey persists replay state across repeated checks", async () => {

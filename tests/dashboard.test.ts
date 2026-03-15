@@ -386,7 +386,7 @@ test("operator console snapshot exposes plumbing dispatch queues and provider sc
     },
   ];
 
-  const snapshot = buildOperatorConsoleSnapshot(leads, [], bookingJobs, providerExecutions, workflowRuns, [
+  const snapshot = buildOperatorConsoleSnapshot(leads, [], bookingJobs, [], providerExecutions, workflowRuns, [
     {
       id: "crew-dallas",
       label: "Dallas Emergency Crew",
@@ -419,6 +419,7 @@ test("operator console snapshot exposes plumbing dispatch queues and provider sc
   assert.equal(snapshot.plumbingDispatch.metroBreakdown[0]?.label, "dallas, texas");
   assert.equal(snapshot.plumbingDispatch.metroRevenueBreakdown[0]?.label, "dallas, texas");
   assert.equal(snapshot.plumbingDispatch.metroRevenueBreakdown[0]?.revenue, 1450);
+  assert.equal(snapshot.plumbingDispatch.executionQueue.pendingCount, 0);
 });
 
 test("dispatch routing recommends providers by capacity and job fit", () => {

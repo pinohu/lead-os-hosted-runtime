@@ -129,6 +129,24 @@ export interface IntakeAttemptRecord {
   payload?: Record<string, unknown>;
 }
 
+export type ExecutionTaskKind = "workflow" | "booking" | "document";
+
+export type ExecutionTaskStatus = "pending" | "processing" | "completed" | "failed";
+
+export interface ExecutionTaskRecord {
+  id: string;
+  leadKey: string;
+  kind: ExecutionTaskKind;
+  provider: string;
+  status: ExecutionTaskStatus;
+  dedupeKey: string;
+  attempts: number;
+  payload?: Record<string, unknown>;
+  lastError?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 const leadStore = new Map<string, StoredLeadRecord>();
 const eventStore: CanonicalEvent[] = [];
 const providerExecutionStore: ProviderExecutionRecord[] = [];
@@ -139,6 +157,7 @@ const workflowRegistryStore = new Map<string, WorkflowRegistryRecord>();
 const runtimeConfigStore = new Map<string, RuntimeConfigRecord>();
 const operatorActionStore = new Map<string, OperatorActionRecord>();
 const intakeAttemptStore = new Map<string, IntakeAttemptRecord>();
+const executionTaskStore = new Map<string, ExecutionTaskRecord>();
 
 let pool: Pool | null = null;
 let schemaReady: Promise<void> | null = null;
@@ -156,7 +175,8 @@ type AitableRuntimeKind =
   | "workflow-registry"
   | "runtime-config"
   | "operator-action"
-  | "intake-attempt";
+  | "intake-attempt"
+  | "execution-task";
 
 type AitableRuntimeEntry = {
   kind: AitableRuntimeKind;
@@ -171,7 +191,8 @@ type AitableRuntimeEntry = {
     | WorkflowRegistryRecord
     | RuntimeConfigRecord
     | OperatorActionRecord
-    | IntakeAttemptRecord;
+    | IntakeAttemptRecord
+    | ExecutionTaskRecord;
 };
 
 function getDatabaseUrl() {
@@ -296,6 +317,17 @@ async function ensureSchema() {
           payload JSONB NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS lead_os_execution_tasks (
+          id TEXT PRIMARY KEY,
+          lead_key TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          status TEXT NOT NULL,
+          dedupe_key TEXT NOT NULL UNIQUE,
+          updated_at TIMESTAMPTZ NOT NULL,
+          payload JSONB NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS lead_os_events_lead_idx
           ON lead_os_events (lead_key, timestamp DESC);
         CREATE INDEX IF NOT EXISTS lead_os_provider_exec_lead_idx
@@ -306,6 +338,8 @@ async function ensureSchema() {
           ON lead_os_operator_actions (lead_key, created_at DESC);
         CREATE INDEX IF NOT EXISTS lead_os_intake_attempts_last_seen_idx
           ON lead_os_intake_attempts (last_seen_at DESC);
+        CREATE INDEX IF NOT EXISTS lead_os_execution_tasks_status_idx
+          ON lead_os_execution_tasks (status, updated_at ASC);
       `);
     } catch (error) {
       schemaReady = null;
@@ -933,6 +967,215 @@ export async function getDocumentJobs(leadKey?: string) {
   return result.rows.map((row) => row.payload);
 }
 
+export async function enqueueExecutionTask(
+  task: Omit<ExecutionTaskRecord, "id" | "status" | "attempts" | "createdAt" | "updatedAt"> & {
+    id?: string;
+    status?: ExecutionTaskStatus;
+    attempts?: number;
+    createdAt?: string;
+    updatedAt?: string;
+  },
+) {
+  const normalizedTask: ExecutionTaskRecord = {
+    ...task,
+    id: task.id ?? crypto.randomUUID(),
+    status: task.status ?? "pending",
+    attempts: task.attempts ?? 0,
+    createdAt: task.createdAt ?? new Date().toISOString(),
+    updatedAt: task.updatedAt ?? new Date().toISOString(),
+  };
+
+  const existingWithSameDedupe = [...executionTaskStore.values()].find((record) => record.dedupeKey === normalizedTask.dedupeKey);
+  if (existingWithSameDedupe) {
+    return existingWithSameDedupe;
+  }
+
+  executionTaskStore.set(normalizedTask.id, normalizedTask);
+
+  const activePool = getPool();
+  if (!activePool && runtimeMode() === "aitable") {
+    await appendAitableRuntimeEntry("execution-task", normalizedTask.id, normalizedTask);
+    return normalizedTask;
+  }
+  if (!activePool) {
+    return normalizedTask;
+  }
+
+  await ensureSchema();
+  const existingResult = await queryPostgres<{ payload: ExecutionTaskRecord }>(
+    "SELECT payload FROM lead_os_execution_tasks WHERE dedupe_key = $1 LIMIT 1",
+    [normalizedTask.dedupeKey],
+  );
+  const existing = existingResult.rows[0]?.payload;
+  if (existing) {
+    executionTaskStore.set(existing.id, existing);
+    return existing;
+  }
+
+  await queryPostgres(
+    `
+      INSERT INTO lead_os_execution_tasks (id, lead_key, kind, provider, status, dedupe_key, updated_at, payload)
+      VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz, $8::jsonb)
+      ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = EXCLUDED.updated_at
+    `,
+    [
+      normalizedTask.id,
+      normalizedTask.leadKey,
+      normalizedTask.kind,
+      normalizedTask.provider,
+      normalizedTask.status,
+      normalizedTask.dedupeKey,
+      normalizedTask.updatedAt,
+      JSON.stringify(normalizedTask),
+    ],
+  );
+  return normalizedTask;
+}
+
+export async function getExecutionTasks(filters?: {
+  leadKey?: string;
+  status?: ExecutionTaskStatus;
+  kind?: ExecutionTaskKind;
+}) {
+  const matches = (record: ExecutionTaskRecord) =>
+    (!filters?.leadKey || record.leadKey === filters.leadKey) &&
+    (!filters?.status || record.status === filters.status) &&
+    (!filters?.kind || record.kind === filters.kind);
+
+  if (!getPool() && runtimeMode() === "aitable") {
+    const entries = await getAitableRuntimeEntries();
+    const latestById = new Map<string, ExecutionTaskRecord>();
+    for (const entry of entries) {
+      if (entry.kind !== "execution-task") continue;
+      const record = entry.payload as ExecutionTaskRecord;
+      const existing = latestById.get(record.id);
+      if (!existing || new Date(record.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
+        latestById.set(record.id, record);
+      }
+    }
+    const values = sortByUpdatedAt([...latestById.values()].filter(matches));
+    executionTaskStore.clear();
+    for (const value of values) {
+      executionTaskStore.set(value.id, value);
+    }
+    return values;
+  }
+  if (!getPool()) {
+    return sortByUpdatedAt([...executionTaskStore.values()].filter(matches));
+  }
+
+  await ensureSchema();
+  const clauses: string[] = [];
+  const values: unknown[] = [];
+  if (filters?.leadKey) {
+    values.push(filters.leadKey);
+    clauses.push(`lead_key = $${values.length}`);
+  }
+  if (filters?.status) {
+    values.push(filters.status);
+    clauses.push(`status = $${values.length}`);
+  }
+  if (filters?.kind) {
+    values.push(filters.kind);
+    clauses.push(`kind = $${values.length}`);
+  }
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+  const result = await queryPostgres<{ payload: ExecutionTaskRecord }>(
+    `SELECT payload FROM lead_os_execution_tasks ${where} ORDER BY updated_at ASC`,
+    values,
+  );
+  const records = result.rows.map((row) => row.payload);
+  for (const record of records) {
+    executionTaskStore.set(record.id, record);
+  }
+  return records;
+}
+
+export async function markExecutionTaskProcessing(taskId: string) {
+  const nowIso = new Date().toISOString();
+
+  if (!getPool()) {
+    const existing = executionTaskStore.get(taskId);
+    if (!existing || existing.status !== "pending") {
+      return undefined;
+    }
+    const updated: ExecutionTaskRecord = {
+      ...existing,
+      status: "processing",
+      attempts: existing.attempts + 1,
+      updatedAt: nowIso,
+    };
+    executionTaskStore.set(taskId, updated);
+    if (runtimeMode() === "aitable") {
+      await appendAitableRuntimeEntry("execution-task", updated.id, updated);
+    }
+    return updated;
+  }
+
+  await ensureSchema();
+  const existingResult = await queryPostgres<{ payload: ExecutionTaskRecord }>(
+    "SELECT payload FROM lead_os_execution_tasks WHERE id = $1 LIMIT 1",
+    [taskId],
+  );
+  const existing = existingResult.rows[0]?.payload;
+  if (!existing || existing.status !== "pending") {
+    return undefined;
+  }
+
+  const updated: ExecutionTaskRecord = {
+    ...existing,
+    status: "processing",
+    attempts: existing.attempts + 1,
+    updatedAt: nowIso,
+  };
+  executionTaskStore.set(taskId, updated);
+  await queryPostgres(
+    `
+      UPDATE lead_os_execution_tasks
+      SET status = 'processing', updated_at = $2::timestamptz, payload = $3::jsonb
+      WHERE id = $1 AND status = 'pending'
+    `,
+    [taskId, updated.updatedAt, JSON.stringify(updated)],
+  );
+  return updated;
+}
+
+export async function finalizeExecutionTask(
+  taskId: string,
+  outcome: { status: Extract<ExecutionTaskStatus, "completed" | "failed">; lastError?: string; payload?: Record<string, unknown> },
+) {
+  const existing = executionTaskStore.get(taskId) ?? (await getExecutionTasks()).find((task) => task.id === taskId);
+  if (!existing) return undefined;
+  const updated: ExecutionTaskRecord = {
+    ...existing,
+    status: outcome.status,
+    lastError: outcome.lastError,
+    payload: outcome.payload ?? existing.payload,
+    updatedAt: new Date().toISOString(),
+  };
+  executionTaskStore.set(taskId, updated);
+
+  const activePool = getPool();
+  if (!activePool && runtimeMode() === "aitable") {
+    await appendAitableRuntimeEntry("execution-task", updated.id, updated);
+    return updated;
+  }
+  if (!activePool) {
+    return updated;
+  }
+
+  await ensureSchema();
+  await queryPostgres(
+    `
+      UPDATE lead_os_execution_tasks
+      SET status = $2, updated_at = $3::timestamptz, payload = $4::jsonb
+      WHERE id = $1
+    `,
+    [taskId, updated.status, updated.updatedAt, JSON.stringify(updated)],
+  );
+  return updated;
+}
+
 export async function upsertRuntimeConfig(
   config: Omit<RuntimeConfigRecord, "updatedAt"> & { updatedAt?: string },
 ) {
@@ -1267,6 +1510,7 @@ export async function resetRuntimeStore() {
   runtimeConfigStore.clear();
   operatorActionStore.clear();
   intakeAttemptStore.clear();
+  executionTaskStore.clear();
   invalidateAitableCache();
 
   const activePool = getPool();
@@ -1287,6 +1531,7 @@ export async function resetRuntimeStore() {
       lead_os_runtime_config,
       lead_os_operator_actions,
       lead_os_intake_attempts,
+      lead_os_execution_tasks,
       lead_os_workflow_runs,
       lead_os_provider_executions,
       lead_os_events,

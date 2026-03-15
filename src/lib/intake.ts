@@ -2,9 +2,6 @@ import { buildImmediateFollowupPlan } from "./automation.ts";
 import { decideNextStep } from "./orchestrator.ts";
 import { classifyPlumbingLead, isPlumbingLead } from "./plumbing-os.ts";
 import {
-  createBookingAction,
-  emitWorkflowAction,
-  generateDocumentAction,
   logEventsToLedger,
   type ProviderResult,
   sendAlertAction,
@@ -18,12 +15,12 @@ import type { CustomerMilestoneId, LeadMilestoneId } from "./runtime-schema.ts";
 import {
   appendEvents,
   claimIntakeReplayKey,
+  enqueueExecutionTask,
   getBookingJobs,
   getDocumentJobs,
   getLeadRecord,
   markNurtureStageSent,
   recordProviderExecution,
-  recordWorkflowRun,
   type StoredLeadRecord,
   upsertBookingJob,
   upsertDocumentJob,
@@ -98,8 +95,8 @@ export interface IntakeResult {
   crm: Awaited<ReturnType<typeof syncLeadToCrm>>;
   logging: Awaited<ReturnType<typeof logEventsToLedger>>;
   alerts: Awaited<ReturnType<typeof sendAlertAction>> | null;
-  workflow: Awaited<ReturnType<typeof emitWorkflowAction>>;
-  workflowTriggers: Array<Awaited<ReturnType<typeof emitWorkflowAction>>>;
+  workflow: ProviderResult;
+  workflowTriggers: Array<ProviderResult>;
   followup: {
     email: Awaited<ReturnType<typeof sendEmailAction>> | null;
     whatsapp: Awaited<ReturnType<typeof sendWhatsAppAction>> | null;
@@ -318,40 +315,6 @@ async function safelyRunProviderAction(
   }
 }
 
-function resolveBookingJobStatus(result: Awaited<ReturnType<typeof createBookingAction>>) {
-  if (result.mode === "dry-run") {
-    return "prepared";
-  }
-  if (!result.ok) {
-    return result.mode === "live" ? "unavailable" : "failed";
-  }
-
-  const detail = result.detail.toLowerCase();
-  if (detail.includes("submitted")) {
-    return "booked";
-  }
-  if (detail.includes("handoff ready")) {
-    return "handoff-ready";
-  }
-  if (detail.includes("availability")) {
-    return "availability-found";
-  }
-  if (detail.includes("handoff") || detail.includes("destination")) {
-    return "handoff-ready";
-  }
-  return result.mode === "prepared" ? "prepared" : "ready";
-}
-
-function resolveDocumentJobStatus(result: Awaited<ReturnType<typeof generateDocumentAction>>) {
-  if (result.mode === "dry-run") {
-    return "prepared";
-  }
-  if (!result.ok) {
-    return "failed";
-  }
-  return result.mode === "live" ? "generated" : "prepared";
-}
-
 function resolveScoreBand(score: number): PublicIntakeResponse["scoreBand"] {
   if (score >= 80) return "high";
   if (score >= 50) return "medium";
@@ -423,6 +386,16 @@ function skippedProviderResult(detail: string): ProviderResult {
     provider: "LeadOS",
     mode: "prepared",
     detail,
+  };
+}
+
+function queuedProviderResult(provider: string, detail: string, payload?: Record<string, unknown>): ProviderResult {
+  return {
+    ok: true,
+    provider,
+    mode: "prepared",
+    detail,
+    payload,
   };
 }
 
@@ -653,7 +626,24 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     stage,
     family: decision.family,
   };
-  const workflow = await safelyRunProviderAction("n8n", () => emitWorkflowAction("lead.captured", workflowPayload), workflowPayload);
+  const workflowTask = payload.dryRun
+    ? null
+    : await enqueueExecutionTask({
+        leadKey,
+        kind: "workflow",
+        provider: "n8n",
+        dedupeKey: `workflow:${leadKey}:lead.captured`,
+        payload: {
+          eventName: "lead.captured",
+          workflowPayload,
+        },
+      });
+  const workflow = payload.dryRun
+    ? skippedProviderResult("Dry run: workflow queued but not executed.")
+    : queuedProviderResult("n8n", "Queued workflow execution.", {
+        taskId: workflowTask?.id,
+        eventName: "lead.captured",
+      });
 
   const workflowTriggerSpecs: Array<{ eventName: string; payload: Record<string, unknown> } | null> = [
     hot
@@ -772,10 +762,29 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
   const workflowTriggers = await Promise.all(
     workflowTriggerSpecs
       .filter((value): value is { eventName: string; payload: Record<string, unknown> } => Boolean(value))
-      .map(async ({ eventName, payload: triggerPayload }) => ({
-        eventName,
-        result: await safelyRunProviderAction("n8n", () => emitWorkflowAction(eventName, triggerPayload), triggerPayload),
-      })),
+      .map(async ({ eventName, payload: triggerPayload }) => {
+        const task = payload.dryRun
+          ? null
+          : await enqueueExecutionTask({
+              leadKey,
+              kind: "workflow",
+              provider: "n8n",
+              dedupeKey: `workflow:${leadKey}:${eventName}`,
+              payload: {
+                eventName,
+                workflowPayload: triggerPayload,
+              },
+            });
+        return {
+          eventName,
+          result: payload.dryRun
+            ? skippedProviderResult(`Dry run: ${eventName} queued but not executed.`)
+            : queuedProviderResult("n8n", `Queued workflow execution for ${eventName}.`, {
+                taskId: task?.id,
+                eventName,
+              }),
+        };
+      }),
   );
 
   const immediatePlan = buildImmediateFollowupPlan({
@@ -877,13 +886,15 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     metadata: payload.metadata ?? {},
   };
   const bookingActionResult = shouldCreateBookingJob
-    ? await safelyRunProviderAction("Trafft", () => createBookingAction(bookingPayload), bookingPayload)
+    ? payload.dryRun
+      ? skippedProviderResult("Dry run: booking prepared but not executed.")
+      : queuedProviderResult("Trafft", "Queued booking execution.", bookingPayload)
     : null;
   const bookingJob = bookingActionResult
     ? await upsertBookingJob({
         leadKey,
         provider: bookingActionResult.provider,
-        status: resolveBookingJobStatus(bookingActionResult),
+        status: payload.dryRun ? "prepared" : "queued",
         detail: bookingActionResult.detail,
         payload: {
           family: decision.family,
@@ -893,6 +904,18 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
         },
       })
     : null;
+  if (bookingJob && !payload.dryRun) {
+    await enqueueExecutionTask({
+      leadKey,
+      kind: "booking",
+      provider: "Trafft",
+      dedupeKey: `booking:${bookingJob.id}`,
+      payload: {
+        bookingJobId: bookingJob.id,
+        bookingPayload,
+      },
+    });
+  }
 
   const documentTypes = normalizeDocumentTypes(stage, payload.metadata);
   const documentJobs = await Promise.all(
@@ -914,12 +937,14 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
         documentType,
         metadata: payload.metadata ?? {},
       };
-      const result = await safelyRunProviderAction("Documentero", () => generateDocumentAction(documentPayload), documentPayload);
+      const result = payload.dryRun
+        ? skippedProviderResult(`Dry run: ${documentType} document prepared but not executed.`)
+        : queuedProviderResult("Documentero", `Queued ${documentType} document generation.`, documentPayload);
 
       const job = await upsertDocumentJob({
         leadKey,
         provider: result.provider,
-        status: resolveDocumentJobStatus(result),
+        status: payload.dryRun ? "prepared" : "queued",
         detail: result.detail,
         payload: {
           documentType,
@@ -930,13 +955,19 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
         },
       });
 
-      if (result.ok && result.mode === "live" && documentType === "proposal") {
-        await appendEvents([
-          createCanonicalEvent(trace, "proposal_sent", "internal", "SENT", {
-            provider: result.provider,
+      if (job && !payload.dryRun) {
+        await enqueueExecutionTask({
+          leadKey,
+          kind: "document",
+          provider: "Documentero",
+          dedupeKey: `document:${job.id}`,
+          payload: {
+            documentJobId: job.id,
             documentType,
-          }),
-        ]);
+            documentPayload,
+            trace,
+          },
+        });
       }
 
       return { job, result };
@@ -962,26 +993,6 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
       detail: logging.detail,
       payload: logging.payload,
     }),
-    recordWorkflowRun({
-      leadKey,
-      eventName: "lead.captured",
-      provider: workflow.provider,
-      ok: workflow.ok,
-      mode: workflow.mode,
-      detail: workflow.detail,
-      payload: workflow.payload,
-    }),
-    ...workflowTriggers.map(({ eventName, result }) =>
-      recordWorkflowRun({
-        leadKey,
-        eventName,
-        provider: result.provider,
-        ok: result.ok,
-        mode: result.mode,
-        detail: result.detail,
-        payload: result.payload,
-      })
-    ),
     ...(alertResult ? [
       recordProviderExecution({
         leadKey,
@@ -1026,28 +1037,6 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
         payload: smsResult.payload,
       }),
     ] : []),
-    ...(bookingActionResult ? [
-      recordProviderExecution({
-        leadKey,
-        provider: bookingActionResult.provider,
-        kind: "booking",
-        ok: bookingActionResult.ok,
-        mode: bookingActionResult.mode,
-        detail: bookingActionResult.detail,
-        payload: bookingActionResult.payload,
-      }),
-    ] : []),
-    ...documentJobs.map(({ result }) =>
-      recordProviderExecution({
-        leadKey,
-        provider: result.provider,
-        kind: "documents",
-        ok: result.ok,
-        mode: result.mode,
-        detail: result.detail,
-        payload: result.payload,
-      })
-    ),
   ]);
 
   return {
