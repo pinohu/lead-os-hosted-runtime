@@ -1,4 +1,5 @@
 import { summarizeMilestoneProgress } from "./automation.ts";
+import { isSystemCanonicalEvent, isSystemLeadRecord } from "./operator-view.ts";
 import type { CanonicalEvent } from "./trace.ts";
 import type { StoredLeadRecord } from "./runtime-store.ts";
 
@@ -22,24 +23,39 @@ function ratio(value: number, total: number) {
 }
 
 export function buildDashboardSnapshot(leads: StoredLeadRecord[], events: CanonicalEvent[]) {
+  return buildDashboardSnapshotWithOptions(leads, events, {});
+}
+
+export function buildDashboardSnapshotWithOptions(
+  leads: StoredLeadRecord[],
+  events: CanonicalEvent[],
+  options: { includeSystemTraffic?: boolean },
+) {
+  const visibleLeads = options.includeSystemTraffic
+    ? leads
+    : leads.filter((lead) => !isSystemLeadRecord(lead));
+  const visibleEvents = options.includeSystemTraffic
+    ? events
+    : events.filter((event) => !isSystemCanonicalEvent(event));
+
   const leadMilestoneCounts = {
-    captured: leads.filter((lead) => lead.milestones.leadMilestones.includes("lead-m1-captured")).length,
-    returnEngaged: leads.filter((lead) => lead.milestones.leadMilestones.includes("lead-m2-return-engaged")).length,
-    bookedOrOffered: leads.filter((lead) => lead.milestones.leadMilestones.includes("lead-m3-booked-or-offered")).length,
+    captured: visibleLeads.filter((lead) => lead.milestones.leadMilestones.includes("lead-m1-captured")).length,
+    returnEngaged: visibleLeads.filter((lead) => lead.milestones.leadMilestones.includes("lead-m2-return-engaged")).length,
+    bookedOrOffered: visibleLeads.filter((lead) => lead.milestones.leadMilestones.includes("lead-m3-booked-or-offered")).length,
   };
 
   const customerMilestoneCounts = {
-    onboarded: leads.filter((lead) => lead.milestones.customerMilestones.includes("customer-m1-onboarded")).length,
-    activated: leads.filter((lead) => lead.milestones.customerMilestones.includes("customer-m2-activated")).length,
-    valueRealized: leads.filter((lead) => lead.milestones.customerMilestones.includes("customer-m3-value-realized")).length,
+    onboarded: visibleLeads.filter((lead) => lead.milestones.customerMilestones.includes("customer-m1-onboarded")).length,
+    activated: visibleLeads.filter((lead) => lead.milestones.customerMilestones.includes("customer-m2-activated")).length,
+    valueRealized: visibleLeads.filter((lead) => lead.milestones.customerMilestones.includes("customer-m3-value-realized")).length,
   };
 
-  const topFamilies = Object.entries(countBy(leads.map((lead) => lead.family)))
+  const topFamilies = Object.entries(countBy(visibleLeads.map((lead) => lead.family)))
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(([family, count]) => ({ family, count }));
 
-  const recentMilestoneEvents = events
+  const recentMilestoneEvents = visibleEvents
     .filter((event) => event.eventType === "lead_milestone_reached" || event.eventType === "customer_milestone_reached")
     .slice(-10)
     .reverse()
@@ -53,7 +69,7 @@ export function buildDashboardSnapshot(leads: StoredLeadRecord[], events: Canoni
       stage: String(event.metadata.stage ?? ""),
     }));
 
-  const leadTimeline = leads
+  const leadTimeline = visibleLeads
     .slice()
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 10)
@@ -73,7 +89,7 @@ export function buildDashboardSnapshot(leads: StoredLeadRecord[], events: Canoni
     });
 
   const experimentPerformance = Object.entries(
-    leads.reduce<Record<string, {
+    visibleLeads.reduce<Record<string, {
       experimentId: string;
       entries: number;
       hot: number;
@@ -119,9 +135,19 @@ export function buildDashboardSnapshot(leads: StoredLeadRecord[], events: Canoni
 
   return {
     totals: {
+      leads: visibleLeads.length,
+      events: visibleEvents.length,
+      hotLeads: visibleLeads.filter((lead) => lead.hot).length,
+    },
+    allTotals: {
       leads: leads.length,
       events: events.length,
       hotLeads: leads.filter((lead) => lead.hot).length,
+    },
+    systemTraffic: {
+      included: options.includeSystemTraffic === true,
+      hiddenLeads: Math.max(0, leads.length - visibleLeads.length),
+      hiddenEvents: Math.max(0, events.length - visibleEvents.length),
     },
     milestones: {
       lead: leadMilestoneCounts,
@@ -134,8 +160,8 @@ export function buildDashboardSnapshot(leads: StoredLeadRecord[], events: Canoni
       customerM2ToM3: ratio(customerMilestoneCounts.valueRealized, customerMilestoneCounts.activated),
     },
     topFamilies,
-    topSources: topBreakdown(leads.map((lead) => lead.source)),
-    topNiches: topBreakdown(leads.map((lead) => lead.niche)),
+    topSources: topBreakdown(visibleLeads.map((lead) => lead.source)),
+    topNiches: topBreakdown(visibleLeads.map((lead) => lead.niche)),
     recentMilestoneEvents,
     leadTimeline,
     experimentPerformance,

@@ -27,11 +27,6 @@ type PublicOriginOptions = {
   forwardedProto?: string | null;
 };
 
-type DeliveryResultLike = {
-  detail: string;
-  payload?: Record<string, unknown>;
-};
-
 function getAuthSecret() {
   return process.env.LEAD_OS_AUTH_SECRET ?? process.env.CRON_SECRET ?? embeddedSecrets.cron.secret;
 }
@@ -74,6 +69,20 @@ export function getOperatorPublicOrigin(options: PublicOriginOptions = {}) {
 
 export function buildOperatorAbsoluteUrl(path: string, options: PublicOriginOptions = {}) {
   return new URL(path, getOperatorPublicOrigin(options)).toString();
+}
+
+export function buildOperatorDestinationUrl(
+  nextPath: string,
+  options: PublicOriginOptions = {},
+  params: Record<string, string | undefined> = {},
+) {
+  const url = new URL(sanitizeNextPath(nextPath), getOperatorPublicOrigin(options));
+  for (const [key, value] of Object.entries(params)) {
+    if (value && value.trim().length > 0) {
+      url.searchParams.set(key, value);
+    }
+  }
+  return url.toString();
 }
 
 export async function createMagicLink(email: string, origin: string, nextPath?: string) {
@@ -137,22 +146,6 @@ export async function sendOperatorMagicLink(email: string, origin: string, nextP
       detail,
     } as const;
   }
-}
-
-export function summarizeOperatorDeliveryFailure(result: DeliveryResultLike) {
-  const response = result.payload?.response;
-  const responseText = typeof response === "string"
-    ? response
-    : response
-      ? JSON.stringify(response)
-      : "";
-
-  return [result.detail, responseText]
-    .filter(Boolean)
-    .join(" | ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 200);
 }
 
 export async function createSessionToken(email: string) {

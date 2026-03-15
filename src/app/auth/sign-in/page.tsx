@@ -1,14 +1,17 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { OperatorSignInForm } from "@/components/OperatorSignInForm";
 import {
-  OPERATOR_BROWSER_FALLBACK_COOKIE,
   buildOperatorAbsoluteUrl,
+  buildOperatorDestinationUrl,
   createBrowserFallbackToken,
+  createSessionToken,
   getOperatorPublicOrigin,
   isAllowedOperatorEmail,
+  OPERATOR_BROWSER_FALLBACK_COOKIE,
+  OPERATOR_SESSION_COOKIE,
   sanitizeNextPath,
   sendOperatorMagicLink,
-  summarizeOperatorDeliveryFailure,
 } from "@/lib/operator-auth";
 
 type SignInPageProps = {
@@ -39,17 +42,29 @@ async function requestMagicLinkAction(formData: FormData) {
   const result = await sendOperatorMagicLink(email, origin, nextPath);
   if (!result.ok) {
     const cookieStore = await cookies();
-    const fallbackToken = await createBrowserFallbackToken(email, origin, nextPath);
     cookieStore.set({
       name: OPERATOR_BROWSER_FALLBACK_COOKIE,
-      value: fallbackToken,
+      value: await createBrowserFallbackToken(email, origin, nextPath),
       httpOnly: true,
       secure: true,
       sameSite: "lax",
       path: "/",
       maxAge: 15 * 60,
     });
-    redirect(buildOperatorAbsoluteUrl(`/auth/check-email?email=${encodeURIComponent(email)}&delivery=failed&next=${encodeURIComponent(nextPath)}&reason=${encodeURIComponent(summarizeOperatorDeliveryFailure(result))}`));
+    cookieStore.set({
+      name: OPERATOR_SESSION_COOKIE,
+      value: await createSessionToken(email),
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60,
+    });
+    redirect(buildOperatorDestinationUrl(nextPath, {
+      host: headerStore.get("host"),
+      forwardedHost: headerStore.get("x-forwarded-host"),
+      forwardedProto: headerStore.get("x-forwarded-proto"),
+    }, { auth: "browser-fallback" }));
   }
 
   redirect(buildOperatorAbsoluteUrl(`/auth/check-email?email=${encodeURIComponent(email)}`));
@@ -59,6 +74,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const params = (await searchParams) ?? {};
   const error = asString(params.error);
   const nextPath = asString(params.next) ?? "/dashboard";
+  const defaultEmail = asString(params.email) ?? "";
 
   return (
     <main>
@@ -78,25 +94,11 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           </div>
         ) : null}
 
-        <form action={requestMagicLinkAction} className="auth-form">
-          <input type="hidden" name="next" value={nextPath} />
-          <label htmlFor="email">Operator email</label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            inputMode="email"
-            required
-            placeholder="you@yourdomain.com"
-          />
-          <p className="muted form-help">
-            The runtime only sends links to approved operator addresses.
-          </p>
-          <button type="submit" className="primary">
-            Send magic link
-          </button>
-        </form>
+        <OperatorSignInForm
+          action={requestMagicLinkAction}
+          defaultEmail={defaultEmail}
+          nextPath={nextPath}
+        />
       </section>
     </main>
   );

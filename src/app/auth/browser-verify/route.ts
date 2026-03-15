@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import {
   applyOperatorSession,
+  buildOperatorDestinationUrl,
   buildOperatorAbsoluteUrl,
   clearOperatorBrowserFallback,
   createSessionToken,
-  getOperatorPublicOrigin,
   OPERATOR_BROWSER_FALLBACK_COOKIE,
   sanitizeNextPath,
   verifyMagicLinkToken,
@@ -39,9 +39,10 @@ export async function POST(request: Request) {
   }
 
   const sessionToken = await createSessionToken(payload.email);
-  const response = NextResponse.redirect(new URL(
+  const response = NextResponse.redirect(buildOperatorDestinationUrl(
     payload.next ?? nextPath,
-    getOperatorPublicOrigin(publicOriginOptions),
+    publicOriginOptions,
+    { auth: "browser-fallback" },
   ));
   applyOperatorSession(response, sessionToken);
   clearOperatorBrowserFallback(response);

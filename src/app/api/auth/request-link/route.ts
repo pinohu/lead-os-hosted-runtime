@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import {
   applyOperatorBrowserFallback,
+  applyOperatorSession,
   buildOperatorAbsoluteUrl,
+  buildOperatorDestinationUrl,
   createBrowserFallbackToken,
+  createSessionToken,
   getOperatorPublicOrigin,
   isAllowedOperatorEmail,
   sanitizeNextPath,
   sendOperatorMagicLink,
-  summarizeOperatorDeliveryFailure,
 } from "@/lib/operator-auth";
 
 function redirectWithError(request: Request, message: string, nextPath: string) {
@@ -44,18 +46,14 @@ export async function POST(request: Request) {
       forwardedHost: request.headers.get("x-forwarded-host"),
       forwardedProto: request.headers.get("x-forwarded-proto"),
     });
-    const url = new URL(buildOperatorAbsoluteUrl("/auth/check-email", {
+    const response = NextResponse.redirect(buildOperatorDestinationUrl(nextPath, {
       requestUrl: request.url,
       host: request.headers.get("host"),
       forwardedHost: request.headers.get("x-forwarded-host"),
       forwardedProto: request.headers.get("x-forwarded-proto"),
-    }));
-    url.searchParams.set("email", email);
-    url.searchParams.set("delivery", "failed");
-    url.searchParams.set("next", nextPath);
-    url.searchParams.set("reason", summarizeOperatorDeliveryFailure(result));
-    const response = NextResponse.redirect(url);
+    }, { auth: "browser-fallback" }));
     applyOperatorBrowserFallback(response, await createBrowserFallbackToken(email, origin, nextPath));
+    applyOperatorSession(response, await createSessionToken(email));
     return response;
   }
 

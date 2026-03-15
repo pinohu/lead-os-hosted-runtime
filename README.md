@@ -14,6 +14,8 @@ The hosted runtime owns:
 - routing and next-step recommendations
 - hosted assessments and calculators
 - shared tenant and niche manifests
+- private operator dashboard access with magic-link auth and same-browser secure continuation if mail delivery is unavailable
+- operator views that hide internal verification traffic by default so dashboards reflect human activity first
 
 ## Key docs
 

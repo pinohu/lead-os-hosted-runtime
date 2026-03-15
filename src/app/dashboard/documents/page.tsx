@@ -2,12 +2,25 @@ import Link from "next/link";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { getDocumentJobs, getLeadRecord, type DocumentJobRecord } from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
+import { isSystemDocumentJob } from "@/lib/operator-view";
 
-export default async function DocumentJobsPage() {
+type DocumentJobsPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function asString(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function DocumentJobsPage({ searchParams }: DocumentJobsPageProps) {
   await requireOperatorPageSession("/dashboard/documents");
+  const params = (await searchParams) ?? {};
+  const includeSystemTraffic = asString(params.include) === "system";
   const jobs = (await getDocumentJobs()) as DocumentJobRecord[];
+  const visibleJobs = includeSystemTraffic ? jobs : jobs.filter((job) => !isSystemDocumentJob(job));
+  const hiddenJobs = Math.max(0, jobs.length - visibleJobs.length);
   const jobsWithLead = await Promise.all(
-    jobs.map(async (job) => ({
+    visibleJobs.map(async (job) => ({
       job,
       lead: await getLeadRecord(job.leadKey),
     })),
@@ -37,19 +50,46 @@ export default async function DocumentJobsPage() {
           <ul className="journey-rail">
             <li>
               <strong>Total jobs</strong>
-              <span>{jobs.length}</span>
+              <span>{visibleJobs.length}</span>
             </li>
             <li>
               <strong>Generated</strong>
-              <span>{jobs.filter((job) => job.status === "generated").length}</span>
+              <span>{visibleJobs.filter((job) => job.status === "generated").length}</span>
             </li>
             <li>
               <strong>Prepared</strong>
-              <span>{jobs.filter((job) => job.status === "prepared").length}</span>
+              <span>{visibleJobs.filter((job) => job.status === "prepared").length}</span>
             </li>
+            {hiddenJobs > 0 && !includeSystemTraffic ? (
+              <li>
+                <strong>Hidden system jobs</strong>
+                <span>{hiddenJobs}</span>
+              </li>
+            ) : null}
           </ul>
         </aside>
       </section>
+
+      {hiddenJobs > 0 ? (
+        <section className="panel">
+          <p className="muted">
+            {includeSystemTraffic
+              ? "System verification document jobs are included in this queue."
+              : "System verification document jobs are hidden from the default queue."}
+          </p>
+          <div className="cta-row">
+            {includeSystemTraffic ? (
+              <Link href="/dashboard/documents" className="secondary">
+                Hide system activity
+              </Link>
+            ) : (
+              <Link href="/dashboard/documents?include=system" className="secondary">
+                Show system activity
+              </Link>
+            )}
+          </div>
+        </section>
+      ) : null}
 
       <section className="stack-grid">
         {jobsWithLead.length === 0 ? (

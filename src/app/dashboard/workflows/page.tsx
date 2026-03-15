@@ -7,13 +7,26 @@ import {
   type WorkflowRunRecord,
 } from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
+import { isSystemWorkflowRun } from "@/lib/operator-view";
 
-export default async function WorkflowRunsPage() {
+type WorkflowRunsPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function asString(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function WorkflowRunsPage({ searchParams }: WorkflowRunsPageProps) {
   await requireOperatorPageSession("/dashboard/workflows");
+  const params = (await searchParams) ?? {};
+  const includeSystemTraffic = asString(params.include) === "system";
   const runs = (await getWorkflowRuns()) as WorkflowRunRecord[];
+  const visibleRuns = includeSystemTraffic ? runs : runs.filter((run) => !isSystemWorkflowRun(run));
+  const hiddenRuns = Math.max(0, runs.length - visibleRuns.length);
   const registry = await getWorkflowRegistryRecords();
   const runsWithLead = await Promise.all(
-    runs.map(async (run) => ({
+    visibleRuns.map(async (run) => ({
       run,
       lead: run.leadKey ? await getLeadRecord(run.leadKey) : undefined,
     })),
@@ -43,23 +56,50 @@ export default async function WorkflowRunsPage() {
           <ul className="journey-rail">
             <li>
               <strong>Total runs</strong>
-              <span>{runs.length}</span>
+              <span>{visibleRuns.length}</span>
             </li>
             <li>
               <strong>Live</strong>
-              <span>{runs.filter((run) => run.mode === "live").length}</span>
+              <span>{visibleRuns.filter((run) => run.mode === "live").length}</span>
             </li>
             <li>
               <strong>Failed</strong>
-              <span>{runs.filter((run) => !run.ok).length}</span>
+              <span>{visibleRuns.filter((run) => !run.ok).length}</span>
             </li>
             <li>
               <strong>Provisioned starters</strong>
               <span>{registry.length}</span>
             </li>
+            {hiddenRuns > 0 && !includeSystemTraffic ? (
+              <li>
+                <strong>Hidden system runs</strong>
+                <span>{hiddenRuns}</span>
+              </li>
+            ) : null}
           </ul>
         </aside>
       </section>
+
+      {hiddenRuns > 0 ? (
+        <section className="panel">
+          <p className="muted">
+            {includeSystemTraffic
+              ? "System verification workflow runs are included in this history."
+              : "System verification workflow runs are hidden from the default history."}
+          </p>
+          <div className="cta-row">
+            {includeSystemTraffic ? (
+              <Link href="/dashboard/workflows" className="secondary">
+                Hide system activity
+              </Link>
+            ) : (
+              <Link href="/dashboard/workflows?include=system" className="secondary">
+                Show system activity
+              </Link>
+            )}
+          </div>
+        </section>
+      ) : null}
 
       <section className="stack-grid">
         {registry.length === 0 ? null : registry.map((workflow) => (

@@ -2,6 +2,13 @@
 
 LeadOS separates secret credentials from operator-editable runtime settings.
 
+## Operator access
+
+- Approved operators sign in from `/auth/sign-in`.
+- The primary path is a magic link delivered to the approved operator email.
+- If transactional email delivery is temporarily unavailable, LeadOS now continues securely in the same browser for the approved operator instead of dead-ending the sign-in flow.
+- The main dashboard and execution queues hide internal verification traffic by default; append `?include=system` if you need to inspect smoke-check or webhook-validation activity.
+
 ## What lives in runtime settings
 
 - Trafft public booking URL

@@ -1,13 +1,25 @@
 import Link from "next/link";
 import { THREE_VISIT_FRAMEWORK } from "@/lib/automation";
-import { buildDashboardSnapshot } from "@/lib/dashboard";
+import { buildDashboardSnapshotWithOptions } from "@/lib/dashboard";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { getAutomationHealth } from "@/lib/providers";
 import { getBookingJobs, getCanonicalEvents, getDocumentJobs, getLeadRecords, getWorkflowRuns } from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
+import { isSystemBookingJob, isSystemDocumentJob, isSystemWorkflowRun } from "@/lib/operator-view";
 
-export default async function DashboardPage() {
+type DashboardPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function asString(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const session = await requireOperatorPageSession("/dashboard");
+  const params = (await searchParams) ?? {};
+  const includeSystemTraffic = asString(params.include) === "system";
+  const authNotice = asString(params.auth);
   const [leads, events, bookingJobs, documentJobs, workflowRuns] = await Promise.all([
     getLeadRecords(),
     getCanonicalEvents(),
@@ -15,11 +27,54 @@ export default async function DashboardPage() {
     getDocumentJobs(),
     getWorkflowRuns(),
   ]);
-  const snapshot = buildDashboardSnapshot(leads, events);
+  const snapshot = buildDashboardSnapshotWithOptions(leads, events, { includeSystemTraffic });
   const health = getAutomationHealth();
+  const visibleBookingJobs = includeSystemTraffic
+    ? bookingJobs
+    : bookingJobs.filter((job) => !isSystemBookingJob(job));
+  const visibleDocumentJobs = includeSystemTraffic
+    ? documentJobs
+    : documentJobs.filter((job) => !isSystemDocumentJob(job));
+  const visibleWorkflowRuns = includeSystemTraffic
+    ? workflowRuns
+    : workflowRuns.filter((run) => !isSystemWorkflowRun(run));
 
   return (
     <main className="experience-page">
+      {authNotice === "browser-fallback" ? (
+        <section className="panel">
+          <div className="status-banner success" role="status">
+            Email delivery is unavailable right now, so LeadOS continued securely in this same
+            browser for your approved operator session.
+          </div>
+        </section>
+      ) : null}
+
+      {snapshot.systemTraffic.hiddenLeads > 0 || snapshot.systemTraffic.hiddenEvents > 0 ? (
+        <section className="panel">
+          <p className="eyebrow">Visibility</p>
+          <h2>
+            {includeSystemTraffic ? "Showing system verification activity" : "System verification activity is hidden by default"}
+          </h2>
+          <p className="muted">
+            {includeSystemTraffic
+              ? `This view includes ${snapshot.systemTraffic.hiddenLeads} internal verification leads and ${snapshot.systemTraffic.hiddenEvents} internal events alongside human traffic.`
+              : `LeadOS is hiding ${snapshot.systemTraffic.hiddenLeads} internal verification leads and ${snapshot.systemTraffic.hiddenEvents} internal events so the default dashboard reflects human traffic first.`}
+          </p>
+          <div className="cta-row">
+            {includeSystemTraffic ? (
+              <Link href="/dashboard" className="secondary">
+                Hide system activity
+              </Link>
+            ) : (
+              <Link href="/dashboard?include=system" className="secondary">
+                Show system activity
+              </Link>
+            )}
+          </div>
+        </section>
+      ) : null}
+
       <section className="experience-hero">
         <div className="hero-copy">
           <p className="eyebrow">Operator command center</p>
@@ -57,8 +112,13 @@ export default async function DashboardPage() {
           <p className="eyebrow">Operator session</p>
           <h2>{session.email}</h2>
           <p className="muted">
-            Live mode: {health.liveMode ? "enabled" : "dry run"} | Total leads: {snapshot.totals.leads} | Hot leads: {snapshot.totals.hotLeads}
+            Live mode: {health.liveMode ? "enabled" : "dry run"} | Visible leads: {snapshot.totals.leads} | Hot leads: {snapshot.totals.hotLeads}
           </p>
+          {snapshot.systemTraffic.hiddenLeads > 0 && !includeSystemTraffic ? (
+            <p className="muted">
+              Hidden system leads: {snapshot.systemTraffic.hiddenLeads}
+            </p>
+          ) : null}
           <ul className="journey-rail">
             {THREE_VISIT_FRAMEWORK.lead.map((milestone) => (
               <li key={milestone.id}>
@@ -100,7 +160,7 @@ export default async function DashboardPage() {
           <div className="stack-grid">
             <article className="stack-card">
               <p className="eyebrow">Bookings</p>
-              <h3>{bookingJobs.length}</h3>
+              <h3>{visibleBookingJobs.length}</h3>
               <p className="muted">Scheduling jobs recorded in the runtime.</p>
               <Link href="/dashboard/bookings" className="secondary">
                 Open booking queue
@@ -108,7 +168,7 @@ export default async function DashboardPage() {
             </article>
             <article className="stack-card">
               <p className="eyebrow">Documents</p>
-              <h3>{documentJobs.length}</h3>
+              <h3>{visibleDocumentJobs.length}</h3>
               <p className="muted">Proposal, agreement, and onboarding document jobs.</p>
               <Link href="/dashboard/documents" className="secondary">
                 Open document queue
@@ -116,7 +176,7 @@ export default async function DashboardPage() {
             </article>
             <article className="stack-card">
               <p className="eyebrow">Workflow runs</p>
-              <h3>{workflowRuns.length}</h3>
+              <h3>{visibleWorkflowRuns.length}</h3>
               <p className="muted">n8n and internal workflow emissions logged by LeadOS.</p>
               <Link href="/dashboard/workflows" className="secondary">
                 Open workflow history
