@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DispatchActionPanel } from "@/components/DispatchActionPanel";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { getBookingJobs, getLeadRecord, type BookingJobRecord } from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
@@ -109,6 +110,11 @@ export default async function BookingJobsPage({ searchParams }: BookingJobsPageP
                 {lead ? ` | Family: ${lead.family} | Stage: ${lead.stage}` : ""}
               </p>
               <p className="muted">Updated: {job.updatedAt}</p>
+              <DispatchActionPanel
+                leadKey={job.leadKey}
+                compact
+                visibleActions={["retry-booking", "assign-backup-provider", "mark-booked"]}
+              />
               <div className="cta-row">
                 <Link href={`/dashboard/leads/${encodeURIComponent(job.leadKey)}`} className="secondary">
                   Open lead detail

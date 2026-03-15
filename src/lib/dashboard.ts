@@ -7,7 +7,7 @@ import type {
   StoredLeadRecord,
   WorkflowRunRecord,
 } from "./runtime-store.ts";
-import type { PlumbingLeadContext, PlumbingUrgencyBand } from "./runtime-schema.ts";
+import type { PlumbingJobOutcome, PlumbingLeadContext, PlumbingUrgencyBand } from "./runtime-schema.ts";
 
 function countBy<T extends string>(values: T[]) {
   return values.reduce<Record<string, number>>((acc, value) => {
@@ -31,6 +31,11 @@ function ratio(value: number, total: number) {
 function asPlumbingContext(lead: StoredLeadRecord) {
   const plumbing = lead.metadata.plumbing;
   return plumbing && typeof plumbing === "object" ? plumbing as PlumbingLeadContext : null;
+}
+
+function asPlumbingOutcome(lead: StoredLeadRecord) {
+  const outcome = lead.metadata.plumbingOutcome;
+  return outcome && typeof outcome === "object" ? outcome as PlumbingJobOutcome : null;
 }
 
 function buildDispatchAction(lead: StoredLeadRecord, plumbing: PlumbingLeadContext | null) {
@@ -81,11 +86,11 @@ function buildPlumbingDispatchSnapshot(
   workflowRuns: WorkflowRunRecord[],
 ) {
   const plumbingLeads = leads
-    .map((lead) => ({ lead, plumbing: asPlumbingContext(lead) }))
+    .map((lead) => ({ lead, plumbing: asPlumbingContext(lead), outcome: asPlumbingOutcome(lead) }))
     .filter((item) => item.plumbing);
 
   const queueItems = plumbingLeads
-    .map(({ lead, plumbing }) => ({
+    .map(({ lead, plumbing, outcome }) => ({
       leadKey: lead.leadKey,
       stage: lead.stage,
       hot: lead.hot,
@@ -98,6 +103,7 @@ function buildPlumbingDispatchSnapshot(
       readinessScore: buildDispatchReadiness(lead, plumbing),
       operatorAction: buildDispatchAction(lead, plumbing),
       routingReasons: plumbing!.routingReasons,
+      outcomeStatus: outcome?.status ?? null,
     }))
     .sort((left, right) => {
       if (right.readinessScore !== left.readinessScore) {
@@ -132,6 +138,11 @@ function buildPlumbingDispatchSnapshot(
       const providerBookingJobs = bookingJobs.filter((job) => job.provider === entry.provider);
       const bookedJobs = providerBookingJobs.filter((job) => ["booked", "availability-found", "handoff-ready"].includes(job.status)).length;
       const workflowFailures = workflowRuns.filter((run) => run.provider === entry.provider && !run.ok).length;
+      const providerOutcomes = plumbingLeads
+        .map((item) => item.outcome)
+        .filter((outcome): outcome is PlumbingJobOutcome => Boolean(outcome) && outcome?.provider === entry.provider);
+      const completedOutcomes = providerOutcomes.filter((outcome) => outcome.status === "completed").length;
+      const bookedOutcomes = providerOutcomes.filter((outcome) => outcome.status === "booked").length;
       const reliabilityScore = Math.max(
         0,
         Math.min(
@@ -139,7 +150,8 @@ function buildPlumbingDispatchSnapshot(
           Math.round(
             ratio(entry.ok, entry.attempts) * 0.55 +
             ratio(entry.live, entry.attempts) * 0.2 +
-            ratio(bookedJobs, Math.max(providerBookingJobs.length, 1)) * 0.2 -
+            ratio(bookedJobs, Math.max(providerBookingJobs.length, 1)) * 0.15 +
+            ratio(bookedOutcomes + completedOutcomes, Math.max(providerOutcomes.length, 1)) * 0.1 -
             workflowFailures * 4,
           ),
         ),
@@ -151,8 +163,11 @@ function buildPlumbingDispatchSnapshot(
         reliabilityScore,
         successRate: ratio(entry.ok, entry.attempts),
         bookingFillRate: ratio(bookedJobs, Math.max(providerBookingJobs.length, 1)),
+        completionRate: ratio(completedOutcomes, Math.max(providerOutcomes.length, 1)),
         workflowFailures,
         bookingJobs: providerBookingJobs.length,
+        bookedOutcomes,
+        completedOutcomes,
       };
     })
     .sort((left, right) => right.reliabilityScore - left.reliabilityScore);

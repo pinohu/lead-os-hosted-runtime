@@ -65,6 +65,22 @@ export type PlumbingDispatchMode =
   | "commercial-intake"
   | "triage";
 
+export type PlumbingOperatorActionType =
+  | "dispatch-now"
+  | "assign-backup-provider"
+  | "retry-booking"
+  | "mark-booked"
+  | "mark-completed"
+  | "mark-lost";
+
+export type PlumbingJobOutcomeStatus =
+  | "dispatch-requested"
+  | "backup-provider-requested"
+  | "booking-retry-requested"
+  | "booked"
+  | "completed"
+  | "lost";
+
 export interface PlumbingLeadContext {
   issueType: PlumbingIssueType;
   urgencyBand: PlumbingUrgencyBand;
@@ -80,6 +96,15 @@ export interface PlumbingLeadContext {
   };
   confidence: number;
   routingReasons: string[];
+}
+
+export interface PlumbingJobOutcome {
+  status: PlumbingJobOutcomeStatus;
+  actorEmail: string;
+  recordedAt: string;
+  note?: string;
+  revenueValue?: number;
+  provider?: string;
 }
 
 export type MilestoneTrack = "lead" | "customer";
@@ -272,6 +297,8 @@ export type CanonicalEventType =
   | "review_requested"
   | "plumbing_urgency_classified"
   | "dispatch_path_selected"
+  | "operator_dispatch_action"
+  | "plumbing_job_outcome_recorded"
   | "lead_milestone_reached"
   | "customer_milestone_reached";
 

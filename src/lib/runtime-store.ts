@@ -1,6 +1,11 @@
 import { Pool, type QueryResultRow } from "pg";
 import { embeddedSecrets } from "./embedded-secrets.ts";
-import type { CustomerMilestoneId, LeadMilestoneId, LeadStage } from "./runtime-schema.ts";
+import type {
+  CustomerMilestoneId,
+  LeadMilestoneId,
+  LeadStage,
+  PlumbingOperatorActionType,
+} from "./runtime-schema.ts";
 import type { CanonicalEvent, TraceContext } from "./trace.ts";
 
 export interface LeadMilestoneState {
@@ -106,6 +111,16 @@ export interface RuntimeConfigRecord {
   updatedBy?: string;
 }
 
+export interface OperatorActionRecord {
+  id: string;
+  leadKey: string;
+  actionType: PlumbingOperatorActionType;
+  actorEmail: string;
+  detail: string;
+  payload?: Record<string, unknown>;
+  createdAt: string;
+}
+
 const leadStore = new Map<string, StoredLeadRecord>();
 const eventStore: CanonicalEvent[] = [];
 const providerExecutionStore: ProviderExecutionRecord[] = [];
@@ -114,6 +129,7 @@ const bookingJobStore = new Map<string, BookingJobRecord>();
 const documentJobStore = new Map<string, DocumentJobRecord>();
 const workflowRegistryStore = new Map<string, WorkflowRegistryRecord>();
 const runtimeConfigStore = new Map<string, RuntimeConfigRecord>();
+const operatorActionStore = new Map<string, OperatorActionRecord>();
 
 let pool: Pool | null = null;
 let schemaReady: Promise<void> | null = null;
@@ -129,7 +145,8 @@ type AitableRuntimeKind =
   | "booking-job"
   | "document-job"
   | "workflow-registry"
-  | "runtime-config";
+  | "runtime-config"
+  | "operator-action";
 
 type AitableRuntimeEntry = {
   kind: AitableRuntimeKind;
@@ -142,7 +159,8 @@ type AitableRuntimeEntry = {
     | BookingJobRecord
     | DocumentJobRecord
     | WorkflowRegistryRecord
-    | RuntimeConfigRecord;
+    | RuntimeConfigRecord
+    | OperatorActionRecord;
 };
 
 function getDatabaseUrl() {
@@ -252,12 +270,22 @@ async function ensureSchema() {
           payload JSONB NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS lead_os_operator_actions (
+          id TEXT PRIMARY KEY,
+          lead_key TEXT NOT NULL,
+          action_type TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL,
+          payload JSONB NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS lead_os_events_lead_idx
           ON lead_os_events (lead_key, timestamp DESC);
         CREATE INDEX IF NOT EXISTS lead_os_provider_exec_lead_idx
           ON lead_os_provider_executions (lead_key, created_at DESC);
         CREATE INDEX IF NOT EXISTS lead_os_workflow_runs_lead_idx
           ON lead_os_workflow_runs (lead_key, created_at DESC);
+        CREATE INDEX IF NOT EXISTS lead_os_operator_actions_lead_idx
+          ON lead_os_operator_actions (lead_key, created_at DESC);
       `);
     } catch (error) {
       schemaReady = null;
@@ -1073,6 +1101,76 @@ export async function getRuntimeConfigs() {
   return configs;
 }
 
+export async function recordOperatorAction(
+  record: Omit<OperatorActionRecord, "id" | "createdAt"> & {
+    id?: string;
+    createdAt?: string;
+  },
+) {
+  const normalizedRecord: OperatorActionRecord = {
+    ...record,
+    id: record.id ?? crypto.randomUUID(),
+    createdAt: record.createdAt ?? new Date().toISOString(),
+  };
+  operatorActionStore.set(normalizedRecord.id, normalizedRecord);
+
+  const activePool = getPool();
+  if (!activePool && runtimeMode() === "aitable") {
+    await appendAitableRuntimeEntry("operator-action", normalizedRecord.id, normalizedRecord);
+    return normalizedRecord;
+  }
+  if (!activePool) {
+    return normalizedRecord;
+  }
+
+  await ensureSchema();
+  await queryPostgres(
+    `
+      INSERT INTO lead_os_operator_actions (id, lead_key, action_type, created_at, payload)
+      VALUES ($1, $2, $3, $4::timestamptz, $5::jsonb)
+      ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, created_at = EXCLUDED.created_at
+    `,
+    [
+      normalizedRecord.id,
+      normalizedRecord.leadKey,
+      normalizedRecord.actionType,
+      normalizedRecord.createdAt,
+      JSON.stringify(normalizedRecord),
+    ],
+  );
+  return normalizedRecord;
+}
+
+export async function getOperatorActions(leadKey?: string) {
+  if (!getPool() && runtimeMode() === "aitable") {
+    const entries = await getAitableRuntimeEntries();
+    return sortByCreatedAt(
+      entries
+        .filter((entry) => entry.kind === "operator-action")
+        .map((entry) => entry.payload as OperatorActionRecord)
+        .filter((record) => !leadKey || record.leadKey === leadKey),
+    );
+  }
+  if (!getPool()) {
+    return sortByCreatedAt(
+      [...operatorActionStore.values()].filter((record) => !leadKey || record.leadKey === leadKey),
+    );
+  }
+
+  await ensureSchema();
+  const query = leadKey
+    ? {
+        text: "SELECT payload FROM lead_os_operator_actions WHERE lead_key = $1 ORDER BY created_at DESC",
+        values: [leadKey],
+      }
+    : {
+        text: "SELECT payload FROM lead_os_operator_actions ORDER BY created_at DESC",
+        values: [] as unknown[],
+      };
+  const result = await queryPostgres<{ payload: OperatorActionRecord }>(query.text, query.values);
+  return result.rows.map((row) => row.payload);
+}
+
 export async function resetRuntimeStore() {
   leadStore.clear();
   eventStore.length = 0;
@@ -1082,6 +1180,7 @@ export async function resetRuntimeStore() {
   documentJobStore.clear();
   workflowRegistryStore.clear();
   runtimeConfigStore.clear();
+  operatorActionStore.clear();
   invalidateAitableCache();
 
   const activePool = getPool();
@@ -1100,6 +1199,7 @@ export async function resetRuntimeStore() {
       lead_os_booking_jobs,
       lead_os_workflow_registry,
       lead_os_runtime_config,
+      lead_os_operator_actions,
       lead_os_workflow_runs,
       lead_os_provider_executions,
       lead_os_events,

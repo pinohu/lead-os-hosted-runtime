@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { DispatchActionPanel } from "@/components/DispatchActionPanel";
 import { summarizeMilestoneProgress } from "@/lib/automation";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import {
   type BookingJobRecord,
   type DocumentJobRecord,
+  getOperatorActions,
   getBookingJobs,
   getCanonicalEvents,
   getDocumentJobs,
@@ -15,7 +17,7 @@ import {
   getWorkflowRuns,
 } from "@/lib/runtime-store";
 import type { CanonicalEvent } from "@/lib/trace";
-import type { PlumbingLeadContext } from "@/lib/runtime-schema";
+import type { PlumbingJobOutcome, PlumbingLeadContext } from "@/lib/runtime-schema";
 
 export const dynamic = "force-dynamic";
 
@@ -33,12 +35,13 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
     notFound();
   }
 
-  const [events, workflows, providerExecutions, bookingJobs, documentJobs] = await Promise.all([
+  const [events, workflows, providerExecutions, bookingJobs, documentJobs, operatorActions] = await Promise.all([
     getCanonicalEvents(),
     getWorkflowRuns(decodedLeadKey),
     getProviderExecutions(decodedLeadKey),
     getBookingJobs(decodedLeadKey),
     getDocumentJobs(decodedLeadKey),
+    getOperatorActions(decodedLeadKey),
   ]);
   const filteredEvents = (events as CanonicalEvent[])
     .filter((event) => event.leadKey === decodedLeadKey)
@@ -50,6 +53,9 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   const progress = summarizeMilestoneProgress(lead);
   const plumbing = lead.metadata.plumbing && typeof lead.metadata.plumbing === "object"
     ? lead.metadata.plumbing as PlumbingLeadContext
+    : null;
+  const plumbingOutcome = lead.metadata.plumbingOutcome && typeof lead.metadata.plumbingOutcome === "object"
+    ? lead.metadata.plumbingOutcome as PlumbingJobOutcome
     : null;
   const operatingModel = typeof lead.metadata.operatingModel === "string"
     ? lead.metadata.operatingModel
@@ -137,7 +143,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
               <li>Issue type: {formatLabel(plumbing.issueType)}</li>
               <li>Dispatch mode: {formatLabel(plumbing.dispatchMode)}</li>
               <li>Property type: {formatLabel(plumbing.propertyType)}</li>
-              <li>Location: {[lead.metadata.city, lead.metadata.county, lead.metadata.state].filter(Boolean).join(", ") || "Not captured"}</li>
+              <li>Location: {[plumbing.geo.city, plumbing.geo.county, plumbing.geo.state].filter(Boolean).join(", ") || "Not captured"}</li>
             </ul>
           </article>
 
@@ -153,6 +159,33 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
                 ))
               )}
             </ul>
+          </article>
+        </section>
+      ) : null}
+
+      {plumbing ? (
+        <section className="grid two">
+          <article className="panel">
+            <p className="eyebrow">Actionable controls</p>
+            <h2>Resolve dispatch from this page</h2>
+            <DispatchActionPanel leadKey={decodedLeadKey} />
+          </article>
+
+          <article className="panel">
+            <p className="eyebrow">Closed-loop outcome</p>
+            <h2>Latest plumbing result</h2>
+            {plumbingOutcome ? (
+              <ul className="check-list">
+                <li>Status: {formatLabel(plumbingOutcome.status)}</li>
+                <li>Actor: {plumbingOutcome.actorEmail}</li>
+                <li>Recorded: {plumbingOutcome.recordedAt}</li>
+                <li>Provider: {plumbingOutcome.provider ?? "Not captured"}</li>
+                <li>Revenue: {typeof plumbingOutcome.revenueValue === "number" ? plumbingOutcome.revenueValue : "Not captured"}</li>
+                <li>Note: {plumbingOutcome.note ?? "No note recorded"}</li>
+              </ul>
+            ) : (
+              <p className="muted">No closed-loop plumbing outcome has been recorded yet.</p>
+            )}
           </article>
         </section>
       ) : null}
@@ -250,6 +283,25 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
                 <h3>{event.eventType}</h3>
                 <p className="muted">{event.timestamp}</p>
                 <p className="muted">Status: {event.status}</p>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="panel">
+        <p className="eyebrow">Operator audit trail</p>
+        <h2>Manual dispatch actions</h2>
+        {operatorActions.length === 0 ? (
+          <p className="muted">No operator dispatch actions have been recorded for this lead yet.</p>
+        ) : (
+          <div className="stack-grid">
+            {operatorActions.map((action) => (
+              <article key={action.id} className="stack-card">
+                <p className="eyebrow">{formatLabel(action.actionType)}</p>
+                <h3>{action.actorEmail}</h3>
+                <p className="muted">{action.detail}</p>
+                <p className="muted">{action.createdAt}</p>
               </article>
             ))}
           </div>

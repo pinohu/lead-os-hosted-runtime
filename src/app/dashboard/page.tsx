@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DispatchActionPanel } from "@/components/DispatchActionPanel";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { isSystemBookingJob, isSystemDocumentJob, isSystemWorkflowRun } from "@/lib/operator-view";
 import { getAutomationHealth } from "@/lib/providers";
@@ -198,6 +199,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     Readiness: {item.readinessScore} | Stage: {item.stage}
                   </p>
                   <p className="muted">Next move: {item.operatorAction}</p>
+                  <DispatchActionPanel
+                    leadKey={item.leadKey}
+                    compact
+                    visibleActions={
+                      item.dispatchMode === "dispatch-now"
+                        ? ["dispatch-now", "assign-backup-provider", "mark-booked"]
+                        : item.dispatchMode === "estimate-path"
+                          ? ["retry-booking", "mark-booked", "mark-lost"]
+                          : ["dispatch-now", "retry-booking", "mark-booked"]
+                    }
+                  />
                   <div className="cta-row">
                     <Link href={`/dashboard/leads/${encodeURIComponent(item.leadKey)}`} className="secondary">
                       Open lead detail
@@ -344,6 +356,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <h3>{provider.reliabilityScore}</h3>
                   <p className="muted">
                     Success rate: {formatPercent(provider.successRate)} | Booking fill: {formatPercent(provider.bookingFillRate)}
+                  </p>
+                  <p className="muted">
+                    Completion: {formatPercent(provider.completionRate)} | Completed jobs: {provider.completedOutcomes}
                   </p>
                   <p className="muted">
                     Attempts: {provider.attempts} | Workflow failures: {provider.workflowFailures}

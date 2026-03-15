@@ -97,6 +97,9 @@ export default async function ProviderHealthPage() {
                   Success rate: {formatPercent(provider.successRate)} | Booking fill: {formatPercent(provider.bookingFillRate)}
                 </p>
                 <p className="muted">
+                  Completion: {formatPercent(provider.completionRate)} | Completed jobs: {provider.completedOutcomes}
+                </p>
+                <p className="muted">
                   Attempts: {provider.attempts} | Workflow failures: {provider.workflowFailures}
                 </p>
               </article>
