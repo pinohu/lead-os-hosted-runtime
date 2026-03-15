@@ -22,6 +22,10 @@ export type RegisterDeploymentInput = DeploymentGeneratorQuery & {
   updatedBy?: string;
 };
 
+export type RegisterDeploymentBatchInput = {
+  deployments: RegisterDeploymentInput[];
+};
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -43,6 +47,11 @@ function sanitizeTags(tags?: string[]) {
   return [...new Set((tags ?? [])
     .map((tag) => tag.trim().toLowerCase())
     .filter(Boolean))];
+}
+
+function daysSince(timestamp: string) {
+  const delta = Date.now() - new Date(timestamp).getTime();
+  return Math.floor(delta / (1000 * 60 * 60 * 24));
 }
 
 export async function registerDeployment(input: RegisterDeploymentInput) {
@@ -99,11 +108,39 @@ export async function registerDeployment(input: RegisterDeploymentInput) {
   return upsertDeploymentRegistryRecord(record);
 }
 
+export async function registerDeploymentBatch(input: RegisterDeploymentBatchInput) {
+  const records: DeploymentRegistryRecord[] = [];
+  for (const deployment of input.deployments) {
+    records.push(await registerDeployment(deployment));
+  }
+  return records;
+}
+
 export function summarizeDeploymentRegistry(records: DeploymentRegistryRecord[]) {
   const countByStatus = (status: DeploymentStatus) => records.filter((record) => record.status === status).length;
   const countByInstallType = (installType: DeploymentInstallType) => records.filter((record) => record.installType === installType).length;
   const zipScoped = records.filter((record) => Boolean(record.zip)).length;
   const providerScoped = records.filter((record) => Boolean(record.providerId || record.providerLabel)).length;
+  const generatedOlderThanSevenDays = records.filter((record) => record.status === "generated" && daysSince(record.updatedAt) >= 7).length;
+  const liveWithoutPageUrl = records.filter((record) => record.status === "live" && !record.pageUrl).length;
+  const staleDeployments = records.filter((record) => daysSince(record.updatedAt) >= 30).length;
+  const byCity = Object.entries(records.reduce<Record<string, number>>((acc, record) => {
+    if (!record.city) return acc;
+    const key = record.city.toLowerCase();
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {}))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([city, count]) => ({ city, count }));
+  const byRecipe = Object.entries(records.reduce<Record<string, number>>((acc, record) => {
+    const key = record.recipe ?? "custom";
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {}))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([recipe, count]) => ({ recipe, count }));
 
   return {
     total: records.length,
@@ -118,6 +155,9 @@ export function summarizeDeploymentRegistry(records: DeploymentRegistryRecord[])
     hostedLink: countByInstallType("hosted-link"),
     zipScoped,
     providerScoped,
+    generatedOlderThanSevenDays,
+    liveWithoutPageUrl,
+    staleDeployments,
     topDomains: Object.entries(records.reduce<Record<string, number>>((acc, record) => {
       if (!record.domain) return acc;
       acc[record.domain] = (acc[record.domain] ?? 0) + 1;
@@ -126,6 +166,8 @@ export function summarizeDeploymentRegistry(records: DeploymentRegistryRecord[])
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
       .map(([domain, count]) => ({ domain, count })),
+    byCity,
+    byRecipe,
   };
 }
 

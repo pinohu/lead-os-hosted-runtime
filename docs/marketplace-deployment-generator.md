@@ -99,6 +99,16 @@ It supports:
 - registering a generated deployment against a real domain or page
 - updating deployment status after QA, launch, pause, or retirement
 
+### `/api/deployments/bulk`
+
+Use this to register a rollout cohort in one request.
+
+It supports:
+- metro launch waves
+- ZIP-cell SEO batches
+- provider-site rollout batches
+- consistent install type and status assignment across a cohort
+
 Add `format=csv` when the output needs to be consumed by spreadsheets, rollout sheets, or external provisioning tools.
 
 ### `/deployments/plumbing`

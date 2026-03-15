@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BulkDeploymentRegistryManager } from "@/components/BulkDeploymentRegistryManager";
 import { DeploymentRegistryManager } from "@/components/DeploymentRegistryManager";
 import { DeploymentStatusForm } from "@/components/DeploymentStatusForm";
 import { getDeploymentRegistrySnapshot } from "@/lib/deployment-registry";
@@ -63,10 +64,29 @@ export default async function DeploymentRegistryPage() {
           <h2>{snapshot.summary.retired}</h2>
           <p className="muted">Legacy deployments kept in history for auditability and migration planning.</p>
         </article>
+        <article className="metric-card">
+          <p className="eyebrow">Generated {"\u003e"} 7d</p>
+          <h2>{snapshot.summary.generatedOlderThanSevenDays}</h2>
+          <p className="muted">Generated assets that still have not been promoted into live rollout work.</p>
+        </article>
+        <article className="metric-card">
+          <p className="eyebrow">Live without URL</p>
+          <h2>{snapshot.summary.liveWithoutPageUrl}</h2>
+          <p className="muted">Live-tagged deployments that still do not have a public page URL attached.</p>
+        </article>
+        <article className="metric-card">
+          <p className="eyebrow">Stale {"\u003e"} 30d</p>
+          <h2>{snapshot.summary.staleDeployments}</h2>
+          <p className="muted">Deployments not touched recently enough to trust as actively managed.</p>
+        </article>
       </section>
 
       <section className="grid two">
         <DeploymentRegistryManager defaultRecipe="provider-homepage-emergency-widget" defaultCity="Philadelphia" />
+        <BulkDeploymentRegistryManager defaultCity="Philadelphia" />
+      </section>
+
+      <section className="grid two">
         <article className="panel">
           <p className="eyebrow">Top domains</p>
           <h2>Where rollout is concentrated</h2>
@@ -79,6 +99,36 @@ export default async function DeploymentRegistryPage() {
               ))}
             </ul>
           )}
+        </article>
+        <article className="panel">
+          <p className="eyebrow">Rollout cohorts</p>
+          <h2>Top cities and recipe mixes</h2>
+          <div className="stack-grid">
+            <article className="stack-card">
+              <p className="eyebrow">Cities</p>
+              {snapshot.summary.byCity.length === 0 ? (
+                <p className="muted">No city-tagged cohorts yet.</p>
+              ) : (
+                <ul className="check-list">
+                  {snapshot.summary.byCity.map((entry) => (
+                    <li key={entry.city}>{entry.city}: {entry.count}</li>
+                  ))}
+                </ul>
+              )}
+            </article>
+            <article className="stack-card">
+              <p className="eyebrow">Recipes</p>
+              {snapshot.summary.byRecipe.length === 0 ? (
+                <p className="muted">No recipe-tagged deployments yet.</p>
+              ) : (
+                <ul className="check-list">
+                  {snapshot.summary.byRecipe.map((entry) => (
+                    <li key={entry.recipe}>{entry.recipe}: {entry.count}</li>
+                  ))}
+                </ul>
+              )}
+            </article>
+          </div>
         </article>
       </section>
 

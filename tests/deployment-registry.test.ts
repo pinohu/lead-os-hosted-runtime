@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getDeploymentRegistrySnapshot, registerDeployment } from "../src/lib/deployment-registry.ts";
+import { getDeploymentRegistrySnapshot, registerDeployment, registerDeploymentBatch } from "../src/lib/deployment-registry.ts";
 
 test("registerDeployment persists rollout records and computes summaries", async () => {
   const first = await registerDeployment({
@@ -67,4 +67,40 @@ test("registerDeployment can update rollout status without resupplying deploymen
   assert.equal(updated.zip, "75201");
   assert.equal(updated.notes, "Promoted after QA pass");
   assert.match(updated.hostedUrl, /plumbing|local/);
+});
+
+test("registerDeploymentBatch registers ZIP rollout cohorts and cohort summaries", async () => {
+  const records = await registerDeploymentBatch({
+    deployments: [
+      {
+        recipe: "zip-seo-page-urgent-widget",
+        niche: "plumbing",
+        city: "Austin",
+        zip: "78701",
+        domain: "www.austinplumbing.com",
+        installType: "wordpress-plugin",
+        status: "generated",
+        updatedBy: "operator@example.com",
+      },
+      {
+        recipe: "zip-seo-page-urgent-widget",
+        niche: "plumbing",
+        city: "Austin",
+        zip: "78702",
+        domain: "www.austinplumbing.com",
+        installType: "wordpress-plugin",
+        status: "generated",
+        updatedBy: "operator@example.com",
+      },
+    ],
+  });
+
+  assert.equal(records.length, 2);
+
+  const snapshot = await getDeploymentRegistrySnapshot();
+  assert.equal(snapshot.summary.byCity.some((entry) => entry.city === "austin"), true);
+  assert.equal(snapshot.summary.byRecipe.some((entry) => entry.recipe === "zip-seo-page-urgent-widget"), true);
+  assert.equal(snapshot.summary.generatedOlderThanSevenDays >= 0, true);
+  assert.equal(snapshot.summary.liveWithoutPageUrl >= 0, true);
+  assert.equal(snapshot.summary.staleDeployments >= 0, true);
 });
