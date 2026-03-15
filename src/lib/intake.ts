@@ -17,6 +17,7 @@ import type { LeadStage, PlumbingLeadContext } from "./runtime-schema.ts";
 import type { CustomerMilestoneId, LeadMilestoneId } from "./runtime-schema.ts";
 import {
   appendEvents,
+  claimIntakeReplayKey,
   getBookingJobs,
   getDocumentJobs,
   getLeadRecord,
@@ -143,7 +144,6 @@ const VALID_SOURCES: IntakeSource[] = [
   "manual",
 ];
 
-const intakeReplayStore = new Map<string, number>();
 const INTAKE_REPLAY_WINDOW_MS = 5 * 60 * 1000;
 
 function normalizeName(value?: string) {
@@ -352,14 +352,6 @@ function resolveDocumentJobStatus(result: Awaited<ReturnType<typeof generateDocu
   return result.mode === "live" ? "generated" : "prepared";
 }
 
-function isRecentReplay(key: string) {
-  const now = Date.now();
-  const existing = intakeReplayStore.get(key);
-  if (existing && now - existing < INTAKE_REPLAY_WINDOW_MS) return true;
-  intakeReplayStore.set(key, now);
-  return false;
-}
-
 function resolveScoreBand(score: number): PublicIntakeResponse["scoreBand"] {
   if (score >= 80) return "high";
   if (score >= 50) return "medium";
@@ -459,7 +451,18 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
   const lastName = normalizeName(payload.lastName);
   const existingRecord = await getLeadRecord(leadKey);
   const existing = Boolean(existingRecord);
-  const replayed = isRecentReplay(buildReplayKey(payload, normalizedEmail, normalizedPhone));
+  const replayClaim = await claimIntakeReplayKey(
+    buildReplayKey(payload, normalizedEmail, normalizedPhone),
+    INTAKE_REPLAY_WINDOW_MS,
+    {
+      source: payload.source,
+      sessionId: payload.sessionId,
+      email: normalizedEmail,
+      phone: normalizedPhone,
+      service: payload.service ?? payload.niche ?? "",
+    },
+  );
+  const replayed = replayClaim.replayed;
   const plumbingMetadata = buildPlumbingMetadata(payload);
   const decision = decideNextStep({
     source: payload.source,

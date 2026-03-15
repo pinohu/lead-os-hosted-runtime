@@ -465,8 +465,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               {snapshot.leadTimeline.map((lead) => (
                 <article key={lead.leadKey} className="stack-card">
                   <p className="eyebrow">{lead.family}</p>
-                  <h3 className="portal-identifier" title={lead.leadKey}>{formatLeadKeyForDisplay(lead.leadKey)}</h3>
-                  <div className="portal-meta">
+                  <h3 className="portal-identifier" title={lead.leadKey}>{lead.displayName}</h3>
+                  {lead.displaySubline ? (
+                    <p className="muted portal-breakable">{lead.displaySubline}</p>
+                  ) : null}
+                  <div className="portal-summary">
                     <p className="muted">
                       Stage: {lead.stage} | Visits: {lead.visitCount} | Score: {lead.score}
                     </p>
@@ -494,7 +497,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <article key={event.id} className="stack-card">
                   <p className="eyebrow">{event.type}</p>
                   <h3 className="portal-identifier" title={event.milestoneId}>{formatMilestoneIdForDisplay(event.milestoneId)}</h3>
-                  <p className="muted portal-breakable" title={event.leadKey}>{formatLeadKeyForDisplay(event.leadKey)}</p>
+                  <p className="muted portal-breakable" title={event.leadKey}>{event.displayName}</p>
+                  {event.displaySubline ? <p className="muted portal-breakable">{event.displaySubline}</p> : null}
                   <p className="muted">
                     Visit count: {event.visitCount} | Stage: {event.stage}
                   </p>

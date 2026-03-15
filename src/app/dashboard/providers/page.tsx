@@ -96,6 +96,11 @@ export default async function ProviderHealthPage() {
         <section className="panel">
           <p className="eyebrow">Routing confidence</p>
           <h2>Provider reliability for live plumbing demand</h2>
+          <p className="muted">
+            These scores are operator guidance, not guarantees. LeadOS weighs execution history,
+            booking fill, completions, and completed revenue so dispatch teams can route with more
+            confidence under pressure.
+          </p>
           <div className="stack-grid">
             {providerScores.map((provider) => (
               <article key={provider.provider} className="stack-card">
@@ -148,6 +153,10 @@ export default async function ProviderHealthPage() {
           <article key={provider} className="stack-card">
             <p className="eyebrow">{formatPortalLabel(provider)}</p>
             <h2>{formatPortalLabel(status.capability)}</h2>
+            <div className="portal-status-row">
+              <span className="portal-chip">{status.live ? "Executable" : "Not executing"}</span>
+              <span className="portal-chip">Legacy {formatPortalLabel(status.status)}</span>
+            </div>
             <p className="muted">
               {status.status === "configured"
                 ? "Legacy status: configured"

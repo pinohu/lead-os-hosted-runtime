@@ -15,13 +15,33 @@
 
 1. Site-wide widget
    - add the embed script to the footer
-   - use the WordPress plugin from the embed repo
+   - use `/api/embed/manifest` to discover official presets
+   - use `/api/embed/generate` to produce the exact widget snippet for the page type
 
 2. Specific CTA handoff
    - link buttons to:
-     - `/assess/[slug]`
-     - `/calculator`
+     - `/plumbing/emergency`
+     - `/plumbing/estimate`
+     - `/plumbing/commercial`
+     - `/join-provider-network`
 
 3. Hybrid mode
    - embed chat/form widget on WordPress
    - host long-form funnels on the subdomain
+
+## Recommended production workflow
+
+1. Choose the page type:
+   - provider homepage
+   - ZIP SEO page
+   - estimate page
+   - commercial page
+   - provider recruiting page
+2. Fetch `/api/embed/manifest` to render the available presets and recommended deployment patterns.
+3. Call `/api/embed/generate` with the chosen recipe, ZIP, and audience to generate:
+   - hosted URL
+   - JavaScript widget snippet
+   - iframe fallback
+   - WordPress HTML block
+4. Paste the generated snippet into Gutenberg or a custom HTML widget.
+5. Keep long-form or higher-trust paths hosted on the LeadOS subdomain.

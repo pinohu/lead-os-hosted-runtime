@@ -21,6 +21,23 @@ LeadOS separates secret credentials from operator-editable runtime settings.
 - Documentero template IDs and default format
 - Crove fallback webhook and template IDs
 
+## Deployment generator workflow
+
+LeadOS now supports a deployment-grade integration workflow for marketplace rollout:
+
+1. Use `/api/embed/manifest` to discover the official entrypoint presets, widget presets, and deployment patterns.
+2. Use `/api/embed/generate` to generate the exact hosted URL, widget snippet, iframe fallback, and WordPress-ready HTML block for a page deployment.
+3. Use `/api/widgets/boot` as the live runtime bootstrap that the embedded widget consumes in the browser.
+4. Use `/deployments/plumbing` as the operator-facing blueprint page for reviewing recipes and copying snippets.
+
+This is the intended path for:
+
+- provider homepages
+- ZIP SEO pages
+- estimate pages
+- commercial plumbing pages
+- provider recruiting pages
+
 ## Trafft discovery flow
 
 The settings dashboard uses `src/lib/provider-discovery.ts` to load Trafft metadata before rendering the client form.
@@ -38,6 +55,15 @@ Discovery order:
 - Mapping labels are stored lower-case, so `"Legal Strategy Call"` and `"legal strategy call"` resolve to the same key.
 - Dispatch roster providers are normalized into lower-case coverage lists so geo and issue matching stays deterministic.
 - Dispatch dashboards now expose geo-cell demand and completed-revenue hotspots from that roster plus closed-loop plumbing outcomes.
+
+## Marketplace scale assumptions
+
+LeadOS should be operated as a two-sided marketplace:
+
+- Demand side: homeowners, tenants, property managers, and clients requesting plumbing help.
+- Supply side: plumbers, plumbing companies, and field-service providers joining the network.
+
+Assume the live system will need to support thousands of providers and customers across many ZIP codes, overlapping service areas, and different emergency coverage windows. Runtime settings, dispatch rosters, provider scoring, and operator queues should be maintained with that scale and locality in mind.
 
 ## When discovery fails
 

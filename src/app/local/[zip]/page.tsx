@@ -1,14 +1,16 @@
 import { PlumbingEntryPage } from "@/components/PlumbingEntryPage";
 import { getPlumbingEntrypoint } from "@/lib/plumbing-entrypoints";
 
-type PlumbingHelpPageProps = {
+type LocalZipPageProps = {
+  params: Promise<{ zip: string }>;
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function PlumbingHelpPage({ searchParams }: PlumbingHelpPageProps) {
+export default async function LocalZipPage({ params, searchParams }: LocalZipPageProps) {
+  const { zip } = await params;
   return (
     <PlumbingEntryPage
-      entry={getPlumbingEntrypoint("help-home")}
+      entry={getPlumbingEntrypoint("local", { zip })}
       searchParams={(await searchParams) ?? {}}
     />
   );

@@ -49,6 +49,11 @@ export function DispatchActionPanel({
   const [message, setMessage] = useState<string | null>(null);
 
   async function runAction(actionType: PlumbingOperatorActionType) {
+    if (actionType === "mark-completed" && !revenueValue.trim()) {
+      setMessage("Add completed revenue before marking a plumbing job completed.");
+      return;
+    }
+
     setPendingAction(actionType);
     setMessage(null);
 
@@ -84,6 +89,11 @@ export function DispatchActionPanel({
   return (
     <div className="stack-card">
       <p className="eyebrow">Dispatch actions</p>
+      <p className="muted">
+        {compact
+          ? "Use the safest next action for this lead. The page refreshes after each change."
+          : "Add operator context, then apply the next dispatch move. Completed jobs should include revenue so provider scoring stays accurate."}
+      </p>
       {!compact ? (
         <>
           <label htmlFor={`dispatch-note-${leadKey}`} className="sr-only">
@@ -124,7 +134,15 @@ export function DispatchActionPanel({
           </button>
         ))}
       </div>
-      {message ? <p className="muted">{message}</p> : null}
+      {message ? (
+        <p
+          className={message.startsWith("Updated:") ? "status-banner success" : "status-banner error"}
+          role="status"
+          aria-live="polite"
+        >
+          {message}
+        </p>
+      ) : null}
     </div>
   );
 }

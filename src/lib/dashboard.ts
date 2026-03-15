@@ -2,6 +2,7 @@ import { summarizeMilestoneProgress } from "./automation.ts";
 import { recommendDispatchProviders } from "./dispatch-routing.ts";
 import { getDispatchSlaSnapshot } from "./dispatch-sla.ts";
 import { isSystemCanonicalEvent, isSystemLeadRecord } from "./operator-view.ts";
+import { buildLeadDisplayName, buildLeadSubline } from "./operator-ui.ts";
 import type { CanonicalEvent } from "./trace.ts";
 import type { OperationalRuntimeConfig } from "./runtime-config.ts";
 import type {
@@ -312,6 +313,7 @@ export function buildDashboardSnapshotWithOptions(
   const visibleEvents = options.includeSystemTraffic
     ? events
     : events.filter((event) => !isSystemCanonicalEvent(event));
+  const leadLookup = new Map(visibleLeads.map((lead) => [lead.leadKey, lead]));
 
   const leadMilestoneCounts = {
     captured: visibleLeads.filter((lead) => lead.milestones.leadMilestones.includes("lead-m1-captured")).length,
@@ -334,15 +336,20 @@ export function buildDashboardSnapshotWithOptions(
     .filter((event) => event.eventType === "lead_milestone_reached" || event.eventType === "customer_milestone_reached")
     .slice(-10)
     .reverse()
-    .map((event) => ({
-      id: event.id,
-      timestamp: event.timestamp,
-      leadKey: event.leadKey,
-      type: event.eventType,
-      milestoneId: String(event.metadata.milestoneId ?? ""),
-      visitCount: Number(event.metadata.visitCount ?? 0),
-      stage: String(event.metadata.stage ?? ""),
-    }));
+    .map((event) => {
+      const lead = leadLookup.get(event.leadKey);
+      return {
+        id: event.id,
+        timestamp: event.timestamp,
+        leadKey: event.leadKey,
+        displayName: lead ? buildLeadDisplayName(lead) : event.leadKey,
+        displaySubline: lead ? buildLeadSubline(lead) : "",
+        type: event.eventType,
+        milestoneId: String(event.metadata.milestoneId ?? ""),
+        visitCount: Number(event.metadata.visitCount ?? 0),
+        stage: String(event.metadata.stage ?? ""),
+      };
+    });
 
   const leadTimeline = visibleLeads
     .slice()
@@ -352,6 +359,8 @@ export function buildDashboardSnapshotWithOptions(
       const progress = summarizeMilestoneProgress(lead);
       return {
         leadKey: lead.leadKey,
+        displayName: buildLeadDisplayName(lead),
+        displaySubline: buildLeadSubline(lead),
         family: lead.family,
         score: lead.score,
         stage: lead.stage,

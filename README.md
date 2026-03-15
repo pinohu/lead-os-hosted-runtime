@@ -10,6 +10,7 @@ It is intended to run on a dedicated lead subdomain such as:
 The hosted runtime owns:
 
 - embeddable widget boot config
+- deployment generator APIs and blueprint pages
 - lead intake
 - routing and next-step recommendations
 - hosted assessments and calculators
@@ -17,11 +18,15 @@ The hosted runtime owns:
 - private operator dashboard access with magic-link auth and role-aware operator sessions
 - operator views that hide internal verification traffic by default so dashboards reflect human activity first
 - capacity-aware plumbing dispatch queues, provider scoring, and geo-cell revenue visibility
+- distinct customer-side and provider-side marketplace entry points
+- multi-ZIP marketplace assumptions for thousands of providers and customers
 
 ## Key docs
 
 - [AGENTS.md](./AGENTS.md)
 - [docs/runtime-operator-setup.md](./docs/runtime-operator-setup.md)
+- [docs/plumbing-marketplace-scaling.md](./docs/plumbing-marketplace-scaling.md)
+- [docs/marketplace-deployment-generator.md](./docs/marketplace-deployment-generator.md)
 - [docs/n8n-starter-pack.md](./docs/n8n-starter-pack.md)
 - [docs/three-visit-milestone-framework.md](./docs/three-visit-milestone-framework.md)
 
@@ -34,9 +39,12 @@ WordPress site / external site
   -> posts data to hosted runtime
 
 Hosted runtime
+  -> /api/embed/manifest
+  -> /api/embed/generate
   -> /api/widgets/boot
   -> /api/decision
   -> /api/intake
+  -> /deployments/plumbing
   -> /assess/[slug]
   -> /calculator
 ```
@@ -70,6 +78,7 @@ Recommended flow:
 5. Verify the runtime with:
 
 - `/api/health`
+- `/api/embed/generate?recipe=provider-homepage-emergency-widget&zip=19103`
 - `/api/widgets/boot`
 - `/api/embed/manifest`
 

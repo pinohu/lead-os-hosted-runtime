@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildCorsHeaders } from "@/lib/cors";
-import { getNiche } from "@/lib/catalog";
-import { buildExperienceManifest } from "@/lib/experience";
+import { resolveWidgetBoot } from "@/lib/embed-deployment";
 import { buildDefaultFunnelGraphs } from "@/lib/funnel-library";
 import { getAutomationHealth } from "@/lib/providers";
 import { tenantConfig } from "@/lib/tenant";
@@ -14,9 +13,21 @@ export async function OPTIONS(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const url = new URL(request.url);
   const funnels = buildDefaultFunnelGraphs(tenantConfig.tenantId);
   const health = getAutomationHealth();
-  const experience = buildExperienceManifest(getNiche(tenantConfig.defaultNiche));
+  const resolved = resolveWidgetBoot({
+    niche: url.searchParams.get("niche") ?? undefined,
+    service: url.searchParams.get("service") ?? undefined,
+    entrypoint: url.searchParams.get("entrypoint") ?? undefined,
+    audience: url.searchParams.get("audience") ?? undefined,
+    mode: url.searchParams.get("mode") ?? undefined,
+    family: url.searchParams.get("family") ?? undefined,
+    zip: url.searchParams.get("zip") ?? undefined,
+    city: url.searchParams.get("city") ?? undefined,
+    pageType: url.searchParams.get("pageType") ?? undefined,
+    launcherLabel: url.searchParams.get("launcherLabel") ?? undefined,
+  }, tenantConfig);
   return NextResponse.json({
     success: true,
     widget: {
@@ -30,14 +41,18 @@ export async function GET(request: Request) {
         manifest: "/api/embed/manifest",
       },
       defaults: {
-        service: tenantConfig.defaultService,
-        niche: tenantConfig.defaultNiche,
+        service: resolved.service,
+        niche: resolved.niche,
+        family: resolved.entrypointPreset.family,
+        mode: resolved.entrypointPreset.mode,
+        entrypoint: resolved.entrypointPreset.id,
+        audience: resolved.audience,
       },
       embed: {
         scriptUrl: `${tenantConfig.siteUrl}/embed/lead-os-embed.js`,
-        launcherLabel: "Need help now?",
-        drawerTitle: "Get the right next step",
-        drawerSummary: "Use the embedded LeadOS flow to qualify, book, or route urgent demand without leaving the client site.",
+        launcherLabel: resolved.launcherLabel,
+        drawerTitle: resolved.resolvedProfile.heroTitle,
+        drawerSummary: resolved.resolvedProfile.heroSummary,
         accessibility: {
           role: "dialog",
           closeLabel: "Close LeadOS panel",
@@ -45,7 +60,15 @@ export async function GET(request: Request) {
       },
       channels: health.channels,
       enabledFunnels: tenantConfig.enabledFunnels,
-      experience,
+      experience: resolved.experience,
+      resolvedEntrypoint: resolved.entrypointPreset,
+      widgetPreset: resolved.widgetPreset,
+      deploymentPattern: resolved.deploymentPattern,
+      location: {
+        zip: resolved.zip ?? null,
+        city: resolved.city ?? null,
+        pageType: resolved.pageType,
+      },
       primaryFunnels: Object.values(funnels).map((graph) => ({
         id: graph.id,
         family: graph.family,

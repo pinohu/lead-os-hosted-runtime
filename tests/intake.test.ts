@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { getDefaultFunnelGraph } from "../src/lib/funnel-library.ts";
 import { buildPublicIntakeResponse, persistLead, validateLeadPayload } from "../src/lib/intake.ts";
-import { getBookingJobs, getDocumentJobs, resetRuntimeStore } from "../src/lib/runtime-store.ts";
+import { claimIntakeReplayKey, getBookingJobs, getDocumentJobs, resetRuntimeStore } from "../src/lib/runtime-store.ts";
 import { tenantConfig } from "../src/lib/tenant.ts";
 
 test("validateLeadPayload requires a source and identity", () => {
@@ -161,4 +161,18 @@ test("recent replays do not create duplicate booking jobs or refire side effects
   assert.equal(second.existing, true);
   assert.equal(second.workflow.detail, "Replay suppressed before workflow emission.");
   assert.equal(second.jobs.booking?.id, first.jobs.booking?.id);
+});
+
+test("claimIntakeReplayKey persists replay state across repeated checks", async () => {
+  await resetRuntimeStore();
+  const first = await claimIntakeReplayKey("assessment|session|lead@test.com||plumbing", 5 * 60 * 1000, {
+    source: "assessment",
+  });
+  const second = await claimIntakeReplayKey("assessment|session|lead@test.com||plumbing", 5 * 60 * 1000, {
+    source: "assessment",
+  });
+
+  assert.equal(first.replayed, false);
+  assert.equal(second.replayed, true);
+  assert.equal(second.record.attempts, 2);
 });

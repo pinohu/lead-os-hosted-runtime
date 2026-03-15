@@ -14,11 +14,11 @@ export default async function ExperimentsPage() {
     <main className="experience-page">
       <section className="experience-hero">
         <div className="hero-copy">
-          <p className="eyebrow">Experiment performance</p>
-          <h1>{tenantConfig.brandName} variant reporting</h1>
+          <p className="eyebrow">Variation signals</p>
+          <h1>{tenantConfig.brandName} observational variant reporting</h1>
           <p className="lede">
-            Compare headline, mode, and device-level experience variants by milestone progression
-            instead of just raw capture volume.
+            Review which tagged experiences are showing stronger milestone movement. This page is
+            observational until LeadOS has true randomized experiments and holdouts in place.
           </p>
           <div className="cta-row">
             <Link href="/dashboard" className="secondary">
@@ -27,7 +27,7 @@ export default async function ExperimentsPage() {
           </div>
         </div>
         <aside className="hero-rail">
-          <p className="eyebrow">Tracked experiments</p>
+          <p className="eyebrow">Tracked variants</p>
           <ul className="journey-rail">
             <li>
               <strong>Experiments</strong>
@@ -42,9 +42,16 @@ export default async function ExperimentsPage() {
       </section>
 
       <section className="stack-grid">
+        <article className="portal-notice">
+          <strong>Interpret these results carefully.</strong>
+          <p className="muted">
+            Current variant reporting is based on tagged traffic segments, not randomized causal
+            tests. Use it for directional learning, not final winner selection.
+          </p>
+        </article>
         {snapshot.experimentPerformance.length === 0 ? (
           <article className="panel">
-            <p className="muted">No experiment-tagged leads have been recorded yet.</p>
+            <p className="muted">No variant-tagged leads have been recorded yet.</p>
           </article>
         ) : (
           snapshot.experimentPerformance.map((experiment) => (

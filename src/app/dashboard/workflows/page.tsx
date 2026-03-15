@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { OperatorPagination } from "@/components/OperatorPagination";
+import { OperatorQueueFilters } from "@/components/OperatorQueueFilters";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
-import { formatLeadKeyForDisplay, formatPortalLabel } from "@/lib/operator-ui";
+import { buildLeadDisplayName, buildLeadSubline, formatLeadKeyForDisplay, formatPortalLabel } from "@/lib/operator-ui";
 import {
   getLeadRecord,
   getWorkflowRegistryRecords,
@@ -20,20 +22,52 @@ function asString(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function asPositiveInt(value: string | string[] | undefined) {
+  const parsed = Number(asString(value) ?? "1");
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
+}
+
+const PAGE_SIZE = 12;
+
 export default async function WorkflowRunsPage({ searchParams }: WorkflowRunsPageProps) {
   await requireOperatorPageSession("/dashboard/workflows");
   const params = (await searchParams) ?? {};
   const includeSystemTraffic = asString(params.include) === "system";
+  const query = asString(params.query)?.trim().toLowerCase() ?? "";
+  const page = asPositiveInt(params.page);
   const runs = (await getWorkflowRuns()) as WorkflowRunRecord[];
   const visibleRuns = includeSystemTraffic ? runs : runs.filter((run) => !isSystemWorkflowRun(run));
   const hiddenRuns = Math.max(0, runs.length - visibleRuns.length);
   const registry = await getWorkflowRegistryRecords();
-  const runsWithLead = await Promise.all(
+  const hydratedRuns = await Promise.all(
     visibleRuns.map(async (run) => ({
       run,
       lead: run.leadKey ? await getLeadRecord(run.leadKey) : undefined,
     })),
   );
+  const runsWithLead = hydratedRuns.filter(({ run, lead }) => {
+    if (!query) return true;
+    const haystack = [
+      run.provider,
+      run.eventName,
+      run.detail,
+      run.leadKey,
+      lead?.email,
+      lead?.phone,
+      lead?.company,
+      lead?.firstName,
+      lead?.lastName,
+      lead?.family,
+      lead?.stage,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(query);
+  });
+  const pageCount = Math.max(1, Math.ceil(runsWithLead.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pagedRuns = runsWithLead.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
     <main className="experience-page">
@@ -83,6 +117,13 @@ export default async function WorkflowRunsPage({ searchParams }: WorkflowRunsPag
         </aside>
       </section>
 
+      <OperatorQueueFilters
+        query={query}
+        includeSystemTraffic={includeSystemTraffic}
+        searchLabel="Search workflow runs"
+        searchPlaceholder="Search by lead, provider, workflow event, or failure detail"
+      />
+
       {hiddenRuns > 0 ? (
         <section className="panel">
           <p className="muted">
@@ -103,6 +144,25 @@ export default async function WorkflowRunsPage({ searchParams }: WorkflowRunsPag
           </div>
         </section>
       ) : null}
+
+      <section className="panel">
+        <p className="eyebrow">Current result set</p>
+        <h2>{runsWithLead.length} workflow runs in view</h2>
+        <p className="muted">
+          {query
+            ? `Filtered from ${visibleRuns.length} visible runs using "${query}".`
+            : "Use search and system-traffic filters to focus on failures, providers, or lead identities."}
+        </p>
+        <p className="muted">Showing {pagedRuns.length} runs on this page.</p>
+      </section>
+
+      <OperatorPagination
+        page={safePage}
+        pageCount={pageCount}
+        basePath="/dashboard/workflows"
+        query={query}
+        includeSystemTraffic={includeSystemTraffic}
+      />
 
       <section className="stack-grid">
         {registry.length === 0 ? null : registry.map((workflow) => (
@@ -126,10 +186,17 @@ export default async function WorkflowRunsPage({ searchParams }: WorkflowRunsPag
       <section className="stack-grid">
         {runsWithLead.length === 0 ? (
           <article className="panel">
-            <p className="muted">No workflow runs have been recorded yet.</p>
+            <div className="portal-empty">
+              <p className="muted">
+                {query
+                  ? "No workflow runs match the current filters."
+                  : "No workflow runs have been recorded yet."}
+              </p>
+              <p className="muted">Try a different lead, provider, or workflow-event search.</p>
+            </div>
           </article>
         ) : (
-          runsWithLead.map(({ run, lead }) => (
+          pagedRuns.map(({ run, lead }) => (
             <article key={run.id} className="stack-card">
               <p className="eyebrow">{formatPortalLabel(run.provider)}</p>
               <h2>{formatPortalLabel(run.eventName)}</h2>
@@ -137,10 +204,17 @@ export default async function WorkflowRunsPage({ searchParams }: WorkflowRunsPag
               <p className="muted">
                 Mode: {run.mode} | Success: {run.ok ? "yes" : "no"}
               </p>
-              <p className="muted portal-breakable">
-                Lead: {run.leadKey ? formatLeadKeyForDisplay(run.leadKey) : "not tied to a lead"}
-                {lead ? ` | Family: ${lead.family}` : ""}
-              </p>
+              <div className="portal-summary">
+                <strong className="portal-inline-text">
+                  {lead
+                    ? buildLeadDisplayName(lead)
+                    : run.leadKey ? formatLeadKeyForDisplay(run.leadKey) : "Not tied to a lead"}
+                </strong>
+                <p className="muted portal-breakable">
+                  {lead ? buildLeadSubline(lead) : "Workflow run is not attached to a lead profile."}
+                </p>
+                <p className="muted">Family: {lead?.family ?? "Unknown"}</p>
+              </div>
               <p className="muted">Created: {run.createdAt}</p>
               {run.leadKey ? (
                 <div className="cta-row">

@@ -6,7 +6,10 @@ import { recommendDispatchProviders } from "@/lib/dispatch-routing";
 import { getDispatchSlaSnapshot } from "@/lib/dispatch-sla";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import {
+  buildLeadDisplayName,
+  buildLeadSubline,
   formatLeadKeyForDisplay,
+  formatOptionalDateTime,
   formatMilestoneIdForDisplay,
   formatPortalLabel,
 } from "@/lib/operator-ui";
@@ -81,6 +84,8 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
     ? recommendDispatchProviders(plumbing, runtimeConfig.dispatch.providers)
     : [];
   const displayLeadKey = formatLeadKeyForDisplay(decodedLeadKey);
+  const displayLeadName = buildLeadDisplayName(lead);
+  const displayLeadSubline = buildLeadSubline(lead);
   const leadMilestones = lead.milestones.leadMilestones.map((milestoneId) => formatMilestoneIdForDisplay(milestoneId));
   const customerMilestones = lead.milestones.customerMilestones.map((milestoneId) =>
     formatMilestoneIdForDisplay(milestoneId),
@@ -92,8 +97,9 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
         <div className="hero-copy">
           <p className="eyebrow">Lead detail</p>
           <h1 className="portal-identifier" title={decodedLeadKey}>
-            {displayLeadKey}
+            {displayLeadName}
           </h1>
+          {displayLeadSubline ? <p className="muted portal-breakable">{displayLeadSubline}</p> : null}
           <p className="lede">
             {lead.firstName} is currently in the <strong>{lead.family}</strong> family at the{" "}
             <strong>{lead.stage}</strong> stage.
@@ -130,28 +136,28 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
         <article className="panel">
           <p className="eyebrow">Identity and routing</p>
           <h2>Lead profile</h2>
-          <ul className="check-list">
-            <li className="portal-breakable">Email: {lead.email ?? "Not captured"}</li>
-            <li className="portal-breakable">Phone: {lead.phone ?? "Not captured"}</li>
-            <li className="portal-breakable">Company: {lead.company ?? "Not captured"}</li>
-            <li>Source: {formatPortalLabel(lead.source)}</li>
-            <li>Niche: {formatPortalLabel(lead.niche)}</li>
-            <li>Score: {lead.score}</li>
-            <li className="portal-breakable">CTA: {lead.ctaLabel}</li>
-          </ul>
+          <dl className="portal-data-list">
+            <div><dt>Email</dt><dd>{lead.email ?? "Not captured"}</dd></div>
+            <div><dt>Phone</dt><dd>{lead.phone ?? "Not captured"}</dd></div>
+            <div><dt>Company</dt><dd>{lead.company ?? "Not captured"}</dd></div>
+            <div><dt>Source</dt><dd>{formatPortalLabel(lead.source)}</dd></div>
+            <div><dt>Niche</dt><dd>{formatPortalLabel(lead.niche)}</dd></div>
+            <div><dt>Score</dt><dd>{lead.score}</dd></div>
+            <div><dt>CTA</dt><dd>{lead.ctaLabel}</dd></div>
+          </dl>
         </article>
 
         <article className="panel">
           <p className="eyebrow">Trace and milestones</p>
           <h2>Runtime context</h2>
-          <ul className="check-list">
-            <li className="portal-breakable">Visitor: {lead.trace.visitorId}</li>
-            <li className="portal-breakable">Session: {lead.trace.sessionId}</li>
-            <li className="portal-breakable">Blueprint: {lead.trace.blueprintId}</li>
-            <li className="portal-breakable">Step: {lead.trace.stepId}</li>
-            <li className="portal-breakable">Lead milestones: {leadMilestones.join(", ") || "None"}</li>
-            <li className="portal-breakable">Customer milestones: {customerMilestones.join(", ") || "None"}</li>
-          </ul>
+          <dl className="portal-data-list">
+            <div><dt>Visitor</dt><dd>{lead.trace.visitorId}</dd></div>
+            <div><dt>Session</dt><dd>{lead.trace.sessionId}</dd></div>
+            <div><dt>Blueprint</dt><dd>{lead.trace.blueprintId}</dd></div>
+            <div><dt>Step</dt><dd>{lead.trace.stepId}</dd></div>
+            <div><dt>Lead milestones</dt><dd>{leadMilestones.join(", ") || "None"}</dd></div>
+            <div><dt>Customer milestones</dt><dd>{customerMilestones.join(", ") || "None"}</dd></div>
+          </dl>
         </article>
       </section>
 
@@ -245,7 +251,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
               <ul className="check-list">
                 <li>Status: {formatPortalLabel(plumbingOutcome.status)}</li>
                 <li className="portal-breakable">Actor: {plumbingOutcome.actorEmail}</li>
-                <li>Recorded: {plumbingOutcome.recordedAt}</li>
+                <li>Recorded: {formatOptionalDateTime(plumbingOutcome.recordedAt)}</li>
                 <li>Provider: {plumbingOutcome.provider ? formatPortalLabel(plumbingOutcome.provider) : "Not captured"}</li>
                 <li>Revenue: {typeof plumbingOutcome.revenueValue === "number" ? plumbingOutcome.revenueValue : "Not captured"}</li>
                 <li className="portal-breakable">Note: {plumbingOutcome.note ?? "No note recorded"}</li>
@@ -270,7 +276,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
                   <p className="eyebrow">{formatPortalLabel(workflow.provider)}</p>
                   <h3>{formatPortalLabel(workflow.eventName)}</h3>
                   <p className="muted portal-breakable">{workflow.detail}</p>
-                  <p className="muted">{workflow.createdAt}</p>
+                  <p className="muted">{formatOptionalDateTime(workflow.createdAt)}</p>
                 </article>
               ))}
             </div>
@@ -289,7 +295,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
                   <p className="eyebrow">{formatPortalLabel(execution.provider)}</p>
                   <h3>{formatPortalLabel(execution.kind)}</h3>
                   <p className="muted portal-breakable">{execution.detail}</p>
-                  <p className="muted">{execution.createdAt}</p>
+                  <p className="muted">{formatOptionalDateTime(execution.createdAt)}</p>
                 </article>
               ))}
             </div>
@@ -310,7 +316,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
                   <p className="eyebrow">{formatPortalLabel(job.provider)}</p>
                   <h3>{formatPortalLabel(job.status)}</h3>
                   <p className="muted portal-breakable">{job.detail}</p>
-                  <p className="muted">{job.updatedAt}</p>
+                  <p className="muted">{formatOptionalDateTime(job.updatedAt)}</p>
                 </article>
               ))}
             </div>
@@ -329,7 +335,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
                   <p className="eyebrow">{formatPortalLabel(job.provider)}</p>
                   <h3>{formatPortalLabel(job.status)}</h3>
                   <p className="muted portal-breakable">{job.detail}</p>
-                  <p className="muted">{job.updatedAt}</p>
+                  <p className="muted">{formatOptionalDateTime(job.updatedAt)}</p>
                 </article>
               ))}
             </div>
@@ -370,7 +376,7 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
                   {action.actorEmail}
                 </h3>
                 <p className="muted portal-breakable">{action.detail}</p>
-                <p className="muted">{action.createdAt}</p>
+                <p className="muted">{formatOptionalDateTime(action.createdAt)}</p>
               </article>
             ))}
           </div>

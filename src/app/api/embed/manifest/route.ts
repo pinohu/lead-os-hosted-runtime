@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { nicheCatalog } from "@/lib/catalog";
 import { buildCorsHeaders } from "@/lib/cors";
+import { buildManifestCatalog } from "@/lib/embed-deployment";
 import { getRecipeForFamily } from "@/lib/automation";
-import { buildExperienceManifest } from "@/lib/experience";
 import { buildDefaultFunnelGraphs } from "@/lib/funnel-library";
 import { getAutomationHealth } from "@/lib/providers";
 import { tenantConfig } from "@/lib/tenant";
@@ -17,20 +16,25 @@ export async function OPTIONS(request: Request) {
 export async function GET(request: Request) {
   const graphs = buildDefaultFunnelGraphs(tenantConfig.tenantId);
   const health = getAutomationHealth();
+  const catalog = buildManifestCatalog(tenantConfig);
   return NextResponse.json({
     success: true,
     tenant: tenantConfig,
-    niches: Object.values(nicheCatalog),
+    niches: catalog.niches,
     widgets: {
       chat: true,
       form: true,
       assessment: true,
       calculator: true,
     },
-    experience: Object.values(nicheCatalog).map((niche) => ({
-      niche: niche.slug,
-      manifest: buildExperienceManifest(niche),
-    })),
+    experience: catalog.experienceCatalog,
+    experienceCatalog: catalog.experienceCatalog,
+    entrypointPresets: catalog.entrypointPresets,
+    widgetPresets: catalog.widgetPresets,
+    deploymentPatterns: catalog.deploymentPatterns,
+    themePresets: catalog.themePresets,
+    supportedIntegrations: catalog.supportedIntegrations,
+    localSeoPresets: catalog.localSeoPresets,
     funnels: Object.values(graphs).map((graph) => ({
       id: graph.id,
       family: graph.family,

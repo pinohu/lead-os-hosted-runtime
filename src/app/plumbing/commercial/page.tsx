@@ -1,14 +1,14 @@
 import { PlumbingEntryPage } from "@/components/PlumbingEntryPage";
 import { getPlumbingEntrypoint } from "@/lib/plumbing-entrypoints";
 
-type PlumbingHelpPageProps = {
+type CommercialPlumbingPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function PlumbingHelpPage({ searchParams }: PlumbingHelpPageProps) {
+export default async function CommercialPlumbingPage({ searchParams }: CommercialPlumbingPageProps) {
   return (
     <PlumbingEntryPage
-      entry={getPlumbingEntrypoint("help-home")}
+      entry={getPlumbingEntrypoint("commercial")}
       searchParams={(await searchParams) ?? {}}
     />
   );

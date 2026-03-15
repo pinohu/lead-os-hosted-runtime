@@ -8,6 +8,11 @@
       service: "lead-capture",
       niche: "plumbing",
       family: "qualification",
+      entrypoint: null,
+      audience: "client",
+      zip: null,
+      city: null,
+      pageType: null,
       launcherLabel: "Need help now?",
       accent: "#c4632d",
       secondary: "#225f54",
@@ -35,7 +40,8 @@
       launcherLabel: config.launcherLabel,
       drawerTitle: "Get the right next step",
       drawerSummary: "Capture and route this visitor into the hosted lead engine."
-    }
+    },
+    resolvedEntrypoint: null
   };
 
   var state = {
@@ -148,6 +154,9 @@
   }
 
   function hostedHref() {
+    if (bootState.resolvedEntrypoint && bootState.resolvedEntrypoint.route) {
+      return absoluteUrl(bootState.resolvedEntrypoint.route);
+    }
     var query = encodeQuery({
       niche: config.niche,
       family: (getExperience().family || config.family || "qualification"),
@@ -250,7 +259,20 @@
   }
 
   function requestBoot() {
-    return fetch(absoluteUrl("/api/widgets/boot"), {
+    var query = encodeQuery({
+      niche: config.niche,
+      service: config.service,
+      family: config.family,
+      mode: config.mode,
+      entrypoint: config.entrypoint,
+      audience: config.audience,
+      zip: config.zip,
+      city: config.city,
+      pageType: config.pageType,
+      launcherLabel: config.launcherLabel
+    });
+
+    return fetch(absoluteUrl("/api/widgets/boot" + (query ? "?" + query : "")), {
       headers: {
         Accept: "application/json"
       }
@@ -266,9 +288,14 @@
 
       config.service = config.service || nextDefaults.service || "lead-capture";
       config.niche = config.niche || nextDefaults.niche || "plumbing";
+      config.family = config.family || nextDefaults.family || "qualification";
+      config.mode = config.mode || nextDefaults.mode || null;
+      config.entrypoint = config.entrypoint || nextDefaults.entrypoint || null;
+      config.audience = config.audience || nextDefaults.audience || "client";
       bootState.brandName = widget.brandName || bootState.brandName;
       bootState.experience = widget.experience || bootState.experience;
       bootState.channels = widget.channels || bootState.channels;
+      bootState.resolvedEntrypoint = widget.resolvedEntrypoint || bootState.resolvedEntrypoint;
       bootState.embed = {
         launcherLabel: embed.launcherLabel || bootState.embed.launcherLabel,
         drawerTitle: embed.drawerTitle || bootState.embed.drawerTitle,

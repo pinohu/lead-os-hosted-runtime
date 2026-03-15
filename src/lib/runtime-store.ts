@@ -121,6 +121,14 @@ export interface OperatorActionRecord {
   createdAt: string;
 }
 
+export interface IntakeAttemptRecord {
+  replayKey: string;
+  attempts: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  payload?: Record<string, unknown>;
+}
+
 const leadStore = new Map<string, StoredLeadRecord>();
 const eventStore: CanonicalEvent[] = [];
 const providerExecutionStore: ProviderExecutionRecord[] = [];
@@ -130,6 +138,7 @@ const documentJobStore = new Map<string, DocumentJobRecord>();
 const workflowRegistryStore = new Map<string, WorkflowRegistryRecord>();
 const runtimeConfigStore = new Map<string, RuntimeConfigRecord>();
 const operatorActionStore = new Map<string, OperatorActionRecord>();
+const intakeAttemptStore = new Map<string, IntakeAttemptRecord>();
 
 let pool: Pool | null = null;
 let schemaReady: Promise<void> | null = null;
@@ -146,7 +155,8 @@ type AitableRuntimeKind =
   | "document-job"
   | "workflow-registry"
   | "runtime-config"
-  | "operator-action";
+  | "operator-action"
+  | "intake-attempt";
 
 type AitableRuntimeEntry = {
   kind: AitableRuntimeKind;
@@ -160,7 +170,8 @@ type AitableRuntimeEntry = {
     | DocumentJobRecord
     | WorkflowRegistryRecord
     | RuntimeConfigRecord
-    | OperatorActionRecord;
+    | OperatorActionRecord
+    | IntakeAttemptRecord;
 };
 
 function getDatabaseUrl() {
@@ -278,6 +289,13 @@ async function ensureSchema() {
           payload JSONB NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS lead_os_intake_attempts (
+          replay_key TEXT PRIMARY KEY,
+          first_seen_at TIMESTAMPTZ NOT NULL,
+          last_seen_at TIMESTAMPTZ NOT NULL,
+          payload JSONB NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS lead_os_events_lead_idx
           ON lead_os_events (lead_key, timestamp DESC);
         CREATE INDEX IF NOT EXISTS lead_os_provider_exec_lead_idx
@@ -286,6 +304,8 @@ async function ensureSchema() {
           ON lead_os_workflow_runs (lead_key, created_at DESC);
         CREATE INDEX IF NOT EXISTS lead_os_operator_actions_lead_idx
           ON lead_os_operator_actions (lead_key, created_at DESC);
+        CREATE INDEX IF NOT EXISTS lead_os_intake_attempts_last_seen_idx
+          ON lead_os_intake_attempts (last_seen_at DESC);
       `);
     } catch (error) {
       schemaReady = null;
@@ -1171,6 +1191,71 @@ export async function getOperatorActions(leadKey?: string) {
   return result.rows.map((row) => row.payload);
 }
 
+export async function claimIntakeReplayKey(
+  replayKey: string,
+  windowMs: number,
+  payload?: Record<string, unknown>,
+) {
+  const nowIso = new Date().toISOString();
+
+  if (!getPool()) {
+    const existing = intakeAttemptStore.get(replayKey);
+    const replayed = Boolean(
+      existing &&
+      Date.now() - new Date(existing.lastSeenAt).getTime() < windowMs,
+    );
+    const record: IntakeAttemptRecord = {
+      replayKey,
+      attempts: (existing?.attempts ?? 0) + 1,
+      firstSeenAt: replayed ? existing!.firstSeenAt : nowIso,
+      lastSeenAt: nowIso,
+      payload,
+    };
+    intakeAttemptStore.set(replayKey, record);
+    if (runtimeMode() === "aitable") {
+      await appendAitableRuntimeEntry("intake-attempt", replayKey, record);
+    }
+    return {
+      replayed,
+      record,
+    };
+  }
+
+  await ensureSchema();
+  const existingResult = await queryPostgres<{ payload: IntakeAttemptRecord }>(
+    "SELECT payload FROM lead_os_intake_attempts WHERE replay_key = $1 LIMIT 1",
+    [replayKey],
+  );
+  const existing = existingResult.rows[0]?.payload;
+  const replayed = Boolean(
+    existing &&
+    Date.now() - new Date(existing.lastSeenAt).getTime() < windowMs,
+  );
+  const record: IntakeAttemptRecord = {
+    replayKey,
+    attempts: (existing?.attempts ?? 0) + 1,
+    firstSeenAt: replayed ? existing!.firstSeenAt : nowIso,
+    lastSeenAt: nowIso,
+    payload,
+  };
+  intakeAttemptStore.set(replayKey, record);
+  await queryPostgres(
+    `
+      INSERT INTO lead_os_intake_attempts (replay_key, first_seen_at, last_seen_at, payload)
+      VALUES ($1, $2::timestamptz, $3::timestamptz, $4::jsonb)
+      ON CONFLICT (replay_key) DO UPDATE SET
+        first_seen_at = EXCLUDED.first_seen_at,
+        last_seen_at = EXCLUDED.last_seen_at,
+        payload = EXCLUDED.payload
+    `,
+    [record.replayKey, record.firstSeenAt, record.lastSeenAt, JSON.stringify(record)],
+  );
+  return {
+    replayed,
+    record,
+  };
+}
+
 export async function resetRuntimeStore() {
   leadStore.clear();
   eventStore.length = 0;
@@ -1181,6 +1266,7 @@ export async function resetRuntimeStore() {
   workflowRegistryStore.clear();
   runtimeConfigStore.clear();
   operatorActionStore.clear();
+  intakeAttemptStore.clear();
   invalidateAitableCache();
 
   const activePool = getPool();
@@ -1200,6 +1286,7 @@ export async function resetRuntimeStore() {
       lead_os_workflow_registry,
       lead_os_runtime_config,
       lead_os_operator_actions,
+      lead_os_intake_attempts,
       lead_os_workflow_runs,
       lead_os_provider_executions,
       lead_os_events,
