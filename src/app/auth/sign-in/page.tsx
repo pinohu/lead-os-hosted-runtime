@@ -1,7 +1,9 @@
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
+  OPERATOR_BROWSER_FALLBACK_COOKIE,
   buildOperatorAbsoluteUrl,
+  createBrowserFallbackToken,
   getOperatorPublicOrigin,
   isAllowedOperatorEmail,
   sanitizeNextPath,
@@ -35,7 +37,18 @@ async function requestMagicLinkAction(formData: FormData) {
 
   const result = await sendOperatorMagicLink(email, origin, nextPath);
   if (!result.ok) {
-    redirect(buildOperatorAbsoluteUrl(`/auth/sign-in?error=delivery-failed&next=${encodeURIComponent(nextPath)}`));
+    const cookieStore = await cookies();
+    const fallbackToken = await createBrowserFallbackToken(email, origin, nextPath);
+    cookieStore.set({
+      name: OPERATOR_BROWSER_FALLBACK_COOKIE,
+      value: fallbackToken,
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 15 * 60,
+    });
+    redirect(buildOperatorAbsoluteUrl(`/auth/check-email?email=${encodeURIComponent(email)}&delivery=failed&next=${encodeURIComponent(nextPath)}`));
   }
 
   redirect(buildOperatorAbsoluteUrl(`/auth/check-email?email=${encodeURIComponent(email)}`));

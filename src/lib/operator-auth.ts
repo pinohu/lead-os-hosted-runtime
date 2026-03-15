@@ -17,6 +17,7 @@ import { tenantConfig } from "./tenant.ts";
 import { ensureTraceContext } from "./trace.ts";
 
 export const OPERATOR_SESSION_COOKIE = "leados_operator_session";
+export const OPERATOR_BROWSER_FALLBACK_COOKIE = "leados_operator_browser_fallback";
 export { sanitizeNextPath } from "./operator-auth-core.ts";
 
 type PublicOriginOptions = {
@@ -79,6 +80,17 @@ export async function createMagicLink(email: string, origin: string, nextPath?: 
     nextPath,
   );
   return url;
+}
+
+export async function createBrowserFallbackToken(email: string, origin: string, nextPath?: string) {
+  const { token } = await createMagicLinkUrl(
+    email,
+    origin,
+    getAuthSecret(),
+    getAllowedOperatorEmails(),
+    nextPath,
+  );
+  return token;
 }
 
 export async function sendOperatorMagicLink(email: string, origin: string, nextPath?: string) {
@@ -168,6 +180,30 @@ export function applyOperatorSession(response: NextResponse, token: string) {
     sameSite: "lax",
     path: "/",
     maxAge: 7 * 24 * 60 * 60,
+  });
+}
+
+export function applyOperatorBrowserFallback(response: NextResponse, token: string) {
+  response.cookies.set({
+    name: OPERATOR_BROWSER_FALLBACK_COOKIE,
+    value: token,
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 15 * 60,
+  });
+}
+
+export function clearOperatorBrowserFallback(response: NextResponse) {
+  response.cookies.set({
+    name: OPERATOR_BROWSER_FALLBACK_COOKIE,
+    value: "",
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
   });
 }
 

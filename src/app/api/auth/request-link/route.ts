@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import {
+  applyOperatorBrowserFallback,
   buildOperatorAbsoluteUrl,
+  createBrowserFallbackToken,
   getOperatorPublicOrigin,
   isAllowedOperatorEmail,
   sanitizeNextPath,
@@ -35,7 +37,24 @@ export async function POST(request: Request) {
     forwardedProto: request.headers.get("x-forwarded-proto"),
   }), nextPath);
   if (!result.ok) {
-    return redirectWithError(request, "delivery-failed", nextPath);
+    const origin = getOperatorPublicOrigin({
+      requestUrl: request.url,
+      host: request.headers.get("host"),
+      forwardedHost: request.headers.get("x-forwarded-host"),
+      forwardedProto: request.headers.get("x-forwarded-proto"),
+    });
+    const url = new URL(buildOperatorAbsoluteUrl("/auth/check-email", {
+      requestUrl: request.url,
+      host: request.headers.get("host"),
+      forwardedHost: request.headers.get("x-forwarded-host"),
+      forwardedProto: request.headers.get("x-forwarded-proto"),
+    }));
+    url.searchParams.set("email", email);
+    url.searchParams.set("delivery", "failed");
+    url.searchParams.set("next", nextPath);
+    const response = NextResponse.redirect(url);
+    applyOperatorBrowserFallback(response, await createBrowserFallbackToken(email, origin, nextPath));
+    return response;
   }
 
   const url = new URL(buildOperatorAbsoluteUrl("/auth/check-email", {
