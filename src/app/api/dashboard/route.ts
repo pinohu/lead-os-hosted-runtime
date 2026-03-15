@@ -3,6 +3,7 @@ import { THREE_VISIT_FRAMEWORK } from "@/lib/automation";
 import { buildOperatorConsoleSnapshot } from "@/lib/dashboard";
 import { requireOperatorApiSession } from "@/lib/operator-auth";
 import { getAutomationHealth } from "@/lib/providers";
+import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import {
   getBookingJobs,
   getCanonicalEvents,
@@ -20,12 +21,13 @@ export async function GET(request: Request) {
   }
 
   const includeSystemTraffic = new URL(request.url).searchParams.get("include") === "system";
-  const [leads, events, bookingJobs, providerExecutions, workflowRuns] = await Promise.all([
+  const [leads, events, bookingJobs, providerExecutions, workflowRuns, runtimeConfig] = await Promise.all([
     getLeadRecords(),
     getCanonicalEvents(),
     getBookingJobs(),
     getProviderExecutions(),
     getWorkflowRuns(),
+    getOperationalRuntimeConfig(),
   ]);
   return NextResponse.json({
     success: true,
@@ -40,6 +42,7 @@ export async function GET(request: Request) {
       bookingJobs,
       providerExecutions,
       workflowRuns,
+      runtimeConfig.dispatch.providers,
       { includeSystemTraffic },
     ),
   });

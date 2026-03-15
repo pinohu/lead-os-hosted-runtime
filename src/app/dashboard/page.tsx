@@ -3,6 +3,7 @@ import { DispatchActionPanel } from "@/components/DispatchActionPanel";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { isSystemBookingJob, isSystemDocumentJob, isSystemWorkflowRun } from "@/lib/operator-view";
 import { getAutomationHealth } from "@/lib/providers";
+import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import {
   getBookingJobs,
   getCanonicalEvents,
@@ -36,13 +37,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const session = await requireOperatorPageSession("/dashboard");
   const params = (await searchParams) ?? {};
   const includeSystemTraffic = asString(params.include) === "system";
-  const [leads, events, bookingJobs, documentJobs, workflowRuns, providerExecutions] = await Promise.all([
+  const dashboardError = asString(params.error);
+  const [leads, events, bookingJobs, documentJobs, workflowRuns, providerExecutions, runtimeConfig] = await Promise.all([
     getLeadRecords(),
     getCanonicalEvents(),
     getBookingJobs(),
     getDocumentJobs(),
     getWorkflowRuns(),
     getProviderExecutions(),
+    getOperationalRuntimeConfig(),
   ]);
 
   const snapshot = buildOperatorConsoleSnapshot(
@@ -51,6 +54,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     bookingJobs,
     providerExecutions,
     workflowRuns,
+    runtimeConfig.dispatch.providers,
     { includeSystemTraffic },
   );
   const health = getAutomationHealth();
@@ -99,6 +103,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </section>
       ) : null}
 
+      {dashboardError === "forbidden" ? (
+        <section className="panel">
+          <p className="eyebrow">Permissions</p>
+          <h2>That page needs a higher-trust operator role</h2>
+          <p className="muted">
+            Your current role is <strong>{session.role}</strong>. Ask an admin operator if you need
+            access to runtime settings, provisioning, or other admin-only controls.
+          </p>
+        </section>
+      ) : null}
+
       <section className="experience-hero">
         <div className="hero-copy">
           <p className="eyebrow">Dispatch command center</p>
@@ -136,6 +151,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <li>
               <strong>Live mode</strong>
               <span>{health.liveMode ? "enabled" : "dry run"}</span>
+            </li>
+            <li>
+              <strong>Role</strong>
+              <span>{session.role}</span>
             </li>
             <li>
               <strong>Visible leads</strong>
@@ -183,6 +202,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <h2>{dispatch.topQueue.filter((item) => item.escalationReady).length}</h2>
           <p className="muted">Plumbing leads that have crossed the backup-routing threshold.</p>
         </article>
+        <article className="metric-card">
+          <p className="eyebrow">Dispatch roster</p>
+          <h2>{dispatch.configuredDispatchProviders}</h2>
+          <p className="muted">Configured providers available for capacity-aware assignment.</p>
+        </article>
       </section>
 
       <section className="grid two">
@@ -207,18 +231,29 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     SLA: {item.overdue ? `overdue by ${item.minutesPastDue}m` : `due ${item.dueAt}`}
                     {item.escalationReady ? " | backup escalation ready" : ""}
                   </p>
+                  {item.recommendedProviders.length > 0 ? (
+                    <p className="muted">
+                      Best match: {item.recommendedProviders[0].providerLabel} ({item.recommendedProviders[0].reason})
+                    </p>
+                  ) : (
+                    <p className="muted">No dispatch provider currently matches this job profile.</p>
+                  )}
                   <p className="muted">Next move: {item.operatorAction}</p>
-                  <DispatchActionPanel
-                    leadKey={item.leadKey}
-                    compact
-                    visibleActions={
-                      item.dispatchMode === "dispatch-now"
-                        ? ["dispatch-now", "assign-backup-provider", "mark-booked"]
-                        : item.dispatchMode === "estimate-path"
-                          ? ["retry-booking", "mark-booked", "mark-lost"]
-                          : ["dispatch-now", "retry-booking", "mark-booked"]
-                    }
-                  />
+                  {session.role !== "analyst" ? (
+                    <DispatchActionPanel
+                      leadKey={item.leadKey}
+                      compact
+                      visibleActions={
+                        item.dispatchMode === "dispatch-now"
+                          ? ["dispatch-now", "assign-backup-provider", "mark-booked"]
+                          : item.dispatchMode === "estimate-path"
+                            ? ["retry-booking", "mark-booked", "mark-lost"]
+                            : ["dispatch-now", "retry-booking", "mark-booked"]
+                      }
+                    />
+                  ) : (
+                    <p className="muted">Analyst role can review dispatch state but cannot mutate it.</p>
+                  )}
                   <div className="cta-row">
                     <Link href={`/dashboard/leads/${encodeURIComponent(item.leadKey)}`} className="secondary">
                       Open lead detail
@@ -290,6 +325,40 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               )}
             </article>
           </div>
+        </article>
+      </section>
+
+      <section className="grid two">
+        <article className="panel">
+          <p className="eyebrow">Geo-cell demand</p>
+          <h2>Where plumbing momentum is clustering</h2>
+          {dispatch.metroBreakdown.length === 0 ? (
+            <p className="muted">LeadOS needs more location capture before it can show dispatch cells.</p>
+          ) : (
+            <ul className="check-list">
+              {dispatch.metroBreakdown.map((cell) => (
+                <li key={cell.label}>
+                  {cell.label}: {cell.count} plumbing leads
+                </li>
+              ))}
+            </ul>
+          )}
+        </article>
+
+        <article className="panel">
+          <p className="eyebrow">Revenue cells</p>
+          <h2>Where completed plumbing value is concentrating</h2>
+          {dispatch.metroRevenueBreakdown.length === 0 ? (
+            <p className="muted">No completed plumbing revenue has been mapped to a geo cell yet.</p>
+          ) : (
+            <ul className="check-list">
+              {dispatch.metroRevenueBreakdown.map((cell) => (
+                <li key={cell.label}>
+                  {cell.label}: {cell.revenue}
+                </li>
+              ))}
+            </ul>
+          )}
         </article>
       </section>
 

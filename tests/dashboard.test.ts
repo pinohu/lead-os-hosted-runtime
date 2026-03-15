@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildDashboardSnapshot, buildDashboardSnapshotWithOptions, buildOperatorConsoleSnapshot } from "../src/lib/dashboard.ts";
+import { recommendDispatchProviders } from "../src/lib/dispatch-routing.ts";
 import type {
   BookingJobRecord,
   ProviderExecutionRecord,
@@ -277,7 +278,71 @@ test("operator console snapshot exposes plumbing dispatch queues and provider sc
           issueType: "burst-pipe",
           dispatchMode: "dispatch-now",
           propertyType: "residential",
+          geo: {
+            city: "Dallas",
+            state: "Texas",
+            zip: "75201",
+          },
           routingReasons: ["Emergency keywords detected", "Phone present for dispatch"],
+        },
+      },
+    },
+    {
+      leadKey: "email:completed@example.com",
+      trace: {
+        visitorId: "visitor-4",
+        sessionId: "session-4",
+        leadKey: "email:completed@example.com",
+        tenant: "tenant",
+        source: "search",
+        service: "emergency-plumbing",
+        niche: "plumbing",
+        blueprintId: "qualification-default",
+        stepId: "qualification-1",
+      },
+      firstName: "Finished",
+      lastName: "Job",
+      email: "completed@example.com",
+      phone: "+15555550444",
+      service: "emergency-plumbing",
+      niche: "plumbing",
+      source: "search",
+      score: 88,
+      family: "qualification",
+      blueprintId: "qualification-default",
+      destination: "/funnel/qualification",
+      ctaLabel: "Start Dispatch",
+      stage: "active",
+      hot: false,
+      createdAt: new Date("2026-03-15T00:30:00Z").toISOString(),
+      updatedAt: new Date("2026-03-15T01:15:00Z").toISOString(),
+      status: "LEAD-CONVERTED",
+      sentNurtureStages: [],
+      milestones: {
+        visitCount: 3,
+        leadMilestones: ["lead-m1-captured", "lead-m2-return-engaged", "lead-m3-booked-or-offered"],
+        customerMilestones: ["customer-m1-onboarded", "customer-m2-activated"],
+      },
+      metadata: {
+        operatingModel: "plumbing-dispatch",
+        plumbing: {
+          urgencyBand: "same-day",
+          issueType: "leak",
+          dispatchMode: "same-day-booking",
+          propertyType: "residential",
+          geo: {
+            city: "Dallas",
+            state: "Texas",
+            zip: "75202",
+          },
+          routingReasons: ["Prior booking completed"],
+        },
+        plumbingOutcome: {
+          status: "completed",
+          actorEmail: "dispatch@example.org",
+          recordedAt: new Date("2026-03-15T01:15:00Z").toISOString(),
+          provider: "Trafft",
+          revenueValue: 1450,
         },
       },
     },
@@ -321,12 +386,90 @@ test("operator console snapshot exposes plumbing dispatch queues and provider sc
     },
   ];
 
-  const snapshot = buildOperatorConsoleSnapshot(leads, [], bookingJobs, providerExecutions, workflowRuns, {});
+  const snapshot = buildOperatorConsoleSnapshot(leads, [], bookingJobs, providerExecutions, workflowRuns, [
+    {
+      id: "crew-dallas",
+      label: "Dallas Emergency Crew",
+      active: true,
+      priorityWeight: 82,
+      maxConcurrentJobs: 4,
+      activeJobs: 1,
+      acceptsEmergency: true,
+      acceptsCommercial: false,
+      propertyTypes: ["residential"],
+      issueTypes: ["burst-pipe", "leak"],
+      states: [],
+      counties: [],
+      cities: [],
+      zipPrefixes: [],
+      emergencyCoverageWindow: "24/7",
+    },
+  ], {});
 
-  assert.equal(snapshot.plumbingDispatch.totalPlumbingLeads, 1);
+  assert.equal(snapshot.plumbingDispatch.totalPlumbingLeads, 2);
+  assert.equal(snapshot.plumbingDispatch.unresolvedCount, 1);
   assert.equal(snapshot.plumbingDispatch.emergencyQueue.length, 1);
   assert.equal(snapshot.plumbingDispatch.emergencyQueue[0]?.dispatchMode, "dispatch-now");
   assert.equal(snapshot.plumbingDispatch.emergencyQueue[0]?.operatorAction, "Escalate to backup provider now");
+  assert.equal(snapshot.plumbingDispatch.emergencyQueue[0]?.recommendedProviders[0]?.providerLabel, "Dallas Emergency Crew");
   assert.equal(snapshot.plumbingDispatch.providerScores[0]?.provider, "Trafft");
   assert.equal(snapshot.plumbingDispatch.providerScores[0]?.bookingFillRate, 100);
+  assert.equal(snapshot.plumbingDispatch.providerScores[0]?.completedRevenue, 1450);
+  assert.equal(snapshot.plumbingDispatch.providerScores[0]?.routingScore >= snapshot.plumbingDispatch.providerScores[0]!.reliabilityScore, true);
+  assert.equal(snapshot.plumbingDispatch.metroBreakdown[0]?.label, "dallas, texas");
+  assert.equal(snapshot.plumbingDispatch.metroRevenueBreakdown[0]?.label, "dallas, texas");
+  assert.equal(snapshot.plumbingDispatch.metroRevenueBreakdown[0]?.revenue, 1450);
+});
+
+test("dispatch routing recommends providers by capacity and job fit", () => {
+  const recommended = recommendDispatchProviders(
+    {
+      urgencyBand: "emergency-now",
+      issueType: "burst-pipe",
+      dispatchMode: "dispatch-now",
+      propertyType: "residential",
+      routingReasons: ["Emergency keywords detected"],
+    },
+    [
+      {
+        id: "crew-dallas",
+        label: "Dallas Emergency Crew",
+        active: true,
+        priorityWeight: 90,
+        maxConcurrentJobs: 4,
+        activeJobs: 1,
+        acceptsEmergency: true,
+        acceptsCommercial: false,
+        propertyTypes: ["residential"],
+        issueTypes: ["burst-pipe", "leak"],
+        states: ["texas"],
+        counties: ["dallas county"],
+        cities: ["dallas"],
+        zipPrefixes: ["752"],
+        emergencyCoverageWindow: "24/7",
+      },
+      {
+        id: "crew-commercial",
+        label: "Commercial Specialist",
+        active: true,
+        priorityWeight: 40,
+        maxConcurrentJobs: 2,
+        activeJobs: 2,
+        acceptsEmergency: false,
+        acceptsCommercial: true,
+        propertyTypes: ["commercial"],
+        issueTypes: ["commercial-service"],
+        states: ["texas"],
+        counties: [],
+        cities: ["dallas"],
+        zipPrefixes: [],
+        emergencyCoverageWindow: undefined,
+      },
+    ],
+  );
+
+  assert.equal(recommended[0]?.providerId, "crew-dallas");
+  assert.equal(recommended[0]?.availableCapacity, 3);
+  assert.match(recommended[0]?.reason ?? "", /Emergency coverage/);
+  assert.equal(recommended.some((provider) => provider.providerId === "crew-commercial"), false);
 });

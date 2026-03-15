@@ -1,8 +1,11 @@
+export type OperatorRole = "admin" | "operator" | "analyst";
+
 export type OperatorTokenPayload = {
   type: "magic" | "session";
   email: string;
   exp: number;
   next?: string;
+  role?: OperatorRole;
 };
 
 export function normalizeEmail(value: string) {
@@ -75,6 +78,47 @@ export function getAllowedOperatorEmails(configured: string | undefined) {
     .filter(isRealEmail);
 
   return [...new Set(normalizedConfigured)];
+}
+
+export function getAllowedOperatorRoles(
+  configured: string | undefined,
+  allowedEmails: string[],
+): Record<string, OperatorRole> {
+  const allowed = new Set(allowedEmails.map(normalizeEmail));
+  const configuredRoles = (configured ?? "")
+    .split(/[,\n;]/g)
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .reduce<Record<string, OperatorRole>>((acc, entry) => {
+      const [emailPart, rolePart] = entry.split(/[=:]/g).map((value) => value.trim());
+      const email = normalizeEmail(emailPart ?? "");
+      const role = (rolePart ?? "").trim().toLowerCase() as OperatorRole;
+      if (!allowed.has(email)) {
+        return acc;
+      }
+      if (role === "admin" || role === "operator" || role === "analyst") {
+        acc[email] = role;
+      }
+      return acc;
+    }, {});
+
+  const hasConfiguredAdmin = Object.values(configuredRoles).includes("admin");
+  return allowedEmails.reduce<Record<string, OperatorRole>>((acc, email, index) => {
+    const normalizedEmail = normalizeEmail(email);
+    const configuredRole = configuredRoles[normalizedEmail];
+    if (configuredRole) {
+      acc[normalizedEmail] = configuredRole;
+      return acc;
+    }
+
+    if (!hasConfiguredAdmin && index === 0) {
+      acc[normalizedEmail] = "admin";
+      return acc;
+    }
+
+    acc[normalizedEmail] = "operator";
+    return acc;
+  }, {});
 }
 
 export function isAllowedOperatorEmail(email: string, allowedEmails: string[]) {

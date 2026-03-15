@@ -15,7 +15,7 @@ import { tenantConfig } from "@/lib/tenant";
 export const dynamic = "force-dynamic";
 
 export default async function RuntimeSettingsPage() {
-  await requireOperatorPageSession("/dashboard/settings");
+  const session = await requireOperatorPageSession("/dashboard/settings", { allowedRoles: ["admin"] });
   const config = await getOperationalRuntimeConfig();
   const [templateCatalog, trafftTenant, trafftServices] = await Promise.all([
     discoverDocumenteroTemplates(),
@@ -35,6 +35,7 @@ export default async function RuntimeSettingsPage() {
             service IDs, and fallback URLs live here so the runtime can become more executable
             without another code deploy.
           </p>
+          <p className="muted">Role: {session.role}</p>
           <div className="cta-row">
             <Link href="/dashboard" className="secondary">
               Back to dashboard
@@ -50,6 +51,14 @@ export default async function RuntimeSettingsPage() {
             <li>
               <strong>Trafft mappings</strong>
               <span>{summary.trafft.mappedServices}</span>
+            </li>
+            <li>
+              <strong>Dispatch providers</strong>
+              <span>{summary.dispatch.providerCount}</span>
+            </li>
+            <li>
+              <strong>Emergency ready</strong>
+              <span>{summary.dispatch.emergencyReadyProviders}</span>
             </li>
             <li>
               <strong>Doc templates</strong>
@@ -68,6 +77,17 @@ export default async function RuntimeSettingsPage() {
       </section>
 
       <section className="grid two">
+        <article className="panel">
+          <p className="eyebrow">Dispatch discovery</p>
+          <h2>Capacity-aware plumbing roster</h2>
+          <ul className="check-list">
+            <li>Configured providers: {summary.dispatch.providerCount}</li>
+            <li>Active providers: {summary.dispatch.activeProviders}</li>
+            <li>Emergency-ready providers: {summary.dispatch.emergencyReadyProviders}</li>
+            <li>Use the dispatch roster below to model metro coverage, issue fit, and live capacity before routing jobs.</li>
+          </ul>
+        </article>
+
         <article className="panel">
           <p className="eyebrow">Documentero discovery</p>
           <h2>Available templates detected from the account API</h2>

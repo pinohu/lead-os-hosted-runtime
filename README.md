@@ -14,8 +14,9 @@ The hosted runtime owns:
 - routing and next-step recommendations
 - hosted assessments and calculators
 - shared tenant and niche manifests
-- private operator dashboard access with magic-link auth and same-browser secure continuation if mail delivery is unavailable
+- private operator dashboard access with magic-link auth and role-aware operator sessions
 - operator views that hide internal verification traffic by default so dashboards reflect human activity first
+- capacity-aware plumbing dispatch queues, provider scoring, and geo-cell revenue visibility
 
 ## Key docs
 
@@ -48,6 +49,9 @@ Hosted runtime
 - `LEAD_OS_WIDGET_ORIGINS`
 - `LEAD_OS_DEFAULT_SERVICE`
 - `LEAD_OS_DEFAULT_NICHE`
+- `LEAD_OS_AUTH_SECRET`
+- `LEAD_OS_OPERATOR_EMAILS`
+- `LEAD_OS_OPERATOR_ROLES`
 
 ## Deploy target
 

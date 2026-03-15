@@ -25,6 +25,27 @@ test("runtime config persists normalized provider mappings", async () => {
       onboardingTemplateId: " onboarding-template ",
       defaultFormat: " docx ",
     },
+    dispatch: {
+      providers: [
+        {
+          id: "crew-dallas",
+          label: " Dallas Emergency Crew ",
+          active: true,
+          priorityWeight: 88,
+          maxConcurrentJobs: 4,
+          activeJobs: 1,
+          acceptsEmergency: true,
+          acceptsCommercial: false,
+          propertyTypes: ["Residential ", "commercial", "residential"],
+          issueTypes: ["Burst-Pipe", " leak "],
+          states: [" Texas "],
+          counties: ["Dallas County"],
+          cities: ["Dallas "],
+          zipPrefixes: ["752", "752"],
+          emergencyCoverageWindow: " 24/7 ",
+        },
+      ],
+    },
   }, "operator@example.com");
 
   const config = await getOperationalRuntimeConfig();
@@ -36,6 +57,24 @@ test("runtime config persists normalized provider mappings", async () => {
   });
   assert.equal(config.documentero.proposalTemplateId, "proposal-template");
   assert.equal(config.documentero.defaultFormat, "docx");
+  assert.equal(config.dispatch.providers.length, 1);
+  assert.deepEqual(config.dispatch.providers[0], {
+    id: "crew-dallas",
+    label: "Dallas Emergency Crew",
+    active: true,
+    priorityWeight: 88,
+    maxConcurrentJobs: 4,
+    activeJobs: 1,
+    acceptsEmergency: true,
+    acceptsCommercial: false,
+    propertyTypes: ["residential", "commercial"],
+    issueTypes: ["burst-pipe", "leak"],
+    states: ["texas"],
+    counties: ["dallas county"],
+    cities: ["dallas"],
+    zipPrefixes: ["752"],
+    emergencyCoverageWindow: "24/7",
+  });
 });
 
 test("runtime config summary reports executable coverage", async () => {
@@ -52,10 +91,45 @@ test("runtime config summary reports executable coverage", async () => {
     crove: {
       webhookUrl: "https://hooks.example.com/crove",
     },
+    dispatch: {
+      providers: [
+        {
+          id: "crew-a",
+          label: "Crew A",
+          active: true,
+          priorityWeight: 70,
+          acceptsEmergency: true,
+          acceptsCommercial: false,
+          propertyTypes: [],
+          issueTypes: [],
+          states: ["texas"],
+          counties: [],
+          cities: [],
+          zipPrefixes: [],
+        },
+        {
+          id: "crew-b",
+          label: "Crew B",
+          active: false,
+          priorityWeight: 40,
+          acceptsEmergency: true,
+          acceptsCommercial: true,
+          propertyTypes: [],
+          issueTypes: [],
+          states: ["texas"],
+          counties: [],
+          cities: [],
+          zipPrefixes: [],
+        },
+      ],
+    },
   });
 
   const summary = buildRuntimeConfigSummary(await getOperationalRuntimeConfig());
   assert.equal(summary.trafft.mappedServices, 1);
+  assert.equal(summary.dispatch.providerCount, 2);
+  assert.equal(summary.dispatch.activeProviders, 1);
+  assert.equal(summary.dispatch.emergencyReadyProviders, 1);
   assert.equal(summary.documentero.hasProposalTemplate, true);
   assert.equal(summary.crove.hasWebhookUrl, true);
 });

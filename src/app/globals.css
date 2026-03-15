@@ -696,7 +696,21 @@ button[disabled] {
 
 .mapping-row__actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   align-items: flex-end;
+}
+
+.checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.checkbox-row input {
+  inline-size: 18px;
+  block-size: 18px;
 }
 
 .stack-grid {

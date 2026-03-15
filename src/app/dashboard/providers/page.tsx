@@ -3,6 +3,7 @@ import { buildOperatorConsoleSnapshot } from "@/lib/dashboard";
 import { getConfigStatusSummary } from "@/lib/config-status";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { getAutomationHealth } from "@/lib/providers";
+import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import {
   getBookingJobs,
   getCanonicalEvents,
@@ -17,13 +18,14 @@ export const dynamic = "force-dynamic";
 
 export default async function ProviderHealthPage() {
   await requireOperatorPageSession("/dashboard/providers");
-  const [health, leads, events, bookingJobs, providerExecutions, workflowRuns] = await Promise.all([
+  const [health, leads, events, bookingJobs, providerExecutions, workflowRuns, runtimeConfig] = await Promise.all([
     Promise.resolve(getAutomationHealth()),
     getLeadRecords(),
     getCanonicalEvents(),
     getBookingJobs(),
     getProviderExecutions(),
     getWorkflowRuns(),
+    getOperationalRuntimeConfig(),
   ]);
   const persistenceMode = getRuntimePersistenceMode();
   const configSummary = getConfigStatusSummary();
@@ -35,6 +37,7 @@ export default async function ProviderHealthPage() {
     bookingJobs,
     providerExecutions,
     workflowRuns,
+    runtimeConfig.dispatch.providers,
     {},
   );
   const providerScores = consoleSnapshot.plumbingDispatch.providerScores.slice(0, 8);
@@ -77,6 +80,10 @@ export default async function ProviderHealthPage() {
               <span>{configSummary.envOnlyReady ? "yes" : "no"}</span>
             </li>
             <li>
+              <strong>Dispatch providers</strong>
+              <span>{consoleSnapshot.plumbingDispatch.configuredDispatchProviders}</span>
+            </li>
+            <li>
               <strong>Embedded secrets</strong>
               <span>{configSummary.embeddedSecretsEnabled ? "enabled" : "disabled"}</span>
             </li>
@@ -92,7 +99,10 @@ export default async function ProviderHealthPage() {
             {providerScores.map((provider) => (
               <article key={provider.provider} className="stack-card">
                 <p className="eyebrow">{provider.provider}</p>
-                <h3>{provider.reliabilityScore}</h3>
+                <h3>{provider.routingScore}</h3>
+                <p className="muted">
+                  Routing score: {provider.routingScore} | Reliability: {provider.reliabilityScore} | Revenue score: {provider.revenueScore}
+                </p>
                 <p className="muted">
                   Success rate: {formatPercent(provider.successRate)} | Booking fill: {formatPercent(provider.bookingFillRate)}
                 </p>
@@ -100,11 +110,17 @@ export default async function ProviderHealthPage() {
                   Completion: {formatPercent(provider.completionRate)} | Completed jobs: {provider.completedOutcomes}
                 </p>
                 <p className="muted">
+                  Completed revenue: {provider.completedRevenue} | Avg completed value: {provider.averageCompletedRevenue || "n/a"}
+                </p>
+                <p className="muted">
                   Attempts: {provider.attempts} | Workflow failures: {provider.workflowFailures}
                 </p>
               </article>
             ))}
           </div>
+          {consoleSnapshot.plumbingDispatch.configuredDispatchProviders === 0 ? (
+            <p className="muted">No dispatch roster is configured yet, so LeadOS cannot recommend coverage-aware backup providers.</p>
+          ) : null}
         </section>
       ) : null}
 

@@ -6,7 +6,7 @@ import { canProvisionToN8n, getN8nStarterWorkflowStatus, provisionN8nStarterWork
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const auth = await requireOperatorApiSession(request);
+  const auth = await requireOperatorApiSession(request, { allowedRoles: ["admin"] });
   if (auth.response) {
     return auth.response;
   }
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireOperatorApiSession(request);
+  const auth = await requireOperatorApiSession(request, { allowedRoles: ["admin"] });
   if (auth.response) {
     return auth.response;
   }

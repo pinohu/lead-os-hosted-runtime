@@ -13,7 +13,7 @@ const VALID_ACTIONS = new Set<PlumbingOperatorActionType>([
 ]);
 
 export async function POST(request: Request) {
-  const auth = await requireOperatorApiSession(request);
+  const auth = await requireOperatorApiSession(request, { allowedRoles: ["admin", "operator"] });
   if (auth.response) {
     return auth.response;
   }

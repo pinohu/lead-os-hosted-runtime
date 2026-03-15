@@ -10,6 +10,24 @@ type ServiceMapRow = {
   serviceId: string;
 };
 
+type DispatchProviderRow = {
+  id: string;
+  label: string;
+  active: boolean;
+  priorityWeight: string;
+  maxConcurrentJobs: string;
+  activeJobs: string;
+  acceptsEmergency: boolean;
+  acceptsCommercial: boolean;
+  propertyTypes: string;
+  issueTypes: string;
+  states: string;
+  counties: string;
+  cities: string;
+  zipPrefixes: string;
+  emergencyCoverageWindow: string;
+};
+
 type Props = {
   initialConfig: OperationalRuntimeConfig;
   trafftServices: TrafftServiceOption[];
@@ -25,12 +43,64 @@ function createServiceMapRow(label = "", serviceId = ""): ServiceMapRow {
   };
 }
 
+function createDispatchProviderRow(
+  row: Partial<DispatchProviderRow> = {},
+): DispatchProviderRow {
+  return {
+    id:
+      row.id
+      ?? globalThis.crypto?.randomUUID?.()
+      ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    label: row.label ?? "",
+    active: row.active ?? true,
+    priorityWeight: row.priorityWeight ?? "50",
+    maxConcurrentJobs: row.maxConcurrentJobs ?? "",
+    activeJobs: row.activeJobs ?? "",
+    acceptsEmergency: row.acceptsEmergency ?? true,
+    acceptsCommercial: row.acceptsCommercial ?? false,
+    propertyTypes: row.propertyTypes ?? "",
+    issueTypes: row.issueTypes ?? "",
+    states: row.states ?? "",
+    counties: row.counties ?? "",
+    cities: row.cities ?? "",
+    zipPrefixes: row.zipPrefixes ?? "",
+    emergencyCoverageWindow: row.emergencyCoverageWindow ?? "",
+  };
+}
+
 function buildServiceMapRows(serviceMap: Record<string, string>) {
   return Object.entries(serviceMap).map(([label, serviceId]) => createServiceMapRow(label, serviceId));
 }
 
+function buildDispatchProviderRows(providers: OperationalRuntimeConfig["dispatch"]["providers"]) {
+  return providers.map((provider) => createDispatchProviderRow({
+    id: provider.id,
+    label: provider.label,
+    active: provider.active,
+    priorityWeight: String(provider.priorityWeight),
+    maxConcurrentJobs: provider.maxConcurrentJobs == null ? "" : String(provider.maxConcurrentJobs),
+    activeJobs: provider.activeJobs == null ? "" : String(provider.activeJobs),
+    acceptsEmergency: provider.acceptsEmergency,
+    acceptsCommercial: provider.acceptsCommercial,
+    propertyTypes: provider.propertyTypes.join(", "),
+    issueTypes: provider.issueTypes.join(", "),
+    states: provider.states.join(", "),
+    counties: provider.counties.join(", "),
+    cities: provider.cities.join(", "),
+    zipPrefixes: provider.zipPrefixes.join(", "),
+    emergencyCoverageWindow: provider.emergencyCoverageWindow ?? "",
+  }));
+}
+
 function normalizeServiceLabel(value: string) {
   return value.trim().toLowerCase();
+}
+
+function normalizeList(value: string) {
+  return [...new Set(value
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean))];
 }
 
 function formatTrafftServiceMeta(service: TrafftServiceOption) {
@@ -51,6 +121,7 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
   const [trafftPublicBookingUrl, setTrafftPublicBookingUrl] = useState(initialConfig.trafft.publicBookingUrl ?? "");
   const [trafftDefaultServiceId, setTrafftDefaultServiceId] = useState(initialConfig.trafft.defaultServiceId ?? "");
   const [trafftServiceMapRows, setTrafftServiceMapRows] = useState<ServiceMapRow[]>(() => buildServiceMapRows(initialConfig.trafft.serviceMap));
+  const [dispatchProviderRows, setDispatchProviderRows] = useState<DispatchProviderRow[]>(() => buildDispatchProviderRows(initialConfig.dispatch.providers));
   const [trafftServiceSearch, setTrafftServiceSearch] = useState("");
   const [documenteroDefaultFormat, setDocumenteroDefaultFormat] = useState(initialConfig.documentero.defaultFormat ?? "pdf");
   const [documenteroProposalTemplateId, setDocumenteroProposalTemplateId] = useState(initialConfig.documentero.proposalTemplateId ?? "");
@@ -86,6 +157,18 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
     setTrafftServiceMapRows((rows) => [...rows, createServiceMapRow()]);
   }
 
+  function updateDispatchProviderRow(rowId: string, patch: Partial<DispatchProviderRow>) {
+    setDispatchProviderRows((rows) => rows.map((row) => (row.id === rowId ? { ...row, ...patch } : row)));
+  }
+
+  function removeDispatchProviderRow(rowId: string) {
+    setDispatchProviderRows((rows) => rows.filter((row) => row.id !== rowId));
+  }
+
+  function addDispatchProviderRow() {
+    setDispatchProviderRows((rows) => [...rows, createDispatchProviderRow()]);
+  }
+
   function addSuggestedMapping(service: TrafftServiceOption) {
     const normalizedLabel = normalizeServiceLabel(service.label);
     setTrafftServiceMapRows((rows) => {
@@ -109,6 +192,7 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
 
     const parsedServiceMap: Record<string, string> = {};
     const seenLabels = new Set<string>();
+    const parsedDispatchProviders: OperationalRuntimeConfig["dispatch"]["providers"] = [];
 
     for (const row of trafftServiceMapRows) {
       const label = row.label.trim();
@@ -133,6 +217,42 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
       parsedServiceMap[normalizedLabel] = serviceId;
     }
 
+    for (const row of dispatchProviderRows) {
+      const label = row.label.trim();
+      if (!label) {
+        if (
+          !row.maxConcurrentJobs.trim() &&
+          !row.activeJobs.trim() &&
+          !row.states.trim() &&
+          !row.cities.trim() &&
+          !row.counties.trim() &&
+          !row.zipPrefixes.trim()
+        ) {
+          continue;
+        }
+        setError("Each dispatch provider row needs a provider label.");
+        return;
+      }
+
+      parsedDispatchProviders.push({
+        id: row.id,
+        label,
+        active: row.active,
+        priorityWeight: Number(row.priorityWeight || "50"),
+        maxConcurrentJobs: row.maxConcurrentJobs.trim() ? Number(row.maxConcurrentJobs) : undefined,
+        activeJobs: row.activeJobs.trim() ? Number(row.activeJobs) : undefined,
+        acceptsEmergency: row.acceptsEmergency,
+        acceptsCommercial: row.acceptsCommercial,
+        propertyTypes: normalizeList(row.propertyTypes),
+        issueTypes: normalizeList(row.issueTypes),
+        states: normalizeList(row.states),
+        counties: normalizeList(row.counties),
+        cities: normalizeList(row.cities),
+        zipPrefixes: normalizeList(row.zipPrefixes),
+        emergencyCoverageWindow: row.emergencyCoverageWindow.trim() || undefined,
+      });
+    }
+
     startTransition(async () => {
       const response = await fetch("/api/runtime-config", {
         method: "POST",
@@ -144,6 +264,9 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
             publicBookingUrl: trafftPublicBookingUrl,
             defaultServiceId: trafftDefaultServiceId,
             serviceMap: parsedServiceMap,
+          },
+          dispatch: {
+            providers: parsedDispatchProviders,
           },
           documentero: {
             defaultFormat: documenteroDefaultFormat,
@@ -319,6 +442,158 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
             <p className="muted">
               No service-specific mappings yet. LeadOS will fall back to the default service ID when
               a service label is not mapped.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="settings-section">
+          <div className="settings-section__header">
+            <div>
+              <p className="eyebrow">Dispatch roster</p>
+              <h3>Provider capacity and coverage</h3>
+              <p className="muted">
+                Configure which plumbing providers can receive dispatches, where they operate, and
+                how much live capacity they still have.
+              </p>
+            </div>
+            <button type="button" className="secondary" onClick={addDispatchProviderRow}>
+              Add provider
+            </button>
+          </div>
+
+          {dispatchProviderRows.length > 0 ? (
+            <div className="mapping-stack">
+              {dispatchProviderRows.map((row) => (
+                <div key={row.id} className="mapping-row">
+                  <label>
+                    Provider label
+                    <input
+                      value={row.label}
+                      onChange={(event) => updateDispatchProviderRow(row.id, { label: event.target.value })}
+                      placeholder="Dallas Emergency Crew"
+                    />
+                  </label>
+                  <label>
+                    Priority weight
+                    <input
+                      value={row.priorityWeight}
+                      onChange={(event) => updateDispatchProviderRow(row.id, { priorityWeight: event.target.value })}
+                      inputMode="numeric"
+                      placeholder="50"
+                    />
+                  </label>
+                  <label>
+                    Max concurrent jobs
+                    <input
+                      value={row.maxConcurrentJobs}
+                      onChange={(event) => updateDispatchProviderRow(row.id, { maxConcurrentJobs: event.target.value })}
+                      inputMode="numeric"
+                      placeholder="4"
+                    />
+                  </label>
+                  <label>
+                    Active jobs
+                    <input
+                      value={row.activeJobs}
+                      onChange={(event) => updateDispatchProviderRow(row.id, { activeJobs: event.target.value })}
+                      inputMode="numeric"
+                      placeholder="1"
+                    />
+                  </label>
+                  <label>
+                    States
+                    <input
+                      value={row.states}
+                      onChange={(event) => updateDispatchProviderRow(row.id, { states: event.target.value })}
+                      placeholder="texas, oklahoma"
+                    />
+                  </label>
+                  <label>
+                    Counties
+                    <input
+                      value={row.counties}
+                      onChange={(event) => updateDispatchProviderRow(row.id, { counties: event.target.value })}
+                      placeholder="dallas county, tarrant county"
+                    />
+                  </label>
+                  <label>
+                    Cities
+                    <input
+                      value={row.cities}
+                      onChange={(event) => updateDispatchProviderRow(row.id, { cities: event.target.value })}
+                      placeholder="dallas, fort worth"
+                    />
+                  </label>
+                  <label>
+                    ZIP prefixes
+                    <input
+                      value={row.zipPrefixes}
+                      onChange={(event) => updateDispatchProviderRow(row.id, { zipPrefixes: event.target.value })}
+                      placeholder="750, 752"
+                    />
+                  </label>
+                  <label>
+                    Property types
+                    <input
+                      value={row.propertyTypes}
+                      onChange={(event) => updateDispatchProviderRow(row.id, { propertyTypes: event.target.value })}
+                      placeholder="residential, commercial"
+                    />
+                  </label>
+                  <label>
+                    Issue types
+                    <input
+                      value={row.issueTypes}
+                      onChange={(event) => updateDispatchProviderRow(row.id, { issueTypes: event.target.value })}
+                      placeholder="burst-pipe, leak, drain-clog"
+                    />
+                  </label>
+                  <label className="span-two">
+                    Emergency coverage window
+                    <input
+                      value={row.emergencyCoverageWindow}
+                      onChange={(event) => updateDispatchProviderRow(row.id, { emergencyCoverageWindow: event.target.value })}
+                      placeholder="24/7 or Mon-Sun 6pm-6am"
+                    />
+                  </label>
+                  <div className="mapping-row__actions">
+                    <label className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={row.active}
+                        onChange={(event) => updateDispatchProviderRow(row.id, { active: event.target.checked })}
+                      />
+                      Active
+                    </label>
+                    <label className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={row.acceptsEmergency}
+                        onChange={(event) => updateDispatchProviderRow(row.id, { acceptsEmergency: event.target.checked })}
+                      />
+                      Emergency ready
+                    </label>
+                    <label className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={row.acceptsCommercial}
+                        onChange={(event) => updateDispatchProviderRow(row.id, { acceptsCommercial: event.target.checked })}
+                      />
+                      Commercial ready
+                    </label>
+                    <button type="button" className="secondary" onClick={() => removeDispatchProviderRow(row.id)}>
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">
+              No dispatch providers configured yet. Add providers here so LeadOS can recommend who
+              should receive a plumbing job based on coverage and capacity.
             </p>
           )}
         </div>

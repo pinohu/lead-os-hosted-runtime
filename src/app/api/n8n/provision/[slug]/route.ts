@@ -6,7 +6,7 @@ import { buildStarterProvisionPayload, canProvisionToN8n, provisionN8nStarterWor
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: { params: Promise<{ slug: string }> }) {
-  const auth = await requireOperatorApiSession(request);
+  const auth = await requireOperatorApiSession(request, { allowedRoles: ["admin"] });
   if (auth.response) {
     return auth.response;
   }
@@ -32,7 +32,7 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
 }
 
 export async function POST(request: Request, context: { params: Promise<{ slug: string }> }) {
-  const auth = await requireOperatorApiSession(request);
+  const auth = await requireOperatorApiSession(request, { allowedRoles: ["admin"] });
   if (auth.response) {
     return auth.response;
   }

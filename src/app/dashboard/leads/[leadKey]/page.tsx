@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DispatchActionPanel } from "@/components/DispatchActionPanel";
 import { summarizeMilestoneProgress } from "@/lib/automation";
+import { recommendDispatchProviders } from "@/lib/dispatch-routing";
 import { getDispatchSlaSnapshot } from "@/lib/dispatch-sla";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
+import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import {
   type BookingJobRecord,
   type DocumentJobRecord,
@@ -27,7 +29,7 @@ type LeadDetailPageProps = {
 };
 
 export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
-  await requireOperatorPageSession("/dashboard");
+  const session = await requireOperatorPageSession("/dashboard");
   const { leadKey } = await params;
   const decodedLeadKey = decodeURIComponent(leadKey);
   const lead = await getLeadRecord(decodedLeadKey);
@@ -36,13 +38,14 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
     notFound();
   }
 
-  const [events, workflows, providerExecutions, bookingJobs, documentJobs, operatorActions] = await Promise.all([
+  const [events, workflows, providerExecutions, bookingJobs, documentJobs, operatorActions, runtimeConfig] = await Promise.all([
     getCanonicalEvents(),
     getWorkflowRuns(decodedLeadKey),
     getProviderExecutions(decodedLeadKey),
     getBookingJobs(decodedLeadKey),
     getDocumentJobs(decodedLeadKey),
     getOperatorActions(decodedLeadKey),
+    getOperationalRuntimeConfig(),
   ]);
   const filteredEvents = (events as CanonicalEvent[])
     .filter((event) => event.leadKey === decodedLeadKey)
@@ -69,6 +72,9 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
         outcome: plumbingOutcome,
       })
     : null;
+  const recommendedProviders = plumbing
+    ? recommendDispatchProviders(plumbing, runtimeConfig.dispatch.providers)
+    : [];
 
   function formatLabel(value: string) {
     return value.replace(/-/g, " ");
@@ -186,11 +192,40 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
       ) : null}
 
       {plumbing ? (
+        <section className="panel">
+          <p className="eyebrow">Provider assignment</p>
+          <h2>Best roster matches for this job</h2>
+          {recommendedProviders.length === 0 ? (
+            <p className="muted">
+              No configured dispatch provider currently matches this lead’s coverage and capacity profile.
+            </p>
+          ) : (
+            <div className="stack-grid">
+              {recommendedProviders.map((provider) => (
+                <article key={provider.providerId} className="stack-card">
+                  <p className="eyebrow">{provider.providerLabel}</p>
+                  <h3>{provider.score}</h3>
+                  <p className="muted">{provider.reason}</p>
+                  <p className="muted">
+                    Available capacity: {provider.availableCapacity == null ? "unknown" : provider.availableCapacity}
+                  </p>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      {plumbing ? (
         <section className="grid two">
           <article className="panel">
             <p className="eyebrow">Actionable controls</p>
             <h2>Resolve dispatch from this page</h2>
-            <DispatchActionPanel leadKey={decodedLeadKey} />
+            {session.role !== "analyst" ? (
+              <DispatchActionPanel leadKey={decodedLeadKey} />
+            ) : (
+              <p className="muted">Analyst role can audit dispatch history here but cannot apply dispatch actions.</p>
+            )}
           </article>
 
           <article className="panel">

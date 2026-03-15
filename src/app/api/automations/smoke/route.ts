@@ -3,7 +3,7 @@ import { requireOperatorApiSession } from "@/lib/operator-auth";
 import { runSmokeTest } from "@/lib/providers";
 
 export async function POST(request: Request) {
-  const auth = await requireOperatorApiSession(request);
+  const auth = await requireOperatorApiSession(request, { allowedRoles: ["admin"] });
   if (auth.response) {
     return auth.response;
   }

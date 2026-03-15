@@ -5,9 +5,12 @@ import {
   createMagicLinkUrl,
   decodeOperatorToken,
   getAllowedOperatorEmails as resolveAllowedOperatorEmails,
+  getAllowedOperatorRoles,
   isAllowedOperatorEmail as isAllowedOperatorEmailInList,
   issueOperatorToken,
   normalizeEmail,
+  type OperatorRole,
+  type OperatorTokenPayload,
   resolvePublicOrigin,
   sanitizeNextPath,
 } from "./operator-auth-core.ts";
@@ -28,6 +31,10 @@ export class OperatorAuthConfigurationError extends Error {
   }
 }
 
+export type OperatorSession = OperatorTokenPayload & {
+  role: OperatorRole;
+};
+
 type PublicOriginOptions = {
   requestUrl?: string;
   host?: string | null;
@@ -38,11 +45,13 @@ type PublicOriginOptions = {
 export function getOperatorAuthConfigurationStatus() {
   const authSecretConfigured = Boolean(process.env.LEAD_OS_AUTH_SECRET?.trim());
   const operatorEmails = resolveAllowedOperatorEmails(process.env.LEAD_OS_OPERATOR_EMAILS);
+  const operatorRoles = getAllowedOperatorRoles(process.env.LEAD_OS_OPERATOR_ROLES, operatorEmails);
   return {
     authSecretConfigured,
     operatorEmailsConfigured: operatorEmails.length > 0,
     ready: authSecretConfigured && operatorEmails.length > 0,
     operatorEmails,
+    operatorRoles,
   };
 }
 
@@ -60,6 +69,11 @@ function getAuthSecret() {
 
 export function getAllowedOperatorEmails() {
   return requireOperatorAuthConfiguration().operatorEmails;
+}
+
+export function getOperatorRole(email: string): OperatorRole | null {
+  const normalizedEmail = normalizeEmail(email);
+  return requireOperatorAuthConfiguration().operatorRoles[normalizedEmail] ?? null;
 }
 
 export function isAllowedOperatorEmail(email: string) {
@@ -161,22 +175,46 @@ export async function sendOperatorMagicLink(email: string, origin: string, nextP
 }
 
 export async function createSessionToken(email: string) {
+  const normalizedEmail = normalizeEmail(email);
+  const role = getOperatorRole(normalizedEmail);
+  if (!role) {
+    throw new OperatorAuthConfigurationError("Operator role resolution failed.");
+  }
   return issueOperatorToken(
     {
       type: "session",
-      email: normalizeEmail(email),
+      email: normalizedEmail,
       exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
+      role,
     },
     getAuthSecret(),
   );
 }
 
+function hydrateOperatorSession(payload: OperatorTokenPayload | null): OperatorSession | null {
+  if (!payload) {
+    return null;
+  }
+  const role = getOperatorRole(payload.email);
+  if (!role) {
+    return null;
+  }
+  return {
+    ...payload,
+    role,
+  };
+}
+
 export async function verifyMagicLinkToken(token: string) {
-  return decodeOperatorToken(token, "magic", getAuthSecret(), getAllowedOperatorEmails());
+  return hydrateOperatorSession(
+    await decodeOperatorToken(token, "magic", getAuthSecret(), getAllowedOperatorEmails()),
+  );
 }
 
 export async function verifySessionToken(token: string) {
-  return decodeOperatorToken(token, "session", getAuthSecret(), getAllowedOperatorEmails());
+  return hydrateOperatorSession(
+    await decodeOperatorToken(token, "session", getAuthSecret(), getAllowedOperatorEmails()),
+  );
 }
 
 export async function getOperatorSessionFromCookieHeader(cookieHeader?: string | null) {
@@ -195,6 +233,13 @@ export async function getOperatorSession() {
   const token = cookieStore.get(OPERATOR_SESSION_COOKIE)?.value;
   if (!token) return null;
   return verifySessionToken(token);
+}
+
+function canAccessRole(
+  role: OperatorRole,
+  allowedRoles?: OperatorRole[],
+) {
+  return !allowedRoles || allowedRoles.includes(role);
 }
 
 export function applyOperatorSession(response: NextResponse, token: string) {
@@ -221,7 +266,13 @@ export function clearOperatorSession(response: NextResponse) {
   });
 }
 
-export async function requireOperatorApiSession(request: Request) {
+export async function requireOperatorApiSession(
+  request: Request,
+  options: {
+    allowedRoles?: OperatorRole[];
+    nextPath?: string;
+  } = {},
+) {
   requireOperatorAuthConfiguration();
   const session = await getOperatorSessionFromCookieHeader(request.headers.get("cookie"));
   if (!session) {
@@ -238,14 +289,36 @@ export async function requireOperatorApiSession(request: Request) {
     };
   }
 
+  if (!canAccessRole(session.role, options.allowedRoles)) {
+    return {
+      session,
+      response: NextResponse.json(
+        {
+          success: false,
+          error: "Forbidden",
+          requiredRoles: options.allowedRoles,
+        },
+        { status: 403 },
+      ),
+    };
+  }
+
   return { session, response: null };
 }
 
-export async function requireOperatorPageSession(nextPath: string) {
+export async function requireOperatorPageSession(
+  nextPath: string,
+  options: {
+    allowedRoles?: OperatorRole[];
+  } = {},
+) {
   requireOperatorAuthConfiguration();
   const session = await getOperatorSession();
   if (!session) {
     redirect(buildOperatorAbsoluteUrl(`/auth/sign-in?next=${encodeURIComponent(sanitizeNextPath(nextPath))}`));
+  }
+  if (!canAccessRole(session.role, options.allowedRoles)) {
+    redirect(buildOperatorAbsoluteUrl(`/dashboard?error=forbidden&next=${encodeURIComponent(sanitizeNextPath(nextPath))}`));
   }
   return session;
 }

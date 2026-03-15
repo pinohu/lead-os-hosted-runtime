@@ -4,6 +4,7 @@ import {
   createMagicLinkUrl,
   decodeOperatorToken,
   getAllowedOperatorEmails,
+  getAllowedOperatorRoles,
   resolvePublicOrigin,
   sanitizeNextPath,
 } from "../src/lib/operator-auth-core.ts";
@@ -33,6 +34,20 @@ test("getAllowedOperatorEmails prefers configured operator emails", () => {
 test("getAllowedOperatorEmails does not invent fallback operators", () => {
   const allowed = getAllowedOperatorEmails("");
   assert.deepEqual(allowed, []);
+});
+
+test("getAllowedOperatorRoles applies explicit roles and safe defaults", () => {
+  const allowedEmails = ["owner@example.org", "dispatch@example.org", "analyst@example.org"];
+  const roles = getAllowedOperatorRoles(
+    "dispatch@example.org=operator; analyst@example.org=analyst",
+    allowedEmails,
+  );
+
+  assert.deepEqual(roles, {
+    "owner@example.org": "admin",
+    "dispatch@example.org": "operator",
+    "analyst@example.org": "analyst",
+  });
 });
 
 test("magic-link tokens validate for approved emails and retain next path", async () => {

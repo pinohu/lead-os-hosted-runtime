@@ -1,7 +1,9 @@
 import { summarizeMilestoneProgress } from "./automation.ts";
+import { recommendDispatchProviders } from "./dispatch-routing.ts";
 import { getDispatchSlaSnapshot } from "./dispatch-sla.ts";
 import { isSystemCanonicalEvent, isSystemLeadRecord } from "./operator-view.ts";
 import type { CanonicalEvent } from "./trace.ts";
+import type { OperationalRuntimeConfig } from "./runtime-config.ts";
 import type {
   BookingJobRecord,
   ProviderExecutionRecord,
@@ -90,11 +92,34 @@ function buildQueueByUrgency(
   return items.filter((item) => item.urgencyBand === urgencyBand);
 }
 
+function formatPlumbingGeoCell(plumbing: PlumbingLeadContext | null) {
+  if (!plumbing) {
+    return "unlocated";
+  }
+
+  const cityState = [plumbing.geo.city, plumbing.geo.state].filter(Boolean).join(", ");
+  if (cityState) {
+    return cityState.toLowerCase();
+  }
+
+  const countyState = [plumbing.geo.county, plumbing.geo.state].filter(Boolean).join(", ");
+  if (countyState) {
+    return countyState.toLowerCase();
+  }
+
+  if (plumbing.geo.zip) {
+    return `zip ${plumbing.geo.zip}`.toLowerCase();
+  }
+
+  return "unlocated";
+}
+
 function buildPlumbingDispatchSnapshot(
   leads: StoredLeadRecord[],
   bookingJobs: BookingJobRecord[],
   providerExecutions: ProviderExecutionRecord[],
   workflowRuns: WorkflowRunRecord[],
+  dispatchProviders: OperationalRuntimeConfig["dispatch"]["providers"] = [],
 ) {
   const plumbingLeads = leads
     .map((lead) => ({ lead, plumbing: asPlumbingContext(lead), outcome: asPlumbingOutcome(lead) }))
@@ -108,6 +133,7 @@ function buildPlumbingDispatchSnapshot(
         plumbing: plumbing!,
         outcome,
       });
+      const recommendedProviders = recommendDispatchProviders(plumbing!, dispatchProviders);
       return {
         leadKey: lead.leadKey,
         stage: lead.stage,
@@ -127,6 +153,7 @@ function buildPlumbingDispatchSnapshot(
         overdue: sla.overdue,
         escalationReady: sla.escalationReady,
         minutesPastDue: sla.minutesPastDue,
+        recommendedProviders,
       };
     })
     .sort((left, right) => {
@@ -143,6 +170,20 @@ function buildPlumbingDispatchSnapshot(
     });
 
   const unresolved = queueItems.filter((item) => !["booked", "converted", "active"].includes(item.stage));
+  const metroBreakdown = topBreakdown(plumbingLeads.map((item) => formatPlumbingGeoCell(item.plumbing)));
+  const metroRevenueBreakdown = Object.entries(
+    plumbingLeads.reduce<Record<string, number>>((acc, item) => {
+      if (!item.outcome || item.outcome.status !== "completed" || typeof item.outcome.revenueValue !== "number") {
+        return acc;
+      }
+      const cell = formatPlumbingGeoCell(item.plumbing);
+      acc[cell] = (acc[cell] ?? 0) + item.outcome.revenueValue;
+      return acc;
+    }, {}),
+  )
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 5)
+    .map(([label, revenue]) => ({ label, revenue }));
 
   const providerScores = Object.entries(
     providerExecutions.reduce<Record<string, {
@@ -173,6 +214,14 @@ function buildPlumbingDispatchSnapshot(
         .filter((outcome): outcome is PlumbingJobOutcome => Boolean(outcome) && outcome?.provider === entry.provider);
       const completedOutcomes = providerOutcomes.filter((outcome) => outcome.status === "completed").length;
       const bookedOutcomes = providerOutcomes.filter((outcome) => outcome.status === "booked").length;
+      const completedRevenue = providerOutcomes.reduce((sum, outcome) => (
+        outcome.status === "completed" && typeof outcome.revenueValue === "number"
+          ? sum + outcome.revenueValue
+          : sum
+      ), 0);
+      const averageCompletedRevenue = completedOutcomes > 0
+        ? Number((completedRevenue / completedOutcomes).toFixed(2))
+        : 0;
       const reliabilityScore = Math.max(
         0,
         Math.min(
@@ -198,9 +247,36 @@ function buildPlumbingDispatchSnapshot(
         bookingJobs: providerBookingJobs.length,
         bookedOutcomes,
         completedOutcomes,
+        completedRevenue,
+        averageCompletedRevenue,
+      };
+    });
+
+  const maxCompletedRevenue = Math.max(
+    1,
+    ...providerScores.map((provider) => provider.completedRevenue),
+  );
+
+  const rankedProviderScores = providerScores
+    .map((provider) => {
+      const revenueScore = provider.completedRevenue <= 0
+        ? 0
+        : Math.round((provider.completedRevenue / maxCompletedRevenue) * 100);
+      const routingScore = Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(provider.reliabilityScore * 0.72 + revenueScore * 0.28),
+        ),
+      );
+
+      return {
+        ...provider,
+        revenueScore,
+        routingScore,
       };
     })
-    .sort((left, right) => right.reliabilityScore - left.reliabilityScore);
+    .sort((left, right) => right.routingScore - left.routingScore);
 
   return {
     totalPlumbingLeads: plumbingLeads.length,
@@ -213,8 +289,11 @@ function buildPlumbingDispatchSnapshot(
     urgencyBreakdown: topBreakdown(queueItems.map((item) => item.urgencyBand)),
     issueBreakdown: topBreakdown(queueItems.map((item) => item.issueType)),
     dispatchModeBreakdown: topBreakdown(queueItems.map((item) => item.dispatchMode)),
+    metroBreakdown,
+    metroRevenueBreakdown,
     topQueue: unresolved.slice(0, 8),
-    providerScores,
+    providerScores: rankedProviderScores,
+    configuredDispatchProviders: dispatchProviders.length,
   };
 }
 
@@ -370,6 +449,7 @@ export function buildOperatorConsoleSnapshot(
   bookingJobs: BookingJobRecord[],
   providerExecutions: ProviderExecutionRecord[],
   workflowRuns: WorkflowRunRecord[],
+  dispatchProviders: OperationalRuntimeConfig["dispatch"]["providers"] = [],
   options: { includeSystemTraffic?: boolean },
 ) {
   const base = buildDashboardSnapshotWithOptions(leads, events, options);
@@ -384,6 +464,7 @@ export function buildOperatorConsoleSnapshot(
       bookingJobs,
       providerExecutions,
       workflowRuns,
+      dispatchProviders,
     ),
   };
 }

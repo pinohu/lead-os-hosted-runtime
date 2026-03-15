@@ -16,7 +16,7 @@ function asString(value: string | string[] | undefined) {
 }
 
 export default async function BookingJobsPage({ searchParams }: BookingJobsPageProps) {
-  await requireOperatorPageSession("/dashboard/bookings");
+  const session = await requireOperatorPageSession("/dashboard/bookings");
   const params = (await searchParams) ?? {};
   const includeSystemTraffic = asString(params.include) === "system";
   const jobs = (await getBookingJobs()) as BookingJobRecord[];
@@ -110,11 +110,15 @@ export default async function BookingJobsPage({ searchParams }: BookingJobsPageP
                 {lead ? ` | Family: ${lead.family} | Stage: ${lead.stage}` : ""}
               </p>
               <p className="muted">Updated: {job.updatedAt}</p>
-              <DispatchActionPanel
-                leadKey={job.leadKey}
-                compact
-                visibleActions={["retry-booking", "assign-backup-provider", "mark-booked"]}
-              />
+              {session.role !== "analyst" ? (
+                <DispatchActionPanel
+                  leadKey={job.leadKey}
+                  compact
+                  visibleActions={["retry-booking", "assign-backup-provider", "mark-booked"]}
+                />
+              ) : (
+                <p className="muted">Analyst role can review booking state but cannot trigger booking actions.</p>
+              )}
               <div className="cta-row">
                 <Link href={`/dashboard/leads/${encodeURIComponent(job.leadKey)}`} className="secondary">
                   Open lead detail

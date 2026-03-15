@@ -3,7 +3,7 @@ import { getConfigStatusSummary } from "@/lib/config-status";
 import { requireOperatorApiSession } from "@/lib/operator-auth";
 
 export async function GET(request: Request) {
-  const auth = await requireOperatorApiSession(request);
+  const auth = await requireOperatorApiSession(request, { allowedRoles: ["admin"] });
   if (auth.response) {
     return auth.response;
   }
