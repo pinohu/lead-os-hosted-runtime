@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
-import { embeddedSecrets } from "./embedded-secrets.ts";
 import {
   createMagicLinkUrl,
   decodeOperatorToken,
@@ -17,8 +16,17 @@ import { tenantConfig } from "./tenant.ts";
 import { ensureTraceContext } from "./trace.ts";
 
 export const OPERATOR_SESSION_COOKIE = "leados_operator_session";
-export const OPERATOR_BROWSER_FALLBACK_COOKIE = "leados_operator_browser_fallback";
 export { sanitizeNextPath } from "./operator-auth-core.ts";
+
+const OPERATOR_AUTH_CONFIG_ERROR =
+  "LeadOS operator auth is not configured. Set LEAD_OS_AUTH_SECRET and LEAD_OS_OPERATOR_EMAILS.";
+
+export class OperatorAuthConfigurationError extends Error {
+  constructor(message = OPERATOR_AUTH_CONFIG_ERROR) {
+    super(message);
+    this.name = "OperatorAuthConfigurationError";
+  }
+}
 
 type PublicOriginOptions = {
   requestUrl?: string;
@@ -27,16 +35,31 @@ type PublicOriginOptions = {
   forwardedProto?: string | null;
 };
 
+export function getOperatorAuthConfigurationStatus() {
+  const authSecretConfigured = Boolean(process.env.LEAD_OS_AUTH_SECRET?.trim());
+  const operatorEmails = resolveAllowedOperatorEmails(process.env.LEAD_OS_OPERATOR_EMAILS);
+  return {
+    authSecretConfigured,
+    operatorEmailsConfigured: operatorEmails.length > 0,
+    ready: authSecretConfigured && operatorEmails.length > 0,
+    operatorEmails,
+  };
+}
+
+function requireOperatorAuthConfiguration() {
+  const config = getOperatorAuthConfigurationStatus();
+  if (!config.ready) {
+    throw new OperatorAuthConfigurationError();
+  }
+  return config;
+}
+
 function getAuthSecret() {
-  return process.env.LEAD_OS_AUTH_SECRET ?? process.env.CRON_SECRET ?? embeddedSecrets.cron.secret;
+  return requireOperatorAuthConfiguration() && process.env.LEAD_OS_AUTH_SECRET!.trim();
 }
 
 export function getAllowedOperatorEmails() {
-  return resolveAllowedOperatorEmails(process.env.LEAD_OS_OPERATOR_EMAILS, [
-    process.env.NEXT_PUBLIC_SUPPORT_EMAIL,
-    tenantConfig.supportEmail,
-    "polycarpohu@gmail.com",
-  ]);
+  return requireOperatorAuthConfiguration().operatorEmails;
 }
 
 export function isAllowedOperatorEmail(email: string) {
@@ -94,17 +117,6 @@ export async function createMagicLink(email: string, origin: string, nextPath?: 
     nextPath,
   );
   return url;
-}
-
-export async function createBrowserFallbackToken(email: string, origin: string, nextPath?: string) {
-  const { token } = await createMagicLinkUrl(
-    email,
-    origin,
-    getAuthSecret(),
-    getAllowedOperatorEmails(),
-    nextPath,
-  );
-  return token;
 }
 
 export async function sendOperatorMagicLink(email: string, origin: string, nextPath?: string) {
@@ -197,30 +209,6 @@ export function applyOperatorSession(response: NextResponse, token: string) {
   });
 }
 
-export function applyOperatorBrowserFallback(response: NextResponse, token: string) {
-  response.cookies.set({
-    name: OPERATOR_BROWSER_FALLBACK_COOKIE,
-    value: token,
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 15 * 60,
-  });
-}
-
-export function clearOperatorBrowserFallback(response: NextResponse) {
-  response.cookies.set({
-    name: OPERATOR_BROWSER_FALLBACK_COOKIE,
-    value: "",
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 0,
-  });
-}
-
 export function clearOperatorSession(response: NextResponse) {
   response.cookies.set({
     name: OPERATOR_SESSION_COOKIE,
@@ -234,6 +222,7 @@ export function clearOperatorSession(response: NextResponse) {
 }
 
 export async function requireOperatorApiSession(request: Request) {
+  requireOperatorAuthConfiguration();
   const session = await getOperatorSessionFromCookieHeader(request.headers.get("cookie"));
   if (!session) {
     return {
@@ -253,6 +242,7 @@ export async function requireOperatorApiSession(request: Request) {
 }
 
 export async function requireOperatorPageSession(nextPath: string) {
+  requireOperatorAuthConfiguration();
   const session = await getOperatorSession();
   if (!session) {
     redirect(buildOperatorAbsoluteUrl(`/auth/sign-in?next=${encodeURIComponent(sanitizeNextPath(nextPath))}`));

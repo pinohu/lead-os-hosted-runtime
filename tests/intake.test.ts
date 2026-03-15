@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { getDefaultFunnelGraph } from "../src/lib/funnel-library.ts";
-import { persistLead, validateLeadPayload } from "../src/lib/intake.ts";
+import { buildPublicIntakeResponse, persistLead, validateLeadPayload } from "../src/lib/intake.ts";
 import { getBookingJobs, getDocumentJobs, resetRuntimeStore } from "../src/lib/runtime-store.ts";
 import { tenantConfig } from "../src/lib/tenant.ts";
 
@@ -84,4 +84,54 @@ test("persistLead creates persisted document jobs for proposal-stage leads", asy
 
   const storedDocs = await getDocumentJobs(result.leadKey);
   assert.ok(storedDocs.some((job) => job.payload?.documentType === "proposal"));
+});
+
+test("buildPublicIntakeResponse strips provider internals from the public payload", async () => {
+  await resetRuntimeStore();
+  const result = await persistLead({
+    source: "assessment",
+    email: "public@test.com",
+    firstName: "Public",
+    wantsBooking: true,
+    dryRun: true,
+  });
+
+  const publicResponse = buildPublicIntakeResponse(result);
+
+  assert.deepEqual(Object.keys(publicResponse).sort(), [
+    "existing",
+    "hot",
+    "leadKey",
+    "nextStep",
+    "scoreBand",
+    "stage",
+    "success",
+  ]);
+  assert.equal("crm" in publicResponse, false);
+  assert.equal("jobs" in publicResponse, false);
+  assert.equal(publicResponse.nextStep.family, result.decision.family);
+});
+
+test("recent replays do not create duplicate booking jobs or refire side effects", async () => {
+  await resetRuntimeStore();
+  const first = await persistLead({
+    source: "assessment",
+    email: "replay@test.com",
+    firstName: "Replay",
+    wantsBooking: true,
+    dryRun: true,
+  });
+  const second = await persistLead({
+    source: "assessment",
+    email: "replay@test.com",
+    firstName: "Replay",
+    wantsBooking: true,
+    dryRun: true,
+  });
+
+  const storedJobs = await getBookingJobs(first.leadKey);
+  assert.equal(storedJobs.length, 1);
+  assert.equal(second.existing, true);
+  assert.equal(second.workflow.detail, "Replay suppressed before workflow emission.");
+  assert.equal(second.jobs.booking?.id, first.jobs.booking?.id);
 });

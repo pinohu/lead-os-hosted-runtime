@@ -12,6 +12,8 @@ import {
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { tenantConfig } from "@/lib/tenant";
 
+export const dynamic = "force-dynamic";
+
 export default async function RuntimeSettingsPage() {
   await requireOperatorPageSession("/dashboard/settings");
   const config = await getOperationalRuntimeConfig();

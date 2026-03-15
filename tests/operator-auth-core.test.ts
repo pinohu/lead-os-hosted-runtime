@@ -25,22 +25,14 @@ test("resolvePublicOrigin rejects private bind addresses and prefers the public 
 });
 
 test("getAllowedOperatorEmails prefers configured operator emails", () => {
-  const allowed = getAllowedOperatorEmails(
-    " Ops@Example.org ; owner@example.org,invalid ",
-    ["fallback@example.com", "polycarpohu@gmail.com"],
-  );
+  const allowed = getAllowedOperatorEmails(" Ops@Example.org ; owner@example.org,invalid ");
 
   assert.deepEqual(allowed, ["ops@example.org", "owner@example.org"]);
 });
 
-test("getAllowedOperatorEmails falls back to non-example defaults", () => {
-  const allowed = getAllowedOperatorEmails("", [
-    "support@example.com",
-    "team@yourdeputy.com",
-    "polycarpohu@gmail.com",
-  ]);
-
-  assert.deepEqual(allowed, ["team@yourdeputy.com", "polycarpohu@gmail.com"]);
+test("getAllowedOperatorEmails does not invent fallback operators", () => {
+  const allowed = getAllowedOperatorEmails("");
+  assert.deepEqual(allowed, []);
 });
 
 test("magic-link tokens validate for approved emails and retain next path", async () => {

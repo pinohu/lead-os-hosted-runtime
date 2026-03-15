@@ -33,7 +33,7 @@ export async function GET(request: Request) {
         service: tenantConfig.defaultService,
         niche: tenantConfig.defaultNiche,
       },
-      channels: tenantConfig.channels,
+      channels: health.channels,
       enabledFunnels: tenantConfig.enabledFunnels,
       experience,
       primaryFunnels: Object.values(funnels).map((graph) => ({

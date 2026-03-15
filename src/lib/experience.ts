@@ -76,6 +76,10 @@ const MODE_LABELS: Record<ExperienceMode, string> = {
   "booking-first": "Book the fastest route",
 };
 
+function isPlumbingLikeNiche(niche: NicheDefinition) {
+  return niche.slug === "plumbing" || niche.slug === "home-services";
+}
+
 function inferDeviceClass(userAgent?: string) {
   return /android|iphone|ipad|mobile/i.test(userAgent ?? "") ? "mobile" : "desktop";
 }
@@ -97,6 +101,11 @@ function buildModeByContext(input: ExperienceInput): ExperienceMode {
   const explicitMode = sanitizeMode(input.preferredMode);
   if (explicitMode) return explicitMode;
 
+  if (isPlumbingLikeNiche(input.niche) && input.intent !== "compare" && input.intent !== "discover") {
+    if ((input.score ?? 0) >= 40 || !input.returning) {
+      return "booking-first";
+    }
+  }
   if (input.returning || input.milestone === "lead-m2-return-engaged") {
     return "form-first";
   }
@@ -154,6 +163,15 @@ function buildDestination(family: FunnelFamily, niche: NicheDefinition) {
 }
 
 function buildProofSignals(niche: NicheDefinition, family: FunnelFamily, mode: ExperienceMode) {
+  if (isPlumbingLikeNiche(niche)) {
+    return [
+      "Urgent plumbing routing with booking and dispatch-first logic",
+      "Licensed and insured trust framing near the first ask",
+      family === "qualification" ? "Booking, backup routing, and estimate recovery are already wired" : "Phone, chat, and follow-up stay ready for urgent jobs",
+      mode === "chat-first" ? "Talk-to-dispatch fallback for low-form visitors" : "Fast-path capture built for mobile emergency traffic",
+    ];
+  }
+
   return [
     `${niche.label} copy and next-step logic`,
     "Milestone-two and milestone-three return automation",
@@ -165,6 +183,7 @@ function buildProofSignals(niche: NicheDefinition, family: FunnelFamily, mode: E
 function buildObjections(niche: NicheDefinition, mode: ExperienceMode) {
   const nicheSpecific =
     niche.slug === "legal" ? "You will not get a generic intake script. The questions adapt to risk, urgency, and case-fit." :
+    niche.slug === "plumbing" ? "We bias for fast-response dispatch, clear next steps, and fewer dead-end form completions on urgent jobs." :
     niche.slug === "home-services" ? "We bias for fast-response booking and quote recovery so good jobs do not cool off." :
     niche.slug === "coaching" ? "The flow is built to protect show rate and fit, not just inflate call volume." :
     "The system adapts the next step so people do not get pushed into the wrong funnel.";
@@ -236,6 +255,29 @@ function buildDiscoveryOptions(niche: NicheDefinition, family: FunnelFamily, mod
     ];
   }
 
+  if (niche.slug === "plumbing") {
+    return [
+      {
+        id: "dispatch-now",
+        label: "Get a plumber confirmed fast",
+        description: "Shorten the path to booking or dispatch for urgent issues.",
+        signals: { wantsBooking: true },
+      },
+      {
+        id: "estimate",
+        label: "Book an estimate",
+        description: "Route non-urgent jobs into a clearer quote and scheduling path.",
+        signals: { wantsBooking: true, contentEngaged: true },
+      },
+      {
+        id: "dispatch-help",
+        label: "Talk to dispatch",
+        description: "Use a human-assisted path when the job is urgent or unusual.",
+        signals: { prefersChat: true },
+      },
+    ];
+  }
+
   if (niche.slug === "coaching") {
     return [
       {
@@ -291,9 +333,14 @@ export function resolveExperienceProfile(input: ExperienceInput): ExperienceProf
   const family = buildDefaultFamily(input);
   const device = inferDeviceClass(input.userAgent);
   const destination = buildDestination(family, input.niche);
+  const plumbingLike = isPlumbingLikeNiche(input.niche);
   const returnOffer = input.returning
-    ? "You are not starting over. We will resume with a lighter second-touch ask and skip repeated context."
-    : "If you come back, LeadOS shifts from first-touch clarity into milestone-two trust building automatically.";
+    ? plumbingLike
+      ? "You are not starting over. We will resume with the lightest useful next step and preserve your job context."
+      : "You are not starting over. We will resume with a lighter second-touch ask and skip repeated context."
+    : plumbingLike
+      ? "If you are not ready to book now, LeadOS keeps the second-touch path light so the job does not go cold."
+      : "If you come back, LeadOS shifts from first-touch clarity into milestone-two trust building automatically.";
 
   return {
     family,
@@ -302,11 +349,21 @@ export function resolveExperienceProfile(input: ExperienceInput): ExperienceProf
     experimentId: `${input.niche.slug}:${family}:${device}`,
     variantId: `${input.niche.slug}:${family}:${mode}:${device}`,
     heroTitle:
-      input.returning
+      plumbingLike
+        ? input.returning
+          ? "Resume your plumbing request without starting over"
+          : "Get a plumber confirmed fast without dead-end forms"
+        : input.returning
         ? `${input.niche.label} momentum, resumed without friction`
         : `${input.niche.label} growth paths that adapt to visitor intent`,
     heroSummary:
-      mode === "booking-first"
+      plumbingLike && mode === "booking-first"
+        ? "For urgent plumbing demand, we bias the first interaction toward dispatch speed, booking readiness, and clear next-step certainty."
+        : plumbingLike && mode === "chat-first"
+        ? "For unusual or urgent jobs, we keep a dispatch-style conversation path open instead of forcing a dead-end form."
+        : plumbingLike
+        ? "For estimate and quote traffic, we keep the path light while preserving urgency, location, and service context."
+        : mode === "booking-first"
         ? "For ready-to-move buyers, we keep the path short, credible, and qualification-aware."
         : mode === "chat-first"
         ? "For lower-form-tolerance visitors, we lead with a conversation and still capture real buying signals."
@@ -319,12 +376,20 @@ export function resolveExperienceProfile(input: ExperienceInput): ExperienceProf
     primaryActionHref: destination,
     secondaryActionLabel: "Talk to a human",
     secondaryActionHref: `mailto:${input.supportEmail ?? "support@example.com"}`,
-    trustPromise: "No generic bait-and-switch. The next step adapts to niche, intent, return state, and contact preference.",
+    trustPromise: plumbingLike
+      ? "No dead-end quote form. We bias for fast routing, clear next steps, and a human fallback when the job needs it."
+      : "No generic bait-and-switch. The next step adapts to niche, intent, return state, and contact preference.",
     progressLabel:
-      input.returning
+      plumbingLike
+        ? input.returning
+          ? "We already have your context. The goal now is getting you to the fastest useful human or booking step."
+          : "The first interaction should confirm urgency, location, and the fastest credible next step."
+        : input.returning
         ? "You are on visit two or beyond. The goal is momentum, not re-explaining yourself."
         : "The first interaction should feel clear, light, and immediately useful.",
-    anxietyReducer: "You can stop at any point, ask for a human path, or take the lighter next step instead of the heavier one.",
+    anxietyReducer: plumbingLike
+      ? "You can take the fast booking path, ask for dispatch help, or switch to a lighter estimate path if the job is not urgent."
+      : "You can stop at any point, ask for a human path, or take the lighter next step instead of the heavier one.",
     proofSignals: buildProofSignals(input.niche, family, mode),
     objectionBlocks: buildObjections(input.niche, mode),
     discoveryPrompt:
@@ -335,8 +400,9 @@ export function resolveExperienceProfile(input: ExperienceInput): ExperienceProf
     fieldOrder: [...buildFieldOrder(mode)],
     progressSteps: buildProgressSteps(mode, family),
     supportingSignals: [
-      input.referrer ? `Arrived from ${new URL(input.referrer).hostname}` : "Adaptive by source and referral context",
+      input.referrer ? `Arrived from ${new URL(input.referrer).hostname}` : plumbingLike ? "Adaptive by urgency, service type, and entry source" : "Adaptive by source and referral context",
       device === "mobile" ? "Mobile-optimized path with lower cognitive load" : "Desktop path can support richer proof and comparison",
+      ...(plumbingLike ? [`Service model: ${input.niche.serviceCategories.slice(0, 3).join(", ")}`] : []),
       returnOffer,
     ],
     returnOffer,

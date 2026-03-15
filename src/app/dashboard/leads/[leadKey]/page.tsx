@@ -16,6 +16,8 @@ import {
 } from "@/lib/runtime-store";
 import type { CanonicalEvent } from "@/lib/trace";
 
+export const dynamic = "force-dynamic";
+
 type LeadDetailPageProps = {
   params: Promise<{ leadKey: string }>;
 };

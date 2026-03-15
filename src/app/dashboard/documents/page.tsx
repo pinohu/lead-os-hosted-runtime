@@ -4,6 +4,8 @@ import { getDocumentJobs, getLeadRecord, type DocumentJobRecord } from "@/lib/ru
 import { tenantConfig } from "@/lib/tenant";
 import { isSystemDocumentJob } from "@/lib/operator-view";
 
+export const dynamic = "force-dynamic";
+
 type DocumentJobsPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };

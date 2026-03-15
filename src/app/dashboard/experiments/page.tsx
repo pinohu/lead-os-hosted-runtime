@@ -4,6 +4,8 @@ import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { getCanonicalEvents, getLeadRecords } from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
 
+export const dynamic = "force-dynamic";
+
 export default async function ExperimentsPage() {
   await requireOperatorPageSession("/dashboard/experiments");
   const snapshot = buildDashboardSnapshot(await getLeadRecords(), await getCanonicalEvents());

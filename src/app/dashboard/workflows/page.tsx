@@ -9,6 +9,8 @@ import {
 import { tenantConfig } from "@/lib/tenant";
 import { isSystemWorkflowRun } from "@/lib/operator-view";
 
+export const dynamic = "force-dynamic";
+
 type WorkflowRunsPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };

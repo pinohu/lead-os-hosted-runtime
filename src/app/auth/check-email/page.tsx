@@ -17,13 +17,13 @@ export default async function CheckEmailPage({ searchParams }: CheckEmailPagePro
   return (
     <main>
       <section className="hero">
-        <p className="eyebrow">{deliveryFailed ? "Delivery fallback" : "Check Your Inbox"}</p>
-        <h1>{deliveryFailed ? "Continue securely in this browser" : "Magic link sent"}</h1>
+        <p className="eyebrow">{deliveryFailed ? "Email delivery issue" : "Check Your Inbox"}</p>
+        <h1>{deliveryFailed ? "Magic link delivery failed" : "Magic link sent"}</h1>
         <p className="lede">
           {deliveryFailed
             ? email
-              ? `We could not deliver the email to ${email}, but you can continue securely from this browser because you already requested access from an approved operator address.`
-              : "We could not deliver the email, but you can continue securely from this browser because you already requested access from an approved operator address."
+              ? `We could not deliver the sign-in email to ${email}. LeadOS no longer bypasses mailbox verification, so you will need email delivery restored before you can sign in again.`
+              : "We could not deliver the sign-in email. LeadOS no longer bypasses mailbox verification, so email delivery must be restored before you can sign in again."
             : email
               ? `We sent a secure sign-in link to ${email}.`
               : "We sent a secure sign-in link to your operator email."}
@@ -34,18 +34,17 @@ export default async function CheckEmailPage({ searchParams }: CheckEmailPagePro
         {deliveryFailed ? (
           <>
             <div className="status-banner error" role="alert">
-              Email delivery is currently unavailable. This fallback only works in the same browser
-              that requested the magic link and expires in 15 minutes.
+              Email delivery is currently unavailable. Operator access now requires possession of the
+              mailbox, so there is no same-browser fallback.
             </div>
             {reason ? (
               <p className="muted">Provider detail: {reason}</p>
             ) : null}
-            <form action="/auth/browser-verify" method="post" className="auth-form">
-              <input type="hidden" name="next" value={nextPath} />
-              <button type="submit" className="primary">
-                Continue to dashboard
-              </button>
-            </form>
+            <p className="muted">
+              Restore delivery for the configured provider, then request a new sign-in link. If you
+              already have an active session in another tab, that session will continue to work
+              until it expires or you sign out.
+            </p>
           </>
         ) : (
           <p className="muted">
@@ -53,7 +52,7 @@ export default async function CheckEmailPage({ searchParams }: CheckEmailPagePro
             one from the sign-in page.
           </p>
         )}
-        <a href="/auth/sign-in" className="secondary">
+        <a href={`/auth/sign-in?next=${encodeURIComponent(nextPath)}`} className="secondary">
           Back to sign-in
         </a>
       </section>

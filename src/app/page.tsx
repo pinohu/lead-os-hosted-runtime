@@ -54,12 +54,24 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const graphs = buildDefaultFunnelGraphs(tenantConfig.tenantId);
   const health = getAutomationHealth();
   const snapshot = buildDashboardSnapshot(await getLeadRecords(), await getCanonicalEvents());
+  const plumbingLike = niche.slug === "plumbing" || niche.slug === "home-services";
+  const footprintItems = plumbingLike
+    ? niche.geographyModel.map((field) => ({
+        id: field,
+        title: field,
+        detail: "Used for routing, dispatch, and SEO structure",
+      }))
+    : Object.values(graphs).slice(0, 5).map((graph) => ({
+        id: graph.id,
+        title: graph.name,
+        detail: `${graph.nodes.length} canonical nodes, ${graph.goal} goal`,
+      }));
   const profile = resolveExperienceProfile({
     family: asFamily(params.family),
     niche,
     supportEmail: tenantConfig.supportEmail,
     source: asString(params.source),
-    intent: asIntent(params.intent),
+    intent: asIntent(params.intent) ?? (plumbingLike ? "solve-now" : undefined),
     returning: asBoolean(params.returning),
     milestone: asString(params.milestone),
     preferredMode: asString(params.mode),
@@ -70,45 +82,58 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <ExperienceScaffold
-      eyebrow="LeadOS Adaptive Runtime"
-      title={`${tenantConfig.brandName} turns first visits into milestone-two and milestone-three momentum`}
-      summary={`${profile.heroSummary} The runtime already knows how to capture, score, route, follow up, and recover the next step across ${Object.keys(graphs).length} funnel families.`}
+      eyebrow={plumbingLike ? "LeadOS Plumbing Dispatch" : "LeadOS Adaptive Runtime"}
+      title={plumbingLike
+        ? "Book urgent plumbing demand without dead-end forms"
+        : `${tenantConfig.brandName} turns first visits into milestone-two and milestone-three momentum`}
+      summary={plumbingLike
+        ? `${profile.heroSummary} LeadOS is optimized for urgent and high-intent plumbing traffic: capture, route, book, recover, and follow up without losing the job to slower competitors.`
+        : `${profile.heroSummary} The runtime already knows how to capture, score, route, follow up, and recover the next step across ${Object.keys(graphs).length} funnel families.`}
       profile={profile}
       metrics={[
         {
-          label: "Lead M2 progression",
-          value: `${snapshot.milestones.lead.returnEngaged}`,
-          detail: "Returning leads already tracked in the live runtime.",
+          label: plumbingLike ? "Hot leads" : "Lead M2 progression",
+          value: plumbingLike ? `${snapshot.totals.hotLeads}` : `${snapshot.milestones.lead.returnEngaged}`,
+          detail: plumbingLike
+            ? "Urgent or booking-intent leads currently recognized by the runtime."
+            : "Returning leads already tracked in the live runtime.",
         },
         {
-          label: "Lead M3 progression",
+          label: plumbingLike ? "Booked or offered" : "Lead M3 progression",
           value: `${snapshot.milestones.lead.bookedOrOffered}`,
-          detail: "Qualified next-step completions captured so far.",
+          detail: plumbingLike
+            ? "Jobs that already reached booking, estimate, or proposal momentum."
+            : "Qualified next-step completions captured so far.",
         },
         {
-          label: "Automation mode",
+          label: plumbingLike ? "Channel readiness" : "Automation mode",
           value: health.liveMode ? "Live" : "Dry run",
-          detail: "Channels and workflows already connected to the runtime.",
+          detail: plumbingLike
+            ? "Dispatch channels, documents, and workflows connected to the runtime."
+            : "Channels and workflows already connected to the runtime.",
         },
       ]}
     >
       <section className="grid two">
         <article className="panel">
-          <p className="eyebrow">Usability heuristics</p>
-          <h2>Every surface now aims to remove confusion before it appears</h2>
+          <p className="eyebrow">{plumbingLike ? "Dispatch model" : "Usability heuristics"}</p>
+          <h2>{plumbingLike ? "The flagship wedge is plumbing, not generic lead gen" : "Every surface now aims to remove confusion before it appears"}</h2>
           <ul className="check-list">
-            {EXPERIENCE_HEURISTICS.map((item) => (
+            {(plumbingLike
+              ? niche.serviceCategories.map((item) => `Service category: ${item}`)
+              : EXPERIENCE_HEURISTICS
+            ).map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
         </article>
         <article className="panel">
-          <p className="eyebrow">Operational footprint</p>
-          <h2>Adaptive journeys, not static landing pages</h2>
+          <p className="eyebrow">{plumbingLike ? "Geography and response" : "Operational footprint"}</p>
+          <h2>{plumbingLike ? "Built for service radius, urgency, and next-step certainty" : "Adaptive journeys, not static landing pages"}</h2>
           <ul className="check-list">
-            {Object.values(graphs).slice(0, 5).map((graph) => (
-              <li key={graph.id}>
-                <strong>{graph.name}</strong>: {graph.nodes.length} canonical nodes, {graph.goal} goal
+            {footprintItems.map((item) => (
+              <li key={item.id}>
+                <strong>{item.title}</strong>: {item.detail}
               </li>
             ))}
           </ul>

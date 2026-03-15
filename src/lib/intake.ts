@@ -101,6 +101,21 @@ export interface IntakeResult {
   };
 }
 
+export interface PublicIntakeResponse {
+  success: boolean;
+  leadKey: string;
+  existing: boolean;
+  hot: boolean;
+  scoreBand: "low" | "medium" | "high";
+  stage: LeadStage;
+  nextStep: {
+    family: FunnelFamily;
+    destination: string;
+    ctaLabel: string;
+    message: string;
+  };
+}
+
 const VALID_SOURCES: IntakeSource[] = [
   "contact_form",
   "assessment",
@@ -297,6 +312,57 @@ function isRecentReplay(key: string) {
   return false;
 }
 
+function resolveScoreBand(score: number): PublicIntakeResponse["scoreBand"] {
+  if (score >= 80) return "high";
+  if (score >= 50) return "medium";
+  return "low";
+}
+
+function buildPublicNextStep(result: IntakeResult): PublicIntakeResponse["nextStep"] {
+  const familyCopy: Record<FunnelFamily, string> = {
+    "lead-magnet": "We captured your request and prepared the fastest relevant next step.",
+    qualification: result.hot
+      ? "We are moving you into the fastest qualification and booking path."
+      : "We captured your details and prepared the best next qualification step.",
+    chat: "We prepared the fastest conversation path for your request.",
+    webinar: "We prepared the next step so you can keep moving without repeating yourself.",
+    authority: "We prepared the clearest next step to help you evaluate the offer.",
+    checkout: "We prepared the fastest path back into checkout.",
+    retention: "We prepared the next step to keep the relationship moving forward.",
+    rescue: "We prepared the quickest rescue path so this lead does not stall.",
+    referral: "We prepared the next step to activate referral momentum.",
+    continuity: "We prepared the next continuity step so momentum keeps compounding.",
+  };
+
+  return {
+    family: result.decision.family,
+    destination: result.decision.destination,
+    ctaLabel: result.decision.ctaLabel,
+    message: familyCopy[result.decision.family] ?? "We prepared your next step.",
+  };
+}
+
+export function buildPublicIntakeResponse(result: IntakeResult): PublicIntakeResponse {
+  return {
+    success: result.success,
+    leadKey: result.leadKey,
+    existing: result.existing,
+    hot: result.hot,
+    scoreBand: resolveScoreBand(result.score),
+    stage: result.stage,
+    nextStep: buildPublicNextStep(result),
+  };
+}
+
+function skippedProviderResult(detail: string): ProviderResult {
+  return {
+    ok: true,
+    provider: "LeadOS",
+    mode: "prepared",
+    detail,
+  };
+}
+
 export function validateLeadPayload(payload: HostedLeadPayload) {
   if (!VALID_SOURCES.includes(payload.source)) {
     throw new Error("Lead source is required and must be supported.");
@@ -428,6 +494,39 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     ),
   ];
   await appendEvents(events);
+
+  if (replayed) {
+    const [bookingJobs, documentJobs] = await Promise.all([
+      getBookingJobs(leadKey),
+      getDocumentJobs(leadKey),
+    ]);
+
+    return {
+      success: true,
+      leadKey,
+      existing: true,
+      record,
+      decision,
+      trace,
+      score,
+      stage,
+      hot,
+      crm: skippedProviderResult("Replay suppressed before CRM sync."),
+      logging: skippedProviderResult("Replay suppressed before ledger sync."),
+      alerts: null,
+      workflow: skippedProviderResult("Replay suppressed before workflow emission."),
+      workflowTriggers: [],
+      followup: {
+        email: null,
+        whatsapp: null,
+        sms: null,
+      },
+      jobs: {
+        booking: bookingJobs[0] ?? null,
+        documents: documentJobs,
+      },
+    };
+  }
 
   const crmPayload = {
     leadKey,

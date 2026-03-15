@@ -6,19 +6,21 @@ import type { ExperienceProfile } from "@/lib/experience";
 import type { IntakeSource } from "@/lib/intake";
 import type { FunnelFamily } from "@/lib/runtime-schema";
 
-type IntakeDecision = {
+type PublicNextStep = {
+  family: FunnelFamily;
   destination: string;
   ctaLabel: string;
-  reason: string;
-  family: FunnelFamily;
+  message: string;
 };
 
 type IntakeResponse = {
   success: boolean;
   leadKey: string;
-  decision: IntakeDecision;
+  existing: boolean;
   hot: boolean;
-  score: number;
+  scoreBand: "low" | "medium" | "high";
+  stage: string;
+  nextStep: PublicNextStep;
 };
 
 type AdaptiveLeadCaptureFormProps = {
@@ -36,6 +38,7 @@ function normalizePhone(value: string) {
 }
 
 export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
+  const plumbingLike = props.niche === "plumbing" || props.niche === "home-services";
   const [step, setStep] = useState(1);
   const [selectedGoalId, setSelectedGoalId] = useState(props.profile.discoveryOptions[0]?.id ?? "");
   const [firstName, setFirstName] = useState("");
@@ -48,7 +51,9 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
   const [isPending, startTransition] = useTransition();
   const statusId = useId();
 
-  const selectedGoal = props.profile.discoveryOptions.find((option) => option.id === selectedGoalId) ?? props.profile.discoveryOptions[0];
+  const selectedGoal =
+    props.profile.discoveryOptions.find((option) => option.id === selectedGoalId) ??
+    props.profile.discoveryOptions[0];
   const requiresPhone = props.profile.mode === "booking-first";
 
   function goToNextStep() {
@@ -63,7 +68,11 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
         return;
       }
       if (!email.trim()) {
-        setError("Add your email so we can send your tailored next step.");
+        setError(
+          plumbingLike
+            ? "Add your email so we can confirm the next plumbing step."
+            : "Add your email so we can send your tailored next step.",
+        );
         return;
       }
       if (requiresPhone && !normalizePhone(phone)) {
@@ -109,18 +118,23 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
               pagePath: props.pagePath,
               trustPromise: props.profile.trustPromise,
             },
+            website: "",
             experimentId: props.profile.experimentId,
             variantId: props.profile.variantId,
             returning: props.returning,
-            contentEngaged: selectedGoal?.signals.contentEngaged ?? props.profile.mode === "webinar-first",
-            wantsBooking: selectedGoal?.signals.wantsBooking ?? props.profile.mode === "booking-first",
-            wantsCheckout: selectedGoal?.signals.wantsCheckout ?? props.family === "checkout",
-            prefersChat: selectedGoal?.signals.prefersChat ?? props.profile.mode === "chat-first",
+            contentEngaged:
+              selectedGoal?.signals.contentEngaged ?? props.profile.mode === "webinar-first",
+            wantsBooking:
+              selectedGoal?.signals.wantsBooking ?? props.profile.mode === "booking-first",
+            wantsCheckout:
+              selectedGoal?.signals.wantsCheckout ?? props.family === "checkout",
+            prefersChat:
+              selectedGoal?.signals.prefersChat ?? props.profile.mode === "chat-first",
             preferredFamily: props.family,
           }),
         });
 
-        const payload = await response.json();
+        const payload = (await response.json()) as IntakeResponse & { error?: string };
         if (!response.ok || !payload.success) {
           setError(payload.error ?? "We could not save your progress. Please try again.");
           return;
@@ -134,19 +148,31 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
   }
 
   return (
-    <section className="capture-shell panel" id="capture-form" aria-labelledby="capture-form-title">
+    <section
+      className="capture-shell panel"
+      id="capture-form"
+      aria-labelledby="capture-form-title"
+    >
       <div className="capture-header">
         <div>
           <p className="eyebrow">Adaptive capture path</p>
-          <h2 id="capture-form-title">Get the right next step without starting from scratch</h2>
+          <h2 id="capture-form-title">
+            {plumbingLike
+              ? "Confirm urgency, keep the path short, and get the right next step"
+              : "Get the right next step without starting from scratch"}
+          </h2>
           <p className="muted">
-            We use one light commitment first, then tailor the milestone-two follow-up and the
-            milestone-three offer around your actual intent.
+            {plumbingLike
+              ? "We collect just enough to route the job fast, preserve context, and keep dispatch or estimate follow-up moving."
+              : "We use one light commitment first, then tailor the milestone-two follow-up and the milestone-three offer around your actual intent."}
           </p>
         </div>
         <ol className="step-rail" aria-label="Form progress">
           {[1, 2, 3].map((item) => (
-            <li key={item} className={item === step ? "current" : item < step ? "complete" : undefined}>
+            <li
+              key={item}
+              className={item === step ? "current" : item < step ? "complete" : undefined}
+            >
               <span>{item}</span>
               <strong>{item === 1 ? "Goal" : item === 2 ? "Contact" : "Confirm"}</strong>
             </li>
@@ -162,14 +188,15 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
 
       {result ? (
         <div className="status-banner success" role="status">
-          <h3>Your path is ready</h3>
-          <p>{result.decision.reason}</p>
+          <h3>{plumbingLike ? "Your next plumbing step is ready" : "Your path is ready"}</h3>
+          <p>{result.nextStep.message}</p>
           <p className="muted">
-            Score: {result.score} {result.hot ? "• Hot path activated" : "• Standard nurture path activated"}
+            Priority: {result.scoreBand}{" "}
+            {result.hot ? "• Fast path activated" : "• Standard follow-up path activated"}
           </p>
           <div className="cta-row">
-            <Link href={result.decision.destination} className="primary">
-              {result.decision.ctaLabel}
+            <Link href={result.nextStep.destination} className="primary">
+              {result.nextStep.ctaLabel}
             </Link>
             <a href={props.profile.secondaryActionHref} className="secondary">
               {props.profile.secondaryActionLabel}
@@ -183,7 +210,10 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
               <legend>{props.profile.discoveryPrompt}</legend>
               <div className="option-grid">
                 {props.profile.discoveryOptions.map((option) => (
-                  <label key={option.id} className={`choice-card${selectedGoalId === option.id ? " selected" : ""}`}>
+                  <label
+                    key={option.id}
+                    className={`choice-card${selectedGoalId === option.id ? " selected" : ""}`}
+                  >
                     <input
                       type="radio"
                       name="goal"
@@ -201,15 +231,24 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
 
           {step === 2 ? (
             <div className="capture-step">
-              <h3>Where should we send the tailored next step?</h3>
+              <h3>
+                {plumbingLike
+                  ? "Where should we confirm the next plumbing step?"
+                  : "Where should we send the tailored next step?"}
+              </h3>
               <p className="muted">
-                We ask for the minimum we need to keep your path relevant. If you are on a fast
-                booking path, we keep phone available too.
+                {plumbingLike
+                  ? "We ask for the minimum needed to keep urgency, service type, and routing context intact. Phone stays available for faster dispatch."
+                  : "We ask for the minimum we need to keep your path relevant. If you are on a fast booking path, we keep phone available too."}
               </p>
               <div className="form-grid">
                 <label>
                   First name
-                  <input value={firstName} onChange={(event) => setFirstName(event.target.value)} autoComplete="given-name" />
+                  <input
+                    value={firstName}
+                    onChange={(event) => setFirstName(event.target.value)}
+                    autoComplete="given-name"
+                  />
                 </label>
                 <label>
                   Email
@@ -223,7 +262,11 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
                 </label>
                 <label>
                   Company
-                  <input value={company} onChange={(event) => setCompany(event.target.value)} autoComplete="organization" />
+                  <input
+                    value={company}
+                    onChange={(event) => setCompany(event.target.value)}
+                    autoComplete="organization"
+                  />
                 </label>
                 <label>
                   Phone {requiresPhone ? "(recommended for this path)" : "(optional)"}
@@ -236,7 +279,9 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
                   />
                 </label>
                 <label className="span-two">
-                  Context we should know before tailoring the next step
+                  {plumbingLike
+                    ? "Job details we should know before routing the next step"
+                    : "Context we should know before tailoring the next step"}
                   <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} />
                 </label>
               </div>
@@ -245,7 +290,7 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
 
           {step === 3 ? (
             <div className="capture-step">
-              <h3>Confirm your tailored path</h3>
+              <h3>{plumbingLike ? "Confirm the fastest useful path" : "Confirm your tailored path"}</h3>
               <div className="review-grid">
                 <article className="review-card">
                   <p className="eyebrow">Chosen outcome</p>
@@ -258,9 +303,7 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
                   <p className="muted">{props.profile.progressSteps[1]?.detail}</p>
                 </article>
               </div>
-              <p className="muted">
-                {props.profile.returnOffer}
-              </p>
+              <p className="muted">{props.profile.returnOffer}</p>
             </div>
           ) : null}
 
@@ -281,8 +324,19 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
                 Continue
               </button>
             ) : (
-              <button type="button" className="primary" onClick={handleSubmit} disabled={isPending}>
-                {isPending ? "Tailoring your next step..." : "Save and continue"}
+              <button
+                type="button"
+                className="primary"
+                onClick={handleSubmit}
+                disabled={isPending}
+              >
+                {isPending
+                  ? plumbingLike
+                    ? "Routing your next plumbing step..."
+                    : "Tailoring your next step..."
+                  : plumbingLike
+                    ? "Save and continue"
+                    : "Save and continue"}
               </button>
             )}
           </div>

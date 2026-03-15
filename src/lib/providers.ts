@@ -6,6 +6,12 @@ import { tenantConfig } from "./tenant.ts";
 import type { CanonicalEvent, TraceContext } from "./trace.ts";
 
 type ProviderStatus = "configured" | "dry-run" | "missing";
+export type ProviderCapabilityState =
+  | "missing"
+  | "configured"
+  | "verifiable"
+  | "executable"
+  | "degraded";
 
 export interface ProviderResult {
   ok: boolean;
@@ -1059,10 +1065,21 @@ function buildDocumentData(payload: Record<string, unknown>) {
 }
 
 export function getAutomationHealth() {
-  const providers = Object.entries(integrationMap).reduce<Record<string, { status: ProviderStatus; owner: string; responsibility: string; live: boolean }>>(
+  const providers = Object.entries(integrationMap).reduce<Record<string, {
+    status: ProviderStatus;
+    capability: ProviderCapabilityState;
+    owner: string;
+    responsibility: string;
+    live: boolean;
+  }>>(
     (acc, [key, value]) => {
+      const capability: ProviderCapabilityState =
+        !value.configured ? "missing"
+        : !value.live ? "configured"
+        : "executable";
       acc[key] = {
         status: value.configured ? (value.live ? "configured" : "dry-run") : "missing",
+        capability,
         owner: value.owner,
         responsibility: value.responsibility,
         live: value.live,

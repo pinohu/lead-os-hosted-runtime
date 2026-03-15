@@ -66,22 +66,7 @@ export function resolvePublicOrigin(candidates: Array<string | undefined | null>
   return fallback;
 }
 
-export function defaultOperatorEmails(candidates: Array<string | undefined | null>) {
-  return [
-    ...new Set(
-      candidates
-        .map((value) => value?.trim() ?? "")
-        .filter(Boolean)
-        .filter((value) => !value.endsWith("@example.com"))
-        .map(normalizeEmail),
-    ),
-  ];
-}
-
-export function getAllowedOperatorEmails(
-  configured: string | undefined,
-  fallbackCandidates: Array<string | undefined | null>,
-) {
+export function getAllowedOperatorEmails(configured: string | undefined) {
   const normalizedConfigured = (configured ?? "")
     .split(/[,\n;]/g)
     .map((value) => value.trim())
@@ -89,9 +74,7 @@ export function getAllowedOperatorEmails(
     .map(normalizeEmail)
     .filter(isRealEmail);
 
-  return normalizedConfigured.length > 0
-    ? [...new Set(normalizedConfigured)]
-    : defaultOperatorEmails(fallbackCandidates);
+  return [...new Set(normalizedConfigured)];
 }
 
 export function isAllowedOperatorEmail(email: string, allowedEmails: string[]) {

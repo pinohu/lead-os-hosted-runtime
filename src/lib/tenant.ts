@@ -24,6 +24,14 @@ function splitCsv(value?: string) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
+function resolveOrigin(url: string) {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return undefined;
+  }
+}
+
 function hasAnyEnv(...keys: string[]) {
   return keys.some((key) => {
     const value = process.env[key];
@@ -37,7 +45,7 @@ export const tenantConfig: TenantConfig = {
   siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "https://leads.example.com",
   supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "support@example.com",
   defaultService: process.env.LEAD_OS_DEFAULT_SERVICE ?? "lead-capture",
-  defaultNiche: process.env.LEAD_OS_DEFAULT_NICHE ?? "general",
+  defaultNiche: process.env.LEAD_OS_DEFAULT_NICHE ?? "plumbing",
   widgetOrigins: splitCsv(process.env.LEAD_OS_WIDGET_ORIGINS),
   accent: process.env.NEXT_PUBLIC_BRAND_ACCENT ?? "#14b8a6",
   enabledFunnels: splitCsv(process.env.LEAD_OS_ENABLED_FUNNELS).length > 0
@@ -45,15 +53,19 @@ export const tenantConfig: TenantConfig = {
     : ["lead-magnet", "qualification", "chat", "webinar", "authority", "checkout", "retention", "rescue", "referral", "continuity"],
   channels: {
     email: true,
-    whatsapp: (process.env.WBIZTOOL_API_KEY ?? embeddedSecrets.wbiztool.apiKey) != null,
+    whatsapp: Boolean((process.env.WBIZTOOL_API_KEY ?? embeddedSecrets.wbiztool.apiKey)?.trim()),
     sms: hasAnyEnv("EASY_TEXT_MARKETING_API_KEY", "EASYTEXTMARKETING_API_KEY", "EASY_TEXT_MARKETING_WEBHOOK_URL", "EASYTEXTMARKETING_WEBHOOK_URL"),
     chat: hasAnyEnv("INSIGHTO_API_KEY", "INSIGHTO_WEBHOOK_URL", "INSIGHTO_AGENT_WEBHOOK_URL", "INSIGHTO_AGENT_ID", "INSIGHTO_BOT_ID"),
     voice: hasAnyEnv("THOUGHTLY_API_KEY", "THOUGHTLY_WEBHOOK_URL", "THOUGHTLY_AGENT_WEBHOOK_URL", "THOUGHTLY_AGENT_ID", "THOUGHTLY_FLOW_ID"),
   },
 };
 
+export function getAllowedWidgetOrigins() {
+  const siteOrigin = resolveOrigin(tenantConfig.siteUrl);
+  return [...new Set([siteOrigin, ...tenantConfig.widgetOrigins].filter(Boolean) as string[])];
+}
+
 export function isAllowedWidgetOrigin(origin?: string | null) {
   if (!origin) return false;
-  if (tenantConfig.widgetOrigins.length === 0) return true;
-  return tenantConfig.widgetOrigins.includes(origin);
+  return getAllowedWidgetOrigins().includes(origin);
 }

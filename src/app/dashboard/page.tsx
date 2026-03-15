@@ -7,6 +7,8 @@ import { getBookingJobs, getCanonicalEvents, getDocumentJobs, getLeadRecords, ge
 import { tenantConfig } from "@/lib/tenant";
 import { isSystemBookingJob, isSystemDocumentJob, isSystemWorkflowRun } from "@/lib/operator-view";
 
+export const dynamic = "force-dynamic";
+
 type DashboardPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
@@ -19,7 +21,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const session = await requireOperatorPageSession("/dashboard");
   const params = (await searchParams) ?? {};
   const includeSystemTraffic = asString(params.include) === "system";
-  const authNotice = asString(params.auth);
   const [leads, events, bookingJobs, documentJobs, workflowRuns] = await Promise.all([
     getLeadRecords(),
     getCanonicalEvents(),
@@ -38,18 +39,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const visibleWorkflowRuns = includeSystemTraffic
     ? workflowRuns
     : workflowRuns.filter((run) => !isSystemWorkflowRun(run));
+  const hotLeadQueue = snapshot.leadTimeline.filter((lead) => lead.hot).slice(0, 5);
+  const bookingFailures = visibleBookingJobs
+    .filter((job) => !["booked", "availability-found", "ready", "handoff-ready"].includes(job.status))
+    .slice(0, 5);
+  const documentFailures = visibleDocumentJobs
+    .filter((job) => job.status === "failed")
+    .slice(0, 5);
+  const workflowFailures = visibleWorkflowRuns
+    .filter((run) => !run.ok)
+    .slice(0, 5);
 
   return (
     <main className="experience-page">
-      {authNotice === "browser-fallback" ? (
-        <section className="panel">
-          <div className="status-banner success" role="status">
-            Email delivery is unavailable right now, so LeadOS continued securely in this same
-            browser for your approved operator session.
-          </div>
-        </section>
-      ) : null}
-
       {snapshot.systemTraffic.hiddenLeads > 0 || snapshot.systemTraffic.hiddenEvents > 0 ? (
         <section className="panel">
           <p className="eyebrow">Visibility</p>
@@ -128,6 +130,94 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             ))}
           </ul>
         </aside>
+      </section>
+
+      <section className="grid two">
+        <article className="panel">
+          <p className="eyebrow">Immediate intervention</p>
+          <h2>Hot leads and unresolved execution problems</h2>
+          <div className="stack-grid">
+            <article className="stack-card">
+              <p className="eyebrow">Hot lead queue</p>
+              {hotLeadQueue.length === 0 ? (
+                <p className="muted">No hot leads are waiting right now.</p>
+              ) : (
+                <ul className="check-list">
+                  {hotLeadQueue.map((lead) => (
+                    <li key={lead.leadKey}>
+                      <Link href={`/dashboard/leads/${encodeURIComponent(lead.leadKey)}`}>
+                        {lead.leadKey}
+                      </Link>{" "}
+                      — {lead.stage}, {lead.nextLeadMilestone ?? "Complete"}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+            <article className="stack-card">
+              <p className="eyebrow">Booking failures</p>
+              {bookingFailures.length === 0 ? (
+                <p className="muted">No unresolved booking failures.</p>
+              ) : (
+                <ul className="check-list">
+                  {bookingFailures.map((job) => (
+                    <li key={job.id}>
+                      <Link href={`/dashboard/leads/${encodeURIComponent(job.leadKey)}`}>
+                        {job.leadKey}
+                      </Link>{" "}
+                      — {job.status}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+          </div>
+        </article>
+
+        <article className="panel">
+          <p className="eyebrow">Recovery queue</p>
+          <h2>Documents and workflows needing attention</h2>
+          <div className="stack-grid">
+            <article className="stack-card">
+              <p className="eyebrow">Document failures</p>
+              {documentFailures.length === 0 ? (
+                <p className="muted">No failed document jobs waiting.</p>
+              ) : (
+                <ul className="check-list">
+                  {documentFailures.map((job) => (
+                    <li key={job.id}>
+                      <Link href={`/dashboard/leads/${encodeURIComponent(job.leadKey)}`}>
+                        {job.leadKey}
+                      </Link>{" "}
+                      — {job.status}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+            <article className="stack-card">
+              <p className="eyebrow">Workflow failures</p>
+              {workflowFailures.length === 0 ? (
+                <p className="muted">No failed workflow runs waiting.</p>
+              ) : (
+                <ul className="check-list">
+                  {workflowFailures.map((run) => (
+                    <li key={run.id}>
+                      {run.leadKey ? (
+                        <Link href={`/dashboard/leads/${encodeURIComponent(run.leadKey)}`}>
+                          {run.leadKey}
+                        </Link>
+                      ) : (
+                        <span>Unknown lead</span>
+                      )}{" "}
+                      — {run.eventName}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+          </div>
+        </article>
       </section>
 
       <section className="metric-grid">

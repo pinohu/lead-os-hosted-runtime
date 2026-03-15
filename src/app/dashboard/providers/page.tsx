@@ -5,6 +5,8 @@ import { getAutomationHealth } from "@/lib/providers";
 import { getRuntimePersistenceMode } from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
 
+export const dynamic = "force-dynamic";
+
 export default async function ProviderHealthPage() {
   await requireOperatorPageSession("/dashboard/providers");
   const health = getAutomationHealth();
@@ -75,15 +77,17 @@ export default async function ProviderHealthPage() {
         {providerEntries.map(([provider, status]) => (
           <article key={provider} className="stack-card">
             <p className="eyebrow">{provider}</p>
-            <h2>
+            <h2>{status.capability.replace(/-/g, " ")}</h2>
+            <p className="muted">
               {status.status === "configured"
-                ? "Configured"
+                ? "Legacy status: configured"
                 : status.status === "dry-run"
-                ? "Configured / dry-run"
-                : "Missing"}
-            </h2>
-            <p className="muted">{status.live ? "Live" : "Prepared"}</p>
+                  ? "Legacy status: configured / dry-run"
+                  : "Legacy status: missing"}
+            </p>
+            <p className="muted">{status.live ? "Execution ready" : "Not executing yet"}</p>
             <p className="muted">{status.owner}</p>
+            <p className="muted">{status.responsibility}</p>
             {(() => {
               const config = configSummary.providers.find((entry) => entry.key === provider);
               if (!config) return null;

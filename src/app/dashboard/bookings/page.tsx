@@ -4,6 +4,8 @@ import { getBookingJobs, getLeadRecord, type BookingJobRecord } from "@/lib/runt
 import { tenantConfig } from "@/lib/tenant";
 import { isSystemBookingJob } from "@/lib/operator-view";
 
+export const dynamic = "force-dynamic";
+
 type BookingJobsPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
