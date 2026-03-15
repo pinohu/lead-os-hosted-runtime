@@ -178,6 +178,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <h2>{dispatch.commercialQueue.length}</h2>
           <p className="muted">Commercial jobs that should bypass consumer-style routing.</p>
         </article>
+        <article className="metric-card">
+          <p className="eyebrow">Escalation ready</p>
+          <h2>{dispatch.topQueue.filter((item) => item.escalationReady).length}</h2>
+          <p className="muted">Plumbing leads that have crossed the backup-routing threshold.</p>
+        </article>
       </section>
 
       <section className="grid two">
@@ -197,6 +202,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </p>
                   <p className="muted">
                     Readiness: {item.readinessScore} | Stage: {item.stage}
+                  </p>
+                  <p className="muted">
+                    SLA: {item.overdue ? `overdue by ${item.minutesPastDue}m` : `due ${item.dueAt}`}
+                    {item.escalationReady ? " | backup escalation ready" : ""}
                   </p>
                   <p className="muted">Next move: {item.operatorAction}</p>
                   <DispatchActionPanel

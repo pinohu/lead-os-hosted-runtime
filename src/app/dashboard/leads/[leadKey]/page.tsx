@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DispatchActionPanel } from "@/components/DispatchActionPanel";
 import { summarizeMilestoneProgress } from "@/lib/automation";
+import { getDispatchSlaSnapshot } from "@/lib/dispatch-sla";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import {
   type BookingJobRecord,
@@ -60,6 +61,14 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   const operatingModel = typeof lead.metadata.operatingModel === "string"
     ? lead.metadata.operatingModel
     : "generic-growth";
+  const plumbingSla = plumbing
+    ? getDispatchSlaSnapshot({
+        updatedAt: lead.updatedAt,
+        stage: lead.stage,
+        plumbing,
+        outcome: plumbingOutcome,
+      })
+    : null;
 
   function formatLabel(value: string) {
     return value.replace(/-/g, " ");
@@ -160,6 +169,19 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
               )}
             </ul>
           </article>
+        </section>
+      ) : null}
+
+      {plumbingSla ? (
+        <section className="panel">
+          <p className="eyebrow">Dispatch SLA</p>
+          <h2>Response and escalation timing</h2>
+          <ul className="check-list">
+            <li>Response due at: {plumbingSla.dueAt}</li>
+            <li>Escalation target: {plumbingSla.escalationAt}</li>
+            <li>Overdue: {plumbingSla.overdue ? `yes, by ${plumbingSla.minutesPastDue} minutes` : "no"}</li>
+            <li>Automatic backup escalation: {plumbingSla.escalationReady ? "ready" : "not ready"}</li>
+          </ul>
         </section>
       ) : null}
 

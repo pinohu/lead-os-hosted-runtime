@@ -1,4 +1,5 @@
 import { summarizeMilestoneProgress } from "./automation.ts";
+import { getDispatchSlaSnapshot } from "./dispatch-sla.ts";
 import { isSystemCanonicalEvent, isSystemLeadRecord } from "./operator-view.ts";
 import type { CanonicalEvent } from "./trace.ts";
 import type {
@@ -38,9 +39,19 @@ function asPlumbingOutcome(lead: StoredLeadRecord) {
   return outcome && typeof outcome === "object" ? outcome as PlumbingJobOutcome : null;
 }
 
-function buildDispatchAction(lead: StoredLeadRecord, plumbing: PlumbingLeadContext | null) {
+function buildDispatchAction(
+  lead: StoredLeadRecord,
+  plumbing: PlumbingLeadContext | null,
+  sla?: { overdue: boolean; escalationReady: boolean },
+) {
   if (!plumbing) {
     return lead.hot ? "Manual fast-path review" : "Standard review";
+  }
+  if (sla?.escalationReady) {
+    return "Escalate to backup provider now";
+  }
+  if (sla?.overdue) {
+    return "Response overdue - intervene now";
   }
   if (["booked", "converted", "active"].includes(lead.stage)) {
     return "Monitor completion";
@@ -90,22 +101,41 @@ function buildPlumbingDispatchSnapshot(
     .filter((item) => item.plumbing);
 
   const queueItems = plumbingLeads
-    .map(({ lead, plumbing, outcome }) => ({
-      leadKey: lead.leadKey,
-      stage: lead.stage,
-      hot: lead.hot,
-      score: lead.score,
-      updatedAt: lead.updatedAt,
-      urgencyBand: plumbing!.urgencyBand,
-      issueType: plumbing!.issueType,
-      dispatchMode: plumbing!.dispatchMode,
-      propertyType: plumbing!.propertyType,
-      readinessScore: buildDispatchReadiness(lead, plumbing),
-      operatorAction: buildDispatchAction(lead, plumbing),
-      routingReasons: plumbing!.routingReasons,
-      outcomeStatus: outcome?.status ?? null,
-    }))
+    .map(({ lead, plumbing, outcome }) => {
+      const sla = getDispatchSlaSnapshot({
+        updatedAt: lead.updatedAt,
+        stage: lead.stage,
+        plumbing: plumbing!,
+        outcome,
+      });
+      return {
+        leadKey: lead.leadKey,
+        stage: lead.stage,
+        hot: lead.hot,
+        score: lead.score,
+        updatedAt: lead.updatedAt,
+        urgencyBand: plumbing!.urgencyBand,
+        issueType: plumbing!.issueType,
+        dispatchMode: plumbing!.dispatchMode,
+        propertyType: plumbing!.propertyType,
+        readinessScore: buildDispatchReadiness(lead, plumbing),
+        operatorAction: buildDispatchAction(lead, plumbing, sla),
+        routingReasons: plumbing!.routingReasons,
+        outcomeStatus: outcome?.status ?? null,
+        dueAt: sla.dueAt,
+        escalationAt: sla.escalationAt,
+        overdue: sla.overdue,
+        escalationReady: sla.escalationReady,
+        minutesPastDue: sla.minutesPastDue,
+      };
+    })
     .sort((left, right) => {
+      if (left.escalationReady !== right.escalationReady) {
+        return left.escalationReady ? -1 : 1;
+      }
+      if (left.overdue !== right.overdue) {
+        return left.overdue ? -1 : 1;
+      }
       if (right.readinessScore !== left.readinessScore) {
         return right.readinessScore - left.readinessScore;
       }

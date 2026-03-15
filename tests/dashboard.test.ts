@@ -326,7 +326,7 @@ test("operator console snapshot exposes plumbing dispatch queues and provider sc
   assert.equal(snapshot.plumbingDispatch.totalPlumbingLeads, 1);
   assert.equal(snapshot.plumbingDispatch.emergencyQueue.length, 1);
   assert.equal(snapshot.plumbingDispatch.emergencyQueue[0]?.dispatchMode, "dispatch-now");
-  assert.equal(snapshot.plumbingDispatch.emergencyQueue[0]?.operatorAction, "Call or assign emergency provider now");
+  assert.equal(snapshot.plumbingDispatch.emergencyQueue[0]?.operatorAction, "Escalate to backup provider now");
   assert.equal(snapshot.plumbingDispatch.providerScores[0]?.provider, "Trafft");
   assert.equal(snapshot.plumbingDispatch.providerScores[0]?.bookingFillRate, 100);
 });
