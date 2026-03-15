@@ -8,6 +8,37 @@ function splitCsv(value?: string | null) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
+function escapeCsvCell(value: string) {
+  if (/[",\n]/.test(value)) {
+    return `"${value.replaceAll("\"", "\"\"")}"`;
+  }
+  return value;
+}
+
+function toCsv(deployment: ReturnType<typeof generateBulkZipDeploymentPackage>) {
+  const header = [
+    "hostedUrl",
+    "entrypoint",
+    "widgetPreset",
+    "pageType",
+    "audience",
+    "bootEndpoint",
+    "manifestEndpoint",
+  ];
+  const rows = deployment.deployments.map((item) => [
+    item.bundle.hostedUrl,
+    item.entrypointPreset.id,
+    item.widgetPreset.id,
+    item.pageType,
+    item.audience,
+    item.bundle.bootEndpoint,
+    item.bundle.manifestEndpoint,
+  ]);
+  return [header, ...rows]
+    .map((row) => row.map((cell) => escapeCsvCell(String(cell))).join(","))
+    .join("\n");
+}
+
 export async function OPTIONS(request: Request) {
   return new NextResponse(null, {
     status: 204,
@@ -17,6 +48,7 @@ export async function OPTIONS(request: Request) {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  const format = url.searchParams.get("format") ?? "json";
   const deployment = generateBulkZipDeploymentPackage({
     recipe: url.searchParams.get("recipe") ?? undefined,
     niche: url.searchParams.get("niche") ?? undefined,
@@ -31,6 +63,16 @@ export async function GET(request: Request) {
     zips: splitCsv(url.searchParams.get("zips")),
     limit: Number(url.searchParams.get("limit") ?? 25),
   }, tenantConfig);
+
+  if (format === "csv") {
+    return new NextResponse(toCsv(deployment), {
+      status: 200,
+      headers: {
+        ...buildCorsHeaders(request.headers.get("origin")),
+        "Content-Type": "text/csv; charset=utf-8",
+      },
+    });
+  }
 
   return NextResponse.json({
     success: true,

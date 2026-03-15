@@ -144,6 +144,9 @@ export default async function DeploymentBlueprintPage({ searchParams }: Deployme
           <div className="code-card">
             <pre><code>{`${tenantConfig.siteUrl}/api/embed/generate-bulk?recipe=${recipe}&city=${encodeURIComponent(city)}&zips=${encodeURIComponent(bulkZipInput)}&limit=12`}</code></pre>
           </div>
+          <div className="code-card">
+            <pre><code>{`${tenantConfig.siteUrl}/api/embed/generate-bulk?recipe=${recipe}&city=${encodeURIComponent(city)}&zips=${encodeURIComponent(bulkZipInput)}&limit=12&format=csv`}</code></pre>
+          </div>
         </article>
         <article className="panel">
           <p className="eyebrow">Preview of generated ZIP packages</p>

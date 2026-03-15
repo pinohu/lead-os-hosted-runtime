@@ -78,6 +78,8 @@ It accepts:
 
 It returns a batch of generated deployment packages so an operator, script, or plugin can provision many localized landing pages in one request.
 
+Add `format=csv` when the output needs to be consumed by spreadsheets, rollout sheets, or external provisioning tools.
+
 ### `/deployments/plumbing`
 
 Use this as the human-facing operator blueprint page for:
