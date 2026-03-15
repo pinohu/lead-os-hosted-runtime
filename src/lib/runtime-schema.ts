@@ -35,6 +35,53 @@ export type CustomerMilestoneId =
   | "customer-m2-activated"
   | "customer-m3-value-realized";
 
+export type PlumbingUrgencyBand =
+  | "emergency-now"
+  | "same-day"
+  | "estimate"
+  | "commercial"
+  | "maintenance";
+
+export type PlumbingIssueType =
+  | "burst-pipe"
+  | "drain-clog"
+  | "water-heater"
+  | "leak"
+  | "sewer-line"
+  | "fixture-install"
+  | "commercial-service"
+  | "general-plumbing";
+
+export type PlumbingPropertyType =
+  | "residential"
+  | "commercial"
+  | "multi-family"
+  | "unknown";
+
+export type PlumbingDispatchMode =
+  | "dispatch-now"
+  | "same-day-booking"
+  | "estimate-path"
+  | "commercial-intake"
+  | "triage";
+
+export interface PlumbingLeadContext {
+  issueType: PlumbingIssueType;
+  urgencyBand: PlumbingUrgencyBand;
+  propertyType: PlumbingPropertyType;
+  dispatchMode: PlumbingDispatchMode;
+  geo: {
+    state?: string;
+    county?: string;
+    city?: string;
+    zip?: string;
+    serviceRadius?: string;
+    emergencyCoverageWindow?: string;
+  };
+  confidence: number;
+  routingReasons: string[];
+}
+
 export type MilestoneTrack = "lead" | "customer";
 
 export type NodeType =
@@ -223,6 +270,8 @@ export type CanonicalEventType =
   | "refund_risk_detected"
   | "referral_invite_sent"
   | "review_requested"
+  | "plumbing_urgency_classified"
+  | "dispatch_path_selected"
   | "lead_milestone_reached"
   | "customer_milestone_reached";
 

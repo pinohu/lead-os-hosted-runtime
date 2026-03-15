@@ -103,6 +103,8 @@ test("buildPublicIntakeResponse strips provider internals from the public payloa
     "hot",
     "leadKey",
     "nextStep",
+    "operatingModel",
+    "plumbing",
     "scoreBand",
     "stage",
     "success",
@@ -110,6 +112,31 @@ test("buildPublicIntakeResponse strips provider internals from the public payloa
   assert.equal("crm" in publicResponse, false);
   assert.equal("jobs" in publicResponse, false);
   assert.equal(publicResponse.nextStep.family, result.decision.family);
+});
+
+test("persistLead classifies urgent plumbing requests into dispatch-safe public metadata", async () => {
+  await resetRuntimeStore();
+  const result = await persistLead({
+    source: "contact_form",
+    email: "plumbing@test.com",
+    phone: "5551234567",
+    firstName: "Pipe",
+    niche: "plumbing",
+    service: "burst pipe",
+    message: "Emergency burst pipe flooding the basement right now",
+    wantsBooking: true,
+    dryRun: true,
+  });
+
+  assert.equal(result.decision.operatingModel, "plumbing-dispatch");
+  assert.equal(result.decision.plumbing?.urgencyBand, "emergency-now");
+  assert.equal(result.decision.plumbing?.dispatchMode, "dispatch-now");
+  assert.equal((result.record.metadata.plumbing as { urgencyBand?: string })?.urgencyBand, "emergency-now");
+
+  const publicResponse = buildPublicIntakeResponse(result);
+  assert.equal(publicResponse.plumbing?.urgencyBand, "emergency-now");
+  assert.equal(publicResponse.plumbing?.dispatchMode, "dispatch-now");
+  assert.match(publicResponse.nextStep.message, /urgent plumbing demand/i);
 });
 
 test("recent replays do not create duplicate booking jobs or refire side effects", async () => {

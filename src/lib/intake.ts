@@ -1,5 +1,6 @@
 import { buildImmediateFollowupPlan } from "./automation.ts";
 import { decideNextStep } from "./orchestrator.ts";
+import { classifyPlumbingLead, isPlumbingLead } from "./plumbing-os.ts";
 import {
   createBookingAction,
   emitWorkflowAction,
@@ -12,7 +13,7 @@ import {
   sendWhatsAppAction,
   syncLeadToCrm,
 } from "./providers.ts";
-import type { LeadStage } from "./runtime-schema.ts";
+import type { LeadStage, PlumbingLeadContext } from "./runtime-schema.ts";
 import type { CustomerMilestoneId, LeadMilestoneId } from "./runtime-schema.ts";
 import {
   appendEvents,
@@ -57,6 +58,13 @@ export interface HostedLeadPayload {
   company?: string;
   service?: string;
   niche?: string;
+  state?: string;
+  county?: string;
+  city?: string;
+  zip?: string;
+  propertyType?: string;
+  urgencyHint?: string;
+  issueType?: string;
   blueprintId?: string;
   stepId?: string;
   experimentId?: string;
@@ -108,6 +116,13 @@ export interface PublicIntakeResponse {
   hot: boolean;
   scoreBand: "low" | "medium" | "high";
   stage: LeadStage;
+  operatingModel?: "generic-growth" | "plumbing-dispatch";
+  plumbing?: {
+    urgencyBand: PlumbingLeadContext["urgencyBand"];
+    issueType: PlumbingLeadContext["issueType"];
+    dispatchMode: PlumbingLeadContext["dispatchMode"];
+    propertyType: PlumbingLeadContext["propertyType"];
+  };
   nextStep: {
     family: FunnelFamily;
     destination: string;
@@ -157,7 +172,38 @@ function computeLeadScore(payload: HostedLeadPayload) {
   const phoneBoost = payload.phone ? 15 : 0;
   const bookingBoost = payload.askingForQuote || payload.wantsBooking ? 25 : 0;
   const contentBoost = payload.contentEngaged ? 10 : 0;
-  return Math.max(0, Math.min(100, explicit + sourceBoost + phoneBoost + bookingBoost + contentBoost));
+  const plumbingBoost = isPlumbingLead(payload)
+    ? (() => {
+        const plumbing = classifyPlumbingLead({
+          niche: payload.niche,
+          service: payload.service,
+          message: payload.message,
+          askingForQuote: payload.askingForQuote,
+          wantsBooking: payload.wantsBooking,
+          prefersChat: payload.prefersChat,
+          metadata: buildPlumbingMetadata(payload),
+        });
+        return plumbing.urgencyBand === "emergency-now" ? 25
+          : plumbing.urgencyBand === "same-day" ? 18
+          : plumbing.urgencyBand === "commercial" ? 16
+          : plumbing.urgencyBand === "estimate" ? 8
+          : 4;
+      })()
+    : 0;
+  return Math.max(0, Math.min(100, explicit + sourceBoost + phoneBoost + bookingBoost + contentBoost + plumbingBoost));
+}
+
+function buildPlumbingMetadata(payload: HostedLeadPayload) {
+  return {
+    ...(payload.metadata ?? {}),
+    state: payload.state ?? payload.metadata?.state,
+    county: payload.county ?? payload.metadata?.county,
+    city: payload.city ?? payload.metadata?.city,
+    zip: payload.zip ?? payload.metadata?.zip,
+    propertyType: payload.propertyType ?? payload.metadata?.propertyType,
+    urgencyHint: payload.urgencyHint ?? payload.metadata?.urgencyHint,
+    issueType: payload.issueType ?? payload.metadata?.issueType,
+  };
 }
 
 function resolveLeadStage(payload: HostedLeadPayload): LeadStage {
@@ -319,11 +365,22 @@ function resolveScoreBand(score: number): PublicIntakeResponse["scoreBand"] {
 }
 
 function buildPublicNextStep(result: IntakeResult): PublicIntakeResponse["nextStep"] {
+  const plumbingMessage = result.decision.plumbing
+    ? result.decision.plumbing.dispatchMode === "dispatch-now"
+      ? "We classified this as urgent plumbing demand and moved it into the fastest dispatch-ready path."
+      : result.decision.plumbing.dispatchMode === "same-day-booking"
+      ? "We classified this as same-day plumbing demand and prepared the fastest booking path."
+      : result.decision.plumbing.dispatchMode === "commercial-intake"
+      ? "We classified this as commercial plumbing demand and prepared a higher-context intake path."
+      : result.decision.plumbing.dispatchMode === "triage"
+      ? "We classified this as a plumbing request that benefits from guided triage before booking."
+      : "We prepared the clearest estimate path for this plumbing request."
+    : null;
   const familyCopy: Record<FunnelFamily, string> = {
     "lead-magnet": "We captured your request and prepared the fastest relevant next step.",
-    qualification: result.hot
+    qualification: plumbingMessage ?? (result.hot
       ? "We are moving you into the fastest qualification and booking path."
-      : "We captured your details and prepared the best next qualification step.",
+      : "We captured your details and prepared the best next qualification step."),
     chat: "We prepared the fastest conversation path for your request.",
     webinar: "We prepared the next step so you can keep moving without repeating yourself.",
     authority: "We prepared the clearest next step to help you evaluate the offer.",
@@ -350,6 +407,15 @@ export function buildPublicIntakeResponse(result: IntakeResult): PublicIntakeRes
     hot: result.hot,
     scoreBand: resolveScoreBand(result.score),
     stage: result.stage,
+    operatingModel: result.decision.operatingModel,
+    plumbing: result.decision.plumbing
+      ? {
+          urgencyBand: result.decision.plumbing.urgencyBand,
+          issueType: result.decision.plumbing.issueType,
+          dispatchMode: result.decision.plumbing.dispatchMode,
+          propertyType: result.decision.plumbing.propertyType,
+        }
+      : undefined,
     nextStep: buildPublicNextStep(result),
   };
 }
@@ -389,10 +455,13 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
   const existingRecord = await getLeadRecord(leadKey);
   const existing = Boolean(existingRecord);
   const replayed = isRecentReplay(buildReplayKey(payload, normalizedEmail, normalizedPhone));
+  const plumbingMetadata = buildPlumbingMetadata(payload);
   const decision = decideNextStep({
     source: payload.source,
     service: payload.service,
     niche: payload.niche,
+    message: payload.message,
+    metadata: plumbingMetadata,
     preferredFamily: payload.preferredFamily,
     hasEmail: Boolean(normalizedEmail),
     hasPhone: Boolean(normalizedPhone),
@@ -455,7 +524,12 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
       leadMilestones,
       customerMilestones,
     },
-    metadata: payload.metadata ?? {},
+    metadata: {
+      ...(payload.metadata ?? {}),
+      ...plumbingMetadata,
+      plumbing: decision.plumbing ?? null,
+      operatingModel: decision.operatingModel,
+    },
   });
 
   const events = [
@@ -477,7 +551,24 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
       family: decision.family,
       destination: decision.destination,
       ctaLabel: decision.ctaLabel,
+      operatingModel: decision.operatingModel,
     }),
+    ...(decision.plumbing
+      ? [
+          createCanonicalEvent(trace, "plumbing_urgency_classified", "internal", "CLASSIFIED", {
+            urgencyBand: decision.plumbing.urgencyBand,
+            issueType: decision.plumbing.issueType,
+            dispatchMode: decision.plumbing.dispatchMode,
+            propertyType: decision.plumbing.propertyType,
+            confidence: decision.plumbing.confidence,
+          }),
+          createCanonicalEvent(trace, "dispatch_path_selected", "internal", "DISPATCH_PATH", {
+            urgencyBand: decision.plumbing.urgencyBand,
+            dispatchMode: decision.plumbing.dispatchMode,
+            routingReasons: decision.plumbing.routingReasons,
+          }),
+        ]
+      : []),
     ...leadMilestones.map((milestoneId) =>
       createCanonicalEvent(trace, "lead_milestone_reached", "internal", "MILESTONE", {
         milestoneId,
