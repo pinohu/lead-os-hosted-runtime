@@ -1164,7 +1164,7 @@ export async function sendEmailAction(payload: {
     const from = getEmailSenderAddress();
     const replyTo = getEmailReplyToAddress();
     const response = await postJson(
-      "https://api.emailit.com/v2/emails",
+      "https://api.emailit.com/v1/emails",
       {
         from,
         to: payload.to,
@@ -1172,9 +1172,9 @@ export async function sendEmailAction(payload: {
         html: payload.html,
         text: stripHtml(payload.html),
         ...(replyTo ? { reply_to: replyTo } : {}),
-        meta: {
-          leadKey: payload.trace.leadKey,
-          blueprintId: payload.trace.blueprintId,
+        headers: {
+          ...(payload.trace.leadKey ? { "X-LeadOS-Lead-Key": payload.trace.leadKey } : {}),
+          ...(payload.trace.blueprintId ? { "X-LeadOS-Blueprint-Id": payload.trace.blueprintId } : {}),
         },
       },
       { Authorization: `Bearer ${process.env.EMAILIT_API_KEY ?? embeddedSecrets.emailit.apiKey}` },

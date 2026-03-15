@@ -52,7 +52,7 @@ test("sendEmailAction returns a graceful failure when delivery throws", async ()
   }
 });
 
-test("sendEmailAction uses Emailit v2 and derives a verified-domain sender when support email is consumer-hosted", async () => {
+test("sendEmailAction uses the documented Emailit send endpoint and derives a verified-domain sender when support email is consumer-hosted", async () => {
   const originalFetch = globalThis.fetch;
   const originalEnv = {
     LEAD_OS_ENABLE_LIVE_SENDS: process.env.LEAD_OS_ENABLE_LIVE_SENDS,
@@ -103,14 +103,15 @@ test("sendEmailAction uses Emailit v2 and derives a verified-domain sender when 
 
     assert.equal(result.ok, true);
     assert.equal(fetchCalls.length, 1);
-    assert.equal(fetchCalls[0]?.url, "https://api.emailit.com/v2/emails");
+    assert.equal(fetchCalls[0]?.url, "https://api.emailit.com/v1/emails");
 
     const body = JSON.parse(String(fetchCalls[0]?.init?.body ?? "{}")) as Record<string, unknown>;
     assert.equal(body.reply_to, "polycarpohu@gmail.com");
     assert.equal(body.from, "Lead OS Hosted <hello@yourdeputy.com>");
     assert.equal(body.text, "Test");
-    assert.ok("meta" in body);
+    assert.ok("headers" in body);
     assert.ok(!("metadata" in body));
+    assert.ok(!("meta" in body));
   } finally {
     globalThis.fetch = originalFetch;
 
