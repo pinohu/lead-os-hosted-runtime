@@ -165,6 +165,36 @@ export interface ProviderDispatchRequestRecord {
   updatedAt: string;
 }
 
+export type DeploymentInstallType = "widget" | "iframe" | "wordpress-plugin" | "hosted-link";
+export type DeploymentStatus = "planned" | "generated" | "live" | "paused" | "retired";
+
+export interface DeploymentRegistryRecord {
+  id: string;
+  recipe?: string;
+  entrypoint: string;
+  niche: string;
+  audience: string;
+  pageType: string;
+  installType: DeploymentInstallType;
+  status: DeploymentStatus;
+  domain?: string;
+  pageUrl?: string;
+  zip?: string;
+  city?: string;
+  providerId?: string;
+  providerLabel?: string;
+  hostedUrl: string;
+  bootEndpoint: string;
+  manifestEndpoint: string;
+  generatorEndpoint?: string;
+  pluginDownloadPath?: string;
+  notes?: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  updatedBy?: string;
+}
+
 const leadStore = new Map<string, StoredLeadRecord>();
 const eventStore: CanonicalEvent[] = [];
 const providerExecutionStore: ProviderExecutionRecord[] = [];
@@ -177,6 +207,7 @@ const operatorActionStore = new Map<string, OperatorActionRecord>();
 const intakeAttemptStore = new Map<string, IntakeAttemptRecord>();
 const executionTaskStore = new Map<string, ExecutionTaskRecord>();
 const providerDispatchRequestStore = new Map<string, ProviderDispatchRequestRecord>();
+const deploymentRegistryStore = new Map<string, DeploymentRegistryRecord>();
 
 let pool: Pool | null = null;
 let schemaReady: Promise<void> | null = null;
@@ -196,7 +227,8 @@ type AitableRuntimeKind =
   | "operator-action"
   | "intake-attempt"
   | "execution-task"
-  | "provider-dispatch-request";
+  | "provider-dispatch-request"
+  | "deployment-registry";
 
 type AitableRuntimeEntry = {
   kind: AitableRuntimeKind;
@@ -213,7 +245,8 @@ type AitableRuntimeEntry = {
     | OperatorActionRecord
     | IntakeAttemptRecord
     | ExecutionTaskRecord
-    | ProviderDispatchRequestRecord;
+    | ProviderDispatchRequestRecord
+    | DeploymentRegistryRecord;
 };
 
 function getDatabaseUrl() {
@@ -358,6 +391,13 @@ async function ensureSchema() {
           payload JSONB NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS lead_os_deployment_registry (
+          id TEXT PRIMARY KEY,
+          status TEXT NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL,
+          payload JSONB NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS lead_os_events_lead_idx
           ON lead_os_events (lead_key, timestamp DESC);
         CREATE INDEX IF NOT EXISTS lead_os_provider_exec_lead_idx
@@ -372,6 +412,9 @@ async function ensureSchema() {
           ON lead_os_execution_tasks (status, updated_at ASC);
         CREATE INDEX IF NOT EXISTS lead_os_provider_dispatch_requests_provider_idx
           ON lead_os_provider_dispatch_requests (provider_id, updated_at DESC);
+
+        CREATE INDEX IF NOT EXISTS lead_os_deployment_registry_status_idx
+          ON lead_os_deployment_registry (status, updated_at DESC);
       `);
     } catch (error) {
       schemaReady = null;
@@ -1313,6 +1356,120 @@ export async function getProviderDispatchRequests(filters?: {
 export async function getProviderDispatchRequestById(requestId: string) {
   const records = await getProviderDispatchRequests();
   return records.find((record) => record.id === requestId);
+}
+
+export async function upsertDeploymentRegistryRecord(
+  record: Omit<DeploymentRegistryRecord, "createdAt" | "updatedAt"> & {
+    createdAt?: string;
+    updatedAt?: string;
+  },
+) {
+  const existing = deploymentRegistryStore.get(record.id) ?? await getDeploymentRegistryRecordById(record.id);
+  const normalizedRecord: DeploymentRegistryRecord = {
+    ...record,
+    createdAt: existing?.createdAt ?? record.createdAt ?? new Date().toISOString(),
+    updatedAt: record.updatedAt ?? new Date().toISOString(),
+  };
+  deploymentRegistryStore.set(normalizedRecord.id, normalizedRecord);
+
+  const activePool = getPool();
+  if (!activePool && runtimeMode() === "aitable") {
+    await appendAitableRuntimeEntry("deployment-registry", normalizedRecord.id, normalizedRecord);
+    return normalizedRecord;
+  }
+  if (!activePool) {
+    return normalizedRecord;
+  }
+
+  await ensureSchema();
+  await queryPostgres(
+    `
+      INSERT INTO lead_os_deployment_registry (id, status, updated_at, payload)
+      VALUES ($1, $2, $3::timestamptz, $4::jsonb)
+      ON CONFLICT (id) DO UPDATE SET
+        status = EXCLUDED.status,
+        updated_at = EXCLUDED.updated_at,
+        payload = EXCLUDED.payload
+    `,
+    [
+      normalizedRecord.id,
+      normalizedRecord.status,
+      normalizedRecord.updatedAt,
+      JSON.stringify(normalizedRecord),
+    ],
+  );
+  return normalizedRecord;
+}
+
+export async function getDeploymentRegistryRecordById(id: string) {
+  const records = await getDeploymentRegistryRecords({ id });
+  return records[0];
+}
+
+export async function getDeploymentRegistryRecords(filters?: {
+  id?: string;
+  status?: DeploymentStatus;
+  pageType?: string;
+  audience?: string;
+}) {
+  const matches = (record: DeploymentRegistryRecord) =>
+    (!filters?.id || record.id === filters.id) &&
+    (!filters?.status || record.status === filters.status) &&
+    (!filters?.pageType || record.pageType === filters.pageType) &&
+    (!filters?.audience || record.audience === filters.audience);
+
+  if (!getPool() && runtimeMode() === "aitable") {
+    const entries = await getAitableRuntimeEntries();
+    const latestById = new Map<string, DeploymentRegistryRecord>();
+    for (const entry of entries) {
+      if (entry.kind !== "deployment-registry") continue;
+      const record = entry.payload as DeploymentRegistryRecord;
+      const existing = latestById.get(record.id);
+      if (!existing || new Date(record.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
+        latestById.set(record.id, record);
+      }
+    }
+    const values = sortByUpdatedAt([...latestById.values()].filter(matches));
+    deploymentRegistryStore.clear();
+    for (const value of values) {
+      deploymentRegistryStore.set(value.id, value);
+    }
+    return values;
+  }
+  if (!getPool()) {
+    return sortByUpdatedAt([...deploymentRegistryStore.values()].filter(matches));
+  }
+
+  await ensureSchema();
+  const clauses: string[] = [];
+  const values: unknown[] = [];
+  if (filters?.id) {
+    values.push(filters.id);
+    clauses.push(`id = $${values.length}`);
+  }
+  if (filters?.status) {
+    values.push(filters.status);
+    clauses.push(`status = $${values.length}`);
+  }
+  if (filters?.pageType) {
+    values.push(filters.pageType);
+    clauses.push(`payload->>'pageType' = $${values.length}`);
+  }
+  if (filters?.audience) {
+    values.push(filters.audience);
+    clauses.push(`payload->>'audience' = $${values.length}`);
+  }
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+  const result = await queryPostgres<{ payload: DeploymentRegistryRecord }>(
+    `SELECT payload FROM lead_os_deployment_registry ${where} ORDER BY updated_at DESC`,
+    values,
+  );
+  const records = result.rows.map((row) => row.payload);
+  deploymentRegistryStore.clear();
+  for (const record of records) {
+    deploymentRegistryStore.set(record.id, record);
+  }
+  return records;
 }
 
 export async function upsertRuntimeConfig(

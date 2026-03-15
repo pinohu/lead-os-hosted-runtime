@@ -131,6 +131,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <Link href="/dashboard/providers" className="primary">
               Provider readiness
             </Link>
+            <Link href="/dashboard/deployments" className="secondary">
+              Deployment registry
+            </Link>
             <Link href="/dashboard/settings" className="secondary">
               Runtime settings
             </Link>

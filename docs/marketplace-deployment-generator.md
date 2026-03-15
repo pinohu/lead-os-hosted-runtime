@@ -7,6 +7,7 @@ LeadOS now exposes a deployment-grade integration stack for the plumbing marketp
 - `/api/embed/generate`
 - `/api/embed/generate-bulk`
 - `/api/embed/wordpress-plugin`
+- `/api/deployments`
 - `/deployments/plumbing`
 
 ## Endpoint roles
@@ -88,6 +89,15 @@ It returns:
 - a single-file PHP plugin
 - a shortcode contract
 - a direct download path for the generated plugin file
+
+### `/api/deployments`
+
+Use this as the rollout registry endpoint.
+
+It supports:
+- listing generated and live deployments
+- registering a generated deployment against a real domain or page
+- updating deployment status after QA, launch, pause, or retirement
 
 Add `format=csv` when the output needs to be consumed by spreadsheets, rollout sheets, or external provisioning tools.
 

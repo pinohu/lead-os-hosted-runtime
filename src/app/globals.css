@@ -1070,6 +1070,48 @@ button[disabled] {
   margin-top: 0;
 }
 
+.portal-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.portal-form-grid label,
+.panel label {
+  display: grid;
+  gap: 0.45rem;
+  color: rgba(20, 33, 29, 0.82);
+  font-size: 0.95rem;
+}
+
+.portal-form-grid input,
+.portal-form-grid select,
+.panel textarea,
+.panel input,
+.panel select {
+  width: 100%;
+  min-width: 0;
+  padding: 0.8rem 0.9rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(20, 33, 29, 0.14);
+  background: rgba(255, 255, 255, 0.82);
+  color: #14211d;
+}
+
+.panel textarea {
+  resize: vertical;
+}
+
+.portal-error {
+  color: #9a2817;
+  font-weight: 600;
+}
+
+.portal-success {
+  color: #1c6b4a;
+  font-weight: 600;
+}
+
 .page-shell {
   display: grid;
   gap: 24px;

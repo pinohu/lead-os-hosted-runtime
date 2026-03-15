@@ -52,6 +52,11 @@ export default async function DeploymentBlueprintPage({ searchParams }: Deployme
           <span className="signal-pill">City: {city}</span>
           <span className="signal-pill">Widget: {activeDeployment.widgetPreset.label}</span>
         </div>
+        <div className="cta-row">
+          <Link href="/dashboard/deployments" className="secondary">
+            Open rollout registry
+          </Link>
+        </div>
       </section>
 
       <section className="grid two">
