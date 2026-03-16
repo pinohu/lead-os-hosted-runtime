@@ -107,13 +107,13 @@ export default async function OperatorManualPage() {
 
               <article className="stack-card manual-sop-panel">
                 <p className="eyebrow">Key surfaces</p>
-                <div className="manual-surface-grid">
+                <div className="manual-surface-list">
                   {sop.surfaces.map((item) => (
-                    <article key={`${sop.id}:${item.href}`} className="stack-card manual-surface-card">
-                      <div className="portal-status-row">
+                    <article key={`${sop.id}:${item.href}`} className="manual-surface-row">
+                      <div className="manual-surface-head">
+                        <h3>{item.label}</h3>
                         <span className="portal-chip">{item.audience}</span>
                       </div>
-                      <h3>{item.label}</h3>
                       <p className="manual-link-path">{item.href}</p>
                       <p className="muted portal-breakable">{item.purpose}</p>
                       <div className="cta-row">

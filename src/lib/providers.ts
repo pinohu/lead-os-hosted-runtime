@@ -1143,7 +1143,7 @@ export async function syncLeadToCrm(payload: Record<string, unknown>) {
   const firstName = String(payload.firstName ?? "Lead");
   const lastName = String(payload.lastName ?? ".");
   const email = String(payload.email ?? "");
-  const result = await createContact({
+  const primaryPayload = {
     first_name: firstName,
     last_name: lastName,
     email,
@@ -1153,7 +1153,30 @@ export async function syncLeadToCrm(payload: Record<string, unknown>) {
     tags: [String(payload.service ?? "lead-capture"), String(payload.niche ?? "general")],
     notes: [`Lead key: ${String(payload.leadKey ?? "")}`, `Stage: ${String(payload.stage ?? "captured")}`],
     send_welcome_email: false,
-  });
+  };
+  let result;
+  try {
+    result = await createContact(primaryPayload);
+  } catch (error) {
+    result = await createContact({
+      first_name: firstName,
+      last_name: lastName,
+      email,
+      phone: payload.phone ? String(payload.phone) : undefined,
+      send_welcome_email: false,
+    });
+    return {
+      ok: true,
+      provider: "SuiteDash",
+      mode: "live",
+      detail: `CRM synced after fallback payload: ${result.message ?? "Contact created"}`,
+      payload: {
+        fallbackApplied: true,
+        primaryError: error instanceof Error ? error.message : "Primary payload failed",
+        data: result.data as Record<string, unknown> | undefined,
+      },
+    } satisfies ProviderResult;
+  }
   return {
     ok: true,
     provider: "SuiteDash",
@@ -1294,24 +1317,32 @@ export async function sendWhatsAppAction(payload: { phone: string; body: string 
   if (!provider.configured || !provider.live) {
     return dryRunResult("WbizTool", "WhatsApp message prepared", { to: payload.phone });
   }
+  try {
+    const response = await postJson(
+      "https://app.wbiztool.com/api/send",
+      {
+        instance_id: process.env.WBIZTOOL_INSTANCE_ID ?? embeddedSecrets.wbiztool.instanceId,
+        to: payload.phone.replace(/[^0-9+]/g, "").replace(/^\+/, ""),
+        type: "text",
+        body: payload.body,
+      },
+      { apikey: process.env.WBIZTOOL_API_KEY ?? embeddedSecrets.wbiztool.apiKey },
+    );
 
-  const response = await postJson(
-    "https://app.wbiztool.com/api/send",
-    {
-      instance_id: process.env.WBIZTOOL_INSTANCE_ID ?? embeddedSecrets.wbiztool.instanceId,
-      to: payload.phone.replace(/[^0-9+]/g, "").replace(/^\+/, ""),
-      type: "text",
-      body: payload.body,
-    },
-    { apikey: process.env.WBIZTOOL_API_KEY ?? embeddedSecrets.wbiztool.apiKey },
-  );
-
-  return {
-    ok: response.ok,
-    provider: "WbizTool",
-    mode: "live",
-    detail: response.ok ? "WhatsApp sent" : `WhatsApp failed: ${response.status}`,
-  } satisfies ProviderResult;
+    return {
+      ok: response.ok,
+      provider: "WbizTool",
+      mode: "live",
+      detail: response.ok ? "WhatsApp sent" : `WhatsApp failed: ${response.status}`,
+    } satisfies ProviderResult;
+  } catch (error) {
+    return {
+      ok: false,
+      provider: "WbizTool",
+      mode: "live",
+      detail: error instanceof Error && error.message ? `WhatsApp failed: ${error.message}` : "WhatsApp failed",
+    } satisfies ProviderResult;
+  }
 }
 
 export async function sendSmsAction(payload: { phone: string; body: string }) {
@@ -1404,7 +1435,9 @@ export async function emitWorkflowAction(eventName: string, payload: Record<stri
     return dryRunResult("n8n", `${eventName} workflow prepared`, payload);
   }
 
-  const webhookUrl = getN8nMappedWebhookUrl(eventName, payload) ?? getN8nWebhookUrl();
+  const mappedWebhookUrl = getN8nMappedWebhookUrl(eventName, payload);
+  const defaultWebhookUrl = getN8nWebhookUrl();
+  const webhookUrl = mappedWebhookUrl ?? defaultWebhookUrl;
   if (!webhookUrl) {
     return {
       ok: true,
@@ -1423,6 +1456,20 @@ export async function emitWorkflowAction(eventName: string, payload: Record<stri
   }
 
   const response = await postJson(webhookUrl, { eventName, payload });
+  if (!response.ok && mappedWebhookUrl && defaultWebhookUrl && mappedWebhookUrl !== defaultWebhookUrl) {
+    const fallbackResponse = await postJson(defaultWebhookUrl, { eventName, payload });
+    return {
+      ok: fallbackResponse.ok,
+      provider: "n8n",
+      mode: "live",
+      detail: fallbackResponse.ok
+        ? `Workflow emitted to fallback webhook ${defaultWebhookUrl}`
+        : `Workflow failed: ${fallbackResponse.status}`,
+      payload: fallbackResponse.ok
+        ? { fallbackWebhookUrl: defaultWebhookUrl, primaryWebhookUrl: mappedWebhookUrl }
+        : { fallbackWebhookUrl: defaultWebhookUrl, primaryWebhookUrl: mappedWebhookUrl, response: fallbackResponse.json ?? fallbackResponse.text },
+    } satisfies ProviderResult;
+  }
 
   return {
     ok: response.ok,

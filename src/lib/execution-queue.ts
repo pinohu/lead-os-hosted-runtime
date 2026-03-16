@@ -305,6 +305,52 @@ async function processWhatsAppTask(task: ExecutionTaskRecord) {
     body: String(whatsappPayload.body ?? ""),
   }), task.payload ?? undefined);
 
+  if (!result.ok && whatsappPayload.phone && whatsappPayload.body) {
+    const smsFallback = await safelyRunProviderAction("Easy Text Marketing", () => sendSmsAction({
+      phone: String(whatsappPayload.phone ?? ""),
+      body: String(whatsappPayload.body ?? ""),
+    }), task.payload ?? undefined);
+
+    if (smsFallback.ok) {
+      await recordProviderExecution({
+        leadKey: task.leadKey,
+        provider: smsFallback.provider,
+        kind: "sms",
+        ok: true,
+        mode: smsFallback.mode,
+        detail: `WhatsApp primary failed; SMS fallback sent. Primary error: ${result.detail}`,
+        payload: {
+          primaryProvider: result.provider,
+          primaryError: result.detail,
+          fallback: smsFallback.payload,
+        },
+      });
+      if (trace) {
+        await appendEvents([
+          createCanonicalEvent(trace, "followup_sms_sent", "sms", "SENT"),
+        ]);
+      }
+
+      await finalizeExecutionTask(task.id, {
+        status: "completed",
+        lastError: undefined,
+        payload: {
+          ...(task.payload ?? {}),
+          result: {
+            ...smsFallback,
+            detail: `WhatsApp primary failed; SMS fallback sent. Primary error: ${result.detail}`,
+          },
+        },
+      });
+      return {
+        taskId: task.id,
+        kind: task.kind,
+        ok: true,
+        detail: `WhatsApp primary failed; SMS fallback sent. Primary error: ${result.detail}`,
+      };
+    }
+  }
+
   await recordProviderExecution({
     leadKey: task.leadKey,
     provider: result.provider,

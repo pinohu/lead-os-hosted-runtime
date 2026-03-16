@@ -45,7 +45,12 @@ export async function createContact(payload: SuiteDashContactPayload) {
   });
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok && !String(data?.message ?? "").toLowerCase().includes("already exists")) {
+  const message = String(data?.message ?? "").toLowerCase();
+  const duplicateLike =
+    message.includes("already exists") ||
+    message.includes("duplicate") ||
+    (message.includes("exists") && message.includes("contact"));
+  if (!res.ok && !duplicateLike) {
     throw new Error(String(data?.message ?? "Failed to create contact"));
   }
 
