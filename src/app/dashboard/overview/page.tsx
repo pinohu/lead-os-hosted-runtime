@@ -84,6 +84,9 @@ export default async function OverviewDashboardPage() {
             <Link href="/dashboard" className="primary">
               Open dispatch desk
             </Link>
+            <Link href="/dashboard/manual" className="secondary">
+              Operations manual
+            </Link>
             <Link href="/dashboard/alerts" className="secondary">
               Alert operations
             </Link>

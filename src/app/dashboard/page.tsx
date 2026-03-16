@@ -142,6 +142,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <Link href="/dashboard/overview" className="primary">
               System overview
             </Link>
+            <Link href="/dashboard/manual" className="secondary">
+              Operations manual
+            </Link>
             <Link href="/dashboard/providers" className="primary">
               Provider readiness
             </Link>
