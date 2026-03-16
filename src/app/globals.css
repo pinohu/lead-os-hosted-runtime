@@ -1057,6 +1057,11 @@ button[disabled] {
   .value-card-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .deployment-preview-grid {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    align-items: start;
+  }
 }
 
 @media (max-width: 719px) {
@@ -1405,6 +1410,65 @@ button[disabled] {
 
 .code-card code {
   font: inherit;
+}
+
+.deployment-preview-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.deployment-preview-panel {
+  padding: 24px;
+}
+
+.deployment-preview-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.deployment-preview-visual {
+  display: grid;
+  gap: 12px;
+}
+
+.deployment-visual-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(20, 33, 29, 0.1);
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.deployment-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.deployment-frame {
+  width: 100%;
+  min-height: 380px;
+  border: 1px solid rgba(20, 33, 29, 0.1);
+  border-radius: 20px;
+  background: #fff;
+}
+
+.deployment-widget-preview {
+  display: grid;
+  gap: 14px;
+}
+
+.deployment-widget-shell {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(20, 33, 29, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 250, 243, 0.92), rgba(255, 250, 243, 0.82)),
+    radial-gradient(circle at top left, rgba(196, 99, 45, 0.14), transparent 16rem);
 }
 
 .signal-pill-grid,
