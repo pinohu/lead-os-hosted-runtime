@@ -41,10 +41,34 @@ type ZipAcquisitionCostRow = {
   acquisitionCost: string;
 };
 
+type NotificationRecipientRow = {
+  id: string;
+  label: string;
+  email: string;
+  phone: string;
+  active: boolean;
+  emailEnabled: boolean;
+  smsEnabled: boolean;
+  whatsappEnabled: boolean;
+  ruleIds: string;
+};
+
 type Props = {
   initialConfig: OperationalRuntimeConfig;
   trafftServices: TrafftServiceOption[];
 };
+
+const OBSERVABILITY_RULE_OPTIONS = [
+  { id: "dispatch-backlog", label: "Dispatch backlog" },
+  { id: "provider-response-latency", label: "Provider response latency" },
+  { id: "execution-failures", label: "Execution failures" },
+  { id: "zip-cell-liquidity", label: "ZIP-cell liquidity" },
+  { id: "provider-profitability", label: "Provider profitability" },
+  { id: "generated-rollout-stall", label: "Generated rollout stall" },
+  { id: "live-missing-url", label: "Live deployment missing URL" },
+  { id: "stale-rollout", label: "Stale rollout" },
+  { id: "provider-capability-health", label: "Provider capability health" },
+];
 
 function createServiceMapRow(label = "", serviceId = ""): ServiceMapRow {
   return {
@@ -101,6 +125,25 @@ function createZipAcquisitionCostRow(
   };
 }
 
+function createNotificationRecipientRow(
+  row: Partial<NotificationRecipientRow> = {},
+): NotificationRecipientRow {
+  return {
+    id:
+      row.id
+      ?? globalThis.crypto?.randomUUID?.()
+      ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    label: row.label ?? "",
+    email: row.email ?? "",
+    phone: row.phone ?? "",
+    active: row.active ?? true,
+    emailEnabled: row.emailEnabled ?? Boolean(row.email),
+    smsEnabled: row.smsEnabled ?? false,
+    whatsappEnabled: row.whatsappEnabled ?? false,
+    ruleIds: row.ruleIds ?? "",
+  };
+}
+
 function buildServiceMapRows(serviceMap: Record<string, string>) {
   return Object.entries(serviceMap).map(([label, serviceId]) => createServiceMapRow(label, serviceId));
 }
@@ -141,6 +184,22 @@ function buildZipAcquisitionCostRows(costs: Record<string, number>) {
   );
 }
 
+function buildNotificationRecipientRows(
+  recipients: OperationalRuntimeConfig["observability"]["notifications"]["recipients"],
+) {
+  return recipients.map((recipient) => createNotificationRecipientRow({
+    id: recipient.id,
+    label: recipient.label,
+    email: recipient.email ?? "",
+    phone: recipient.phone ?? "",
+    active: recipient.active,
+    emailEnabled: recipient.channels.includes("email"),
+    smsEnabled: recipient.channels.includes("sms"),
+    whatsappEnabled: recipient.channels.includes("whatsapp"),
+    ruleIds: recipient.ruleIds.join(", "),
+  }));
+}
+
 function normalizeServiceLabel(value: string) {
   return value.trim().toLowerCase();
 }
@@ -167,6 +226,11 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
   const [isPending, startTransition] = useTransition();
   const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [observabilityDefaultChannel, setObservabilityDefaultChannel] = useState(initialConfig.observability.notifications.defaultChannel);
+  const [observabilityCooldownMinutes, setObservabilityCooldownMinutes] = useState(String(initialConfig.observability.notifications.cooldownMinutes));
+  const [notificationRecipientRows, setNotificationRecipientRows] = useState<NotificationRecipientRow[]>(() =>
+    buildNotificationRecipientRows(initialConfig.observability.notifications.recipients)
+  );
   const [trafftPublicBookingUrl, setTrafftPublicBookingUrl] = useState(initialConfig.trafft.publicBookingUrl ?? "");
   const [trafftDefaultServiceId, setTrafftDefaultServiceId] = useState(initialConfig.trafft.defaultServiceId ?? "");
   const [trafftServiceMapRows, setTrafftServiceMapRows] = useState<ServiceMapRow[]>(() => buildServiceMapRows(initialConfig.trafft.serviceMap));
@@ -232,6 +296,18 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
     setZipAcquisitionCostRows((rows) => [...rows, createZipAcquisitionCostRow()]);
   }
 
+  function updateNotificationRecipientRow(rowId: string, patch: Partial<NotificationRecipientRow>) {
+    setNotificationRecipientRows((rows) => rows.map((row) => (row.id === rowId ? { ...row, ...patch } : row)));
+  }
+
+  function removeNotificationRecipientRow(rowId: string) {
+    setNotificationRecipientRows((rows) => rows.filter((row) => row.id !== rowId));
+  }
+
+  function addNotificationRecipientRow() {
+    setNotificationRecipientRows((rows) => [...rows, createNotificationRecipientRow()]);
+  }
+
   function addSuggestedMapping(service: TrafftServiceOption) {
     const normalizedLabel = normalizeServiceLabel(service.label);
     setTrafftServiceMapRows((rows) => {
@@ -255,8 +331,57 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
 
     const parsedServiceMap: Record<string, string> = {};
     const seenLabels = new Set<string>();
+    const parsedNotificationRecipients: OperationalRuntimeConfig["observability"]["notifications"]["recipients"] = [];
     const parsedDispatchProviders: OperationalRuntimeConfig["dispatch"]["providers"] = [];
     const parsedZipAcquisitionCosts: Record<string, number> = {};
+    const parsedCooldownMinutes = Number(observabilityCooldownMinutes || "0");
+
+    if (!Number.isFinite(parsedCooldownMinutes) || parsedCooldownMinutes < 0) {
+      setError("Observability cooldown must be a non-negative number of minutes.");
+      return;
+    }
+
+    for (const row of notificationRecipientRows) {
+      const label = row.label.trim();
+      const email = row.email.trim().toLowerCase();
+      const phone = row.phone.trim();
+      const channels = [
+        ...(row.emailEnabled ? ["email" as const] : []),
+        ...(row.smsEnabled ? ["sms" as const] : []),
+        ...(row.whatsappEnabled ? ["whatsapp" as const] : []),
+      ];
+
+      if (!label && !email && !phone && row.ruleIds.trim().length === 0) {
+        continue;
+      }
+
+      if (!label) {
+        setError("Each observability recipient needs a label.");
+        return;
+      }
+      if (channels.includes("email") && !email) {
+        setError(`Observability recipient "${label}" is missing an email address for email paging.`);
+        return;
+      }
+      if ((channels.includes("sms") || channels.includes("whatsapp")) && !phone) {
+        setError(`Observability recipient "${label}" needs a phone number for SMS or WhatsApp paging.`);
+        return;
+      }
+      if (channels.length === 0) {
+        setError(`Observability recipient "${label}" needs at least one notification channel.`);
+        return;
+      }
+
+      parsedNotificationRecipients.push({
+        id: row.id,
+        label,
+        email: email || undefined,
+        phone: phone || undefined,
+        active: row.active,
+        channels,
+        ruleIds: normalizeList(row.ruleIds),
+      });
+    }
 
     for (const row of trafftServiceMapRows) {
       const label = row.label.trim();
@@ -348,6 +473,13 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          observability: {
+            notifications: {
+              defaultChannel: observabilityDefaultChannel,
+              cooldownMinutes: parsedCooldownMinutes,
+              recipients: parsedNotificationRecipients,
+            },
+          },
           trafft: {
             publicBookingUrl: trafftPublicBookingUrl,
             defaultServiceId: trafftDefaultServiceId,
@@ -397,6 +529,143 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
 
       {error ? <p className="status-banner error">{error}</p> : null}
       {status ? <p className="status-banner success">{status}</p> : null}
+
+      <div className="panel">
+        <p className="eyebrow">Observability paging</p>
+        <div className="form-grid">
+          <label>
+            Default notification channel
+            <select value={observabilityDefaultChannel} onChange={(event) =>
+              setObservabilityDefaultChannel(event.target.value as "email" | "sms" | "whatsapp")
+            }>
+              <option value="email">Email</option>
+              <option value="sms">SMS</option>
+              <option value="whatsapp">WhatsApp</option>
+            </select>
+          </label>
+          <label>
+            Cooldown minutes
+            <input
+              value={observabilityCooldownMinutes}
+              onChange={(event) => setObservabilityCooldownMinutes(event.target.value)}
+              inputMode="numeric"
+              placeholder="30"
+            />
+          </label>
+        </div>
+
+        <div className="settings-section">
+          <div className="settings-section__header">
+            <div>
+              <h3>Recipients and rule ownership</h3>
+              <p className="muted">
+                Route triggered observability rules to the operators who should be paged. Leave rule IDs empty
+                to receive every triggered rule. Cooldowns are enforced per rule, recipient, and channel.
+              </p>
+            </div>
+            <button type="button" className="secondary" onClick={addNotificationRecipientRow}>
+              Add recipient
+            </button>
+          </div>
+
+          {notificationRecipientRows.length > 0 ? (
+            <div className="mapping-stack">
+              {notificationRecipientRows.map((row) => (
+                <div key={row.id} className="mapping-row">
+                  <div className="form-grid">
+                    <label>
+                      Recipient label
+                      <input
+                        value={row.label}
+                        onChange={(event) => updateNotificationRecipientRow(row.id, { label: event.target.value })}
+                        placeholder="Primary dispatch lead"
+                      />
+                    </label>
+                    <label>
+                      Email
+                      <input
+                        value={row.email}
+                        onChange={(event) => updateNotificationRecipientRow(row.id, { email: event.target.value })}
+                        placeholder="ops@example.com"
+                      />
+                    </label>
+                    <label>
+                      Phone
+                      <input
+                        value={row.phone}
+                        onChange={(event) => updateNotificationRecipientRow(row.id, { phone: event.target.value })}
+                        placeholder="+15555550123"
+                      />
+                    </label>
+                    <label className="span-two">
+                      Rule IDs
+                      <input
+                        value={row.ruleIds}
+                        onChange={(event) => updateNotificationRecipientRow(row.id, { ruleIds: event.target.value })}
+                        placeholder="execution-failures, provider-response-latency"
+                      />
+                      <span className="muted form-help">
+                        Available rules: {OBSERVABILITY_RULE_OPTIONS.map((rule) => rule.id).join(", ")}
+                      </span>
+                    </label>
+                  </div>
+                  <div className="mapping-row__actions">
+                    <label className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={row.active}
+                        onChange={(event) => updateNotificationRecipientRow(row.id, { active: event.target.checked })}
+                      />
+                      Active
+                    </label>
+                    <label className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={row.emailEnabled}
+                        onChange={(event) => updateNotificationRecipientRow(row.id, { emailEnabled: event.target.checked })}
+                      />
+                      Email
+                    </label>
+                    <label className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={row.smsEnabled}
+                        onChange={(event) => updateNotificationRecipientRow(row.id, { smsEnabled: event.target.checked })}
+                      />
+                      SMS
+                    </label>
+                    <label className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={row.whatsappEnabled}
+                        onChange={(event) => updateNotificationRecipientRow(row.id, { whatsappEnabled: event.target.checked })}
+                      />
+                      WhatsApp
+                    </label>
+                    <button type="button" className="secondary" onClick={() => removeNotificationRecipientRow(row.id)}>
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="stack-grid">
+              <p className="muted">
+                No paging recipients are configured yet. If you leave this empty, LeadOS will fall back to the
+                configured support inbox for email-only paging when one exists.
+              </p>
+              <ul className="check-list">
+                {OBSERVABILITY_RULE_OPTIONS.map((rule) => (
+                  <li key={rule.id}>
+                    <strong>{rule.label}</strong>: <span className="portal-breakable">{rule.id}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="panel">
         <p className="eyebrow">Trafft</p>

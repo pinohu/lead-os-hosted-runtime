@@ -50,8 +50,16 @@ export default async function RuntimeSettingsPage() {
           <p className="eyebrow">Coverage summary</p>
           <ul className="journey-rail">
             <li>
+              <strong>Alert recipients</strong>
+              <span>{summary.observability.activeRecipients}</span>
+            </li>
+            <li>
               <strong>Trafft mappings</strong>
               <span>{summary.trafft.mappedServices}</span>
+            </li>
+            <li>
+              <strong>Alert cooldown</strong>
+              <span>{summary.observability.cooldownMinutes}m</span>
             </li>
             <li>
               <strong>Dispatch providers</strong>
@@ -82,6 +90,19 @@ export default async function RuntimeSettingsPage() {
       </section>
 
       <section className="grid two">
+        <article className="panel">
+          <p className="eyebrow">Observability paging</p>
+          <h2>Alert delivery routing</h2>
+          <ul className="check-list">
+            <li>Default alert channel: {summary.observability.defaultChannel}</li>
+            <li>Cooldown minutes: {summary.observability.cooldownMinutes}</li>
+            <li>Active recipients: {summary.observability.activeRecipients}</li>
+            <li>Email recipients: {summary.observability.emailRecipients}</li>
+            <li>SMS recipients: {summary.observability.smsRecipients}</li>
+            <li>WhatsApp recipients: {summary.observability.whatsappRecipients}</li>
+          </ul>
+        </article>
+
         <article className="panel">
           <p className="eyebrow">Dispatch discovery</p>
           <h2>Capacity-aware plumbing roster</h2>

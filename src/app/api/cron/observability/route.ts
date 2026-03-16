@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDeploymentRegistrySnapshot } from "@/lib/deployment-registry";
+import { dispatchObservabilityNotifications } from "@/lib/observability-notifications";
 import { buildOperatorConsoleSnapshot } from "@/lib/dashboard";
 import { buildSystemOverviewSnapshot } from "@/lib/operator-observability";
 import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
@@ -64,15 +65,22 @@ export async function GET() {
     providerRequests: providerDispatchRequests,
     deploymentSummary: deploymentSnapshot.summary,
   });
+  const triggeredRules = overview.rules.filter((rule) => rule.triggered);
+  const deliveries = await dispatchObservabilityNotifications(triggeredRules, runtimeConfig);
 
   return NextResponse.json({
     success: true,
     generatedAt: new Date().toISOString(),
     activeAlerts: overview.activeAlerts,
-    triggeredRules: overview.rules.filter((rule) => rule.triggered),
+    triggeredRules,
+    deliveries,
     counts: {
       activeAlerts: overview.activeAlerts.length,
-      triggeredRules: overview.rules.filter((rule) => rule.triggered).length,
+      triggeredRules: triggeredRules.length,
+      deliveries: deliveries.length,
+      sentDeliveries: deliveries.filter((delivery) => delivery.status === "sent").length,
+      failedDeliveries: deliveries.filter((delivery) => delivery.status === "failed").length,
+      suppressedDeliveries: deliveries.filter((delivery) => delivery.status === "suppressed").length,
     },
   });
 }

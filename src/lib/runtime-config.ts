@@ -5,6 +5,21 @@ import {
 } from "./runtime-store.ts";
 
 export type OperationalRuntimeConfig = {
+  observability: {
+    notifications: {
+      defaultChannel: "email" | "sms" | "whatsapp";
+      cooldownMinutes: number;
+      recipients: Array<{
+        id: string;
+        label: string;
+        active: boolean;
+        email?: string;
+        phone?: string;
+        channels: Array<"email" | "sms" | "whatsapp">;
+        ruleIds: string[];
+      }>;
+    };
+  };
   trafft: {
     publicBookingUrl?: string;
     defaultServiceId?: string;
@@ -58,6 +73,13 @@ export type OperationalRuntimeConfig = {
 type RuntimeConfigSectionKey = keyof OperationalRuntimeConfig;
 
 const DEFAULT_CONFIG: OperationalRuntimeConfig = {
+  observability: {
+    notifications: {
+      defaultChannel: "email",
+      cooldownMinutes: 30,
+      recipients: [],
+    },
+  },
   trafft: {
     serviceMap: {},
   },
@@ -72,6 +94,7 @@ const DEFAULT_CONFIG: OperationalRuntimeConfig = {
 };
 
 const RECORD_KEYS: Record<RuntimeConfigSectionKey, string> = {
+  observability: "runtime.observability",
   trafft: "provider.trafft",
   dispatch: "provider.dispatch",
   marketplace: "provider.marketplace",
@@ -129,6 +152,64 @@ function sanitizeStringArray(value: unknown) {
     .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
     .filter(Boolean)
     .map((entry) => entry.toLowerCase()))];
+}
+
+function sanitizeObservabilityChannels(value: unknown) {
+  const allowed = new Set(["email", "sms", "whatsapp"]);
+  return sanitizeStringArray(value).filter((entry): entry is "email" | "sms" | "whatsapp" => allowed.has(entry));
+}
+
+function sanitizeObservabilityRecipients(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [] as OperationalRuntimeConfig["observability"]["notifications"]["recipients"];
+  }
+
+  return value
+    .map((entry) => entry && typeof entry === "object" ? entry as Record<string, unknown> : null)
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry))
+    .map((entry): OperationalRuntimeConfig["observability"]["notifications"]["recipients"][number] => {
+      const email = getStringValue(entry.email)?.toLowerCase();
+      const phone = getStringValue(entry.phone);
+      const channels = sanitizeObservabilityChannels(entry.channels);
+      const inferredChannels = channels.length > 0
+        ? channels
+        : [
+            ...(email ? ["email" as const] : []),
+            ...(phone ? ["sms" as const] : []),
+          ];
+
+      return {
+        id: getStringValue(entry.id) ?? crypto.randomUUID(),
+        label: getStringValue(entry.label) ?? "Unnamed recipient",
+        active: entry.active !== false,
+        email,
+        phone,
+        channels: [...new Set(inferredChannels)],
+        ruleIds: sanitizeStringArray(entry.ruleIds),
+      };
+    });
+}
+
+function sanitizeObservabilitySection(value: Partial<OperationalRuntimeConfig["observability"]> | undefined) {
+  if (!value) {
+    return DEFAULT_CONFIG.observability;
+  }
+
+  const notifications = (value.notifications ?? {}) as Partial<OperationalRuntimeConfig["observability"]["notifications"]>;
+  const defaultChannel = notifications.defaultChannel === "sms" || notifications.defaultChannel === "whatsapp"
+    ? notifications.defaultChannel
+    : "email";
+  const cooldownMinutes = typeof notifications.cooldownMinutes === "number" && Number.isFinite(notifications.cooldownMinutes)
+    ? Math.max(0, Math.min(1440, notifications.cooldownMinutes))
+    : DEFAULT_CONFIG.observability.notifications.cooldownMinutes;
+
+  return {
+    notifications: {
+      defaultChannel,
+      cooldownMinutes,
+      recipients: sanitizeObservabilityRecipients(notifications.recipients),
+    },
+  } satisfies OperationalRuntimeConfig["observability"];
 }
 
 function sanitizeDispatchProviders(value: unknown) {
@@ -248,7 +329,8 @@ function sanitizeCroveSection(value: Partial<OperationalRuntimeConfig["crove"]> 
 }
 
 export async function getOperationalRuntimeConfig(): Promise<OperationalRuntimeConfig> {
-  const [trafft, dispatch, marketplace, documentero, crove] = await Promise.all([
+  const [observability, trafft, dispatch, marketplace, documentero, crove] = await Promise.all([
+    getRuntimeConfig(RECORD_KEYS.observability),
     getRuntimeConfig(RECORD_KEYS.trafft),
     getRuntimeConfig(RECORD_KEYS.dispatch),
     getRuntimeConfig(RECORD_KEYS.marketplace),
@@ -257,6 +339,7 @@ export async function getOperationalRuntimeConfig(): Promise<OperationalRuntimeC
   ]);
 
   return {
+    observability: sanitizeObservabilitySection(getRecordValue(observability) as OperationalRuntimeConfig["observability"]),
     trafft: sanitizeTrafftSection(getRecordValue(trafft) as OperationalRuntimeConfig["trafft"]),
     dispatch: sanitizeDispatchSection(getRecordValue(dispatch) as OperationalRuntimeConfig["dispatch"]),
     marketplace: sanitizeMarketplaceSection(getRecordValue(marketplace) as OperationalRuntimeConfig["marketplace"]),
@@ -271,6 +354,12 @@ export async function updateOperationalRuntimeConfig(
 ) {
   const current = await getOperationalRuntimeConfig();
   const next: OperationalRuntimeConfig = {
+    observability: sanitizeObservabilitySection({
+      notifications: {
+        ...current.observability.notifications,
+        ...config.observability?.notifications,
+      },
+    }),
     trafft: sanitizeTrafftSection({ ...current.trafft, ...config.trafft }),
     dispatch: sanitizeDispatchSection({ ...current.dispatch, ...config.dispatch }),
     marketplace: sanitizeMarketplaceSection({ ...current.marketplace, ...config.marketplace }),
@@ -279,6 +368,11 @@ export async function updateOperationalRuntimeConfig(
   };
 
   await Promise.all([
+    upsertRuntimeConfig({
+      key: RECORD_KEYS.observability,
+      value: next.observability,
+      updatedBy,
+    }),
     upsertRuntimeConfig({
       key: RECORD_KEYS.trafft,
       value: next.trafft,
@@ -311,6 +405,20 @@ export async function updateOperationalRuntimeConfig(
 
 export function buildRuntimeConfigSummary(config: OperationalRuntimeConfig) {
   return {
+    observability: {
+      defaultChannel: config.observability.notifications.defaultChannel,
+      cooldownMinutes: config.observability.notifications.cooldownMinutes,
+      activeRecipients: config.observability.notifications.recipients.filter((recipient) => recipient.active).length,
+      smsRecipients: config.observability.notifications.recipients.filter((recipient) =>
+        recipient.active && recipient.channels.includes("sms") && Boolean(recipient.phone)
+      ).length,
+      whatsappRecipients: config.observability.notifications.recipients.filter((recipient) =>
+        recipient.active && recipient.channels.includes("whatsapp") && Boolean(recipient.phone)
+      ).length,
+      emailRecipients: config.observability.notifications.recipients.filter((recipient) =>
+        recipient.active && recipient.channels.includes("email") && Boolean(recipient.email)
+      ).length,
+    },
     trafft: {
       hasPublicBookingUrl: Boolean(config.trafft.publicBookingUrl),
       hasDefaultServiceId: Boolean(config.trafft.defaultServiceId),
