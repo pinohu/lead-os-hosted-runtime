@@ -14,6 +14,8 @@ test("emergency entry point is client-facing and booking-oriented", () => {
   assert.equal(entry.preferredMode, "booking-first");
   assert.equal(entry.service, "emergency-plumbing");
   assert.match(entry.title, /plumber fast/i);
+  assert.ok(entry.heroHighlights.length >= 3);
+  assert.ok(entry.faq.length >= 3);
 });
 
 test("provider entry point is supply-side and form-oriented", () => {

@@ -14,6 +14,9 @@ type ExperienceScaffoldProps = {
   summary: string;
   profile: ExperienceProfile;
   metrics: ExperienceMetric[];
+  heroSignals?: string[];
+  audienceLabel?: string;
+  commitmentNote?: string;
   children: ReactNode;
   primaryActionHref?: string;
   primaryActionLabel?: string;
@@ -27,6 +30,9 @@ export function ExperienceScaffold({
   summary,
   profile,
   metrics,
+  heroSignals = [],
+  audienceLabel,
+  commitmentNote,
   children,
   primaryActionHref,
   primaryActionLabel,
@@ -40,7 +46,17 @@ export function ExperienceScaffold({
           <p className="eyebrow">{eyebrow}</p>
           <h1>{title}</h1>
           <p className="lede">{summary}</p>
+          {audienceLabel ? <p className="hero-audience">{audienceLabel}</p> : null}
           <p className="muted hero-support">{profile.trustPromise}</p>
+          {heroSignals.length > 0 ? (
+            <div className="hero-highlight-row" aria-label="Why this path converts">
+              {heroSignals.map((signal) => (
+                <span key={signal} className="hero-highlight">
+                  {signal}
+                </span>
+              ))}
+            </div>
+          ) : null}
           <div className="cta-row">
             <Link href={primaryActionHref ?? "#capture-form"} className="primary">
               {primaryActionLabel ?? profile.primaryActionLabel}
@@ -52,14 +68,10 @@ export function ExperienceScaffold({
         </div>
 
         <aside className="hero-rail" aria-label="Experience summary">
-          <div className="signal-chip-row">
-            <span className="signal-chip">{profile.audience === "provider" ? "provider path" : "client path"}</span>
-            <span className="signal-chip">{profile.mode.replace("-", " ")}</span>
-            <span className="signal-chip">{profile.device}</span>
-            <span className="signal-chip">{profile.family}</span>
-          </div>
+          <p className="eyebrow">What this page is designed to do</p>
           <h2>{profile.heroTitle}</h2>
           <p className="muted">{profile.heroSummary}</p>
+          {commitmentNote ? <p className="trust-copy">{commitmentNote}</p> : null}
           <p className="trust-copy">{profile.progressLabel}</p>
           <ul className="journey-rail">
             {profile.progressSteps.map((step) => (

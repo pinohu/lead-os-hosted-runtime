@@ -16,6 +16,16 @@ export type PlumbingEntrypointLink = {
   description: string;
 };
 
+export type PlumbingValueCard = {
+  title: string;
+  detail: string;
+};
+
+export type PlumbingFaqItem = {
+  question: string;
+  answer: string;
+};
+
 export type PlumbingEntrypointDefinition = {
   kind: PlumbingEntrypointKind;
   route: string;
@@ -27,6 +37,9 @@ export type PlumbingEntrypointDefinition = {
   eyebrow: string;
   title: string;
   summary: string;
+  audienceLabel: string;
+  heroHighlights: string[];
+  commitmentNote: string;
   chipsLabel: string;
   chips: string[];
   pathLabel: string;
@@ -35,6 +48,8 @@ export type PlumbingEntrypointDefinition = {
   trustSignals: string[];
   proofLabel: string;
   proofSignals: string[];
+  valueCards: PlumbingValueCard[];
+  faq: PlumbingFaqItem[];
   relatedLinks: PlumbingEntrypointLink[];
 };
 
@@ -109,6 +124,9 @@ export function getPlumbingEntrypoint(
         title: "A two-sided plumbing marketplace built for speed, coverage, and trust",
         summary:
           "LeadOS now serves both sides of the marketplace: homeowners and tenants who need help fast, and plumbing providers who want better-fit jobs with real dispatch context.",
+        audienceLabel: "For homeowners, tenants, property teams, and plumbing providers",
+        heroHighlights: ["Local ZIP-aware routing", "One clear next step", "Separate buyer and provider journeys"],
+        commitmentNote: "Start on the right side of the marketplace first, then move into the shortest path for the job or opportunity in front of you.",
         chipsLabel: "Entry points",
         chips: [
           "Emergency plumbing help",
@@ -135,6 +153,34 @@ export function getPlumbingEntrypoint(
           "Structured commercial intake",
           "Provider network path with service-area and specialty mapping",
         ],
+        valueCards: [
+          {
+            title: "Faster self-selection",
+            detail: "Visitors choose the right lane first instead of getting trapped in a generic plumbing form.",
+          },
+          {
+            title: "Lower confusion",
+            detail: "Demand and supply are split immediately, which reduces the friction that kills momentum in two-sided marketplaces.",
+          },
+          {
+            title: "Better-fit routing",
+            detail: "LeadOS can route urgent demand, estimate traffic, commercial requests, and provider onboarding with different logic from the start.",
+          },
+        ],
+        faq: [
+          {
+            question: "Who should start here?",
+            answer: "Anyone who needs the marketplace overview first: homeowners, tenants, commercial buyers, and providers comparing their correct next path.",
+          },
+          {
+            question: "What if I already know what I need?",
+            answer: "Use the more direct emergency, estimate, commercial, or provider page to reduce steps and get to the right next action faster.",
+          },
+          {
+            question: "Why split the paths so early?",
+            answer: "Because urgent buyers, estimate shoppers, property teams, and providers need different copy, different friction, and different next-step promises to convert well.",
+          },
+        ],
         relatedLinks,
       };
     case "help-home":
@@ -150,6 +196,9 @@ export function getPlumbingEntrypoint(
         title: "Choose the right plumbing help path without re-explaining the job twice",
         summary:
           "This is the homeowner, tenant, and client entry point. Pick the urgency and job type first, then LeadOS keeps the next step short, local, and clear.",
+        audienceLabel: "For homeowners, tenants, and people trying to get plumbing help now",
+        heroHighlights: ["Emergency and estimate split", "Human fallback stays visible", "Local context preserved"],
+        commitmentNote: "Choose the kind of help you need first. That single commitment lets LeadOS shorten the rest of the experience.",
         chipsLabel: "Demand-side paths",
         chips: ["Emergency", "Estimate", "Commercial", "Talk to dispatch"],
         pathLabel: "How this demand path works",
@@ -171,6 +220,34 @@ export function getPlumbingEntrypoint(
           "Commercial flow for property teams",
           "Local ZIP entry pages for search-driven traffic",
         ],
+        valueCards: [
+          {
+            title: "No dead-end first screen",
+            detail: "Visitors choose their job context before the form gets longer, which reduces hesitation and bad-fit submissions.",
+          },
+          {
+            title: "Shorter urgent path",
+            detail: "People with active plumbing problems are not forced through the same path as estimate shoppers.",
+          },
+          {
+            title: "Safer fallback",
+            detail: "If the job is unusual, the visitor can still move toward a human dispatch path instead of abandoning the page.",
+          },
+        ],
+        faq: [
+          {
+            question: "Should I choose emergency or estimate?",
+            answer: "Choose emergency if speed matters more than comparison. Choose estimate if the job is planned and you want a lighter quote path.",
+          },
+          {
+            question: "What if my issue is complicated?",
+            answer: "Use the dispatch-style fallback so you can keep moving without forcing the job into the wrong form path.",
+          },
+          {
+            question: "Will I need to explain everything twice?",
+            answer: "No. The path keeps your urgency, job type, and location attached so the next step starts with context already in place.",
+          },
+        ],
         relatedLinks,
       };
     case "emergency":
@@ -186,6 +263,9 @@ export function getPlumbingEntrypoint(
         title: `Need a plumber fast in ${formatZipLabel(zip)}?`,
         summary:
           "This path is optimized for burst pipes, active leaks, sewer backups, no hot water, and other urgent problems where dead-end quote forms cost time and trust.",
+        audienceLabel: `For homeowners and tenants who need urgent plumbing help in ${formatZipLabel(zip)}`,
+        heroHighlights: ["Phone-first fast path", "Local routing context", "Human dispatch fallback"],
+        commitmentNote: "This page is built to get you to the fastest credible next step, not to bury you in a long quote request while the problem gets worse.",
         chipsLabel: "Urgent issue types",
         chips: ["Burst pipe", "Active leak", "Sewer backup", "No hot water", "Overflowing drain"],
         pathLabel: "What happens next",
@@ -207,6 +287,34 @@ export function getPlumbingEntrypoint(
           "Use local ZIP page for neighborhood-specific trust framing",
           "Provider network path remains separate from the homeowner experience",
         ],
+        valueCards: [
+          {
+            title: "Built for speed",
+            detail: "Urgent users should see the problem type, the action, and the next step almost immediately.",
+          },
+          {
+            title: "Built for anxious buyers",
+            detail: "The page reduces uncertainty by showing what happens next before asking for more information.",
+          },
+          {
+            title: "Built for mobile emergencies",
+            detail: "The path stays thumb-friendly, short, and easy to continue when someone is under pressure.",
+          },
+        ],
+        faq: [
+          {
+            question: "Will this connect me to a real next step quickly?",
+            answer: "That is the purpose of this path. It prioritizes urgency, location, and the best contact route before any extra detail.",
+          },
+          {
+            question: "What if this is urgent but unusual?",
+            answer: "The page keeps a human dispatch fallback visible so the visitor is not stranded when the job does not fit a simple booking path.",
+          },
+          {
+            question: "What if it turns out not to be an emergency?",
+            answer: "You can switch into the estimate path without losing the momentum you already created.",
+          },
+        ],
         relatedLinks,
       };
     case "estimate":
@@ -222,6 +330,9 @@ export function getPlumbingEntrypoint(
         title: "Book a plumbing estimate without the usual quote-form drag",
         summary:
           "This path is for planned repairs, replacements, installs, and comparison shopping. It collects only the information needed to route the estimate, not a giant intake dossier.",
+        audienceLabel: "For homeowners and tenants planning repairs, replacements, and quote comparisons",
+        heroHighlights: ["Lower-pressure estimate path", "Only the needed details", "Easy switch to faster help if needed"],
+        commitmentNote: "This page is meant to feel calm, clear, and useful for people who are comparing options rather than trying to solve a crisis this minute.",
         chipsLabel: "Planned-work categories",
         chips: ["Water heater replacement", "Fixture install", "Drain repair", "Leak repair", "Repiping estimate"],
         pathLabel: "How the estimate path works",
@@ -243,6 +354,34 @@ export function getPlumbingEntrypoint(
           "Provider network if you are a plumber, not a buyer",
           "Local ZIP pages for search-intent entry",
         ],
+        valueCards: [
+          {
+            title: "Less friction up front",
+            detail: "People can describe the type of work they want before being asked for every possible project detail.",
+          },
+          {
+            title: "More realistic expectations",
+            detail: "The page frames the next step as estimate routing, not false instant dispatch promises.",
+          },
+          {
+            title: "Better comparison support",
+            detail: "Visitors can stay in evaluation mode while still moving toward a useful next step.",
+          },
+        ],
+        faq: [
+          {
+            question: "How is this different from emergency plumbing?",
+            answer: "This page is for planned jobs and quote comparison, so it uses lighter friction and calmer expectations than the urgent dispatch path.",
+          },
+          {
+            question: "What if the issue becomes urgent while I’m here?",
+            answer: "You can switch into the faster emergency path instead of starting over in a different form.",
+          },
+          {
+            question: "Why not ask for every project detail right away?",
+            answer: "Because long front-loaded forms reduce completion. This page asks for the minimum needed to keep the estimate path moving.",
+          },
+        ],
         relatedLinks,
       };
     case "commercial":
@@ -258,6 +397,9 @@ export function getPlumbingEntrypoint(
         title: "Commercial plumbing service intake for property teams and facilities",
         summary:
           "This path is for businesses, facilities managers, property managers, and multi-unit operators who need a more structured service request than a homeowner emergency screen can provide.",
+        audienceLabel: "For property managers, facilities teams, and commercial buyers",
+        heroHighlights: ["Structured service intake", "Property-aware coordination", "Commercial-safe language and expectations"],
+        commitmentNote: "This page should feel like a capable commercial desk, not a residential emergency form with a business label slapped on it.",
         chipsLabel: "Commercial request types",
         chips: ["Facilities issue", "Multi-unit property", "Scheduled service", "Emergency building issue", "Coverage conversation"],
         pathLabel: "How commercial intake works",
@@ -279,6 +421,34 @@ export function getPlumbingEntrypoint(
           "Provider onboarding path",
           "Local ZIP entry for area-specific demand capture",
         ],
+        valueCards: [
+          {
+            title: "Structured for property complexity",
+            detail: "Commercial users need room for site, building, and coordination context without wading through homeowner-oriented copy.",
+          },
+          {
+            title: "Designed for repeat work",
+            detail: "The path can support both immediate requests and longer-term service relationships.",
+          },
+          {
+            title: "Clear next-step framing",
+            detail: "Commercial buyers should know whether they are requesting service, starting a coverage conversation, or moving toward coordinated dispatch.",
+          },
+        ],
+        faq: [
+          {
+            question: "Is this only for emergencies?",
+            answer: "No. It supports urgent building issues, scheduled service, property coordination, and recurring commercial plumbing needs.",
+          },
+          {
+            question: "Why not use the residential flow?",
+            answer: "Because property, facilities, and portfolio context materially changes what should be asked and how the next step should be handled.",
+          },
+          {
+            question: "Can this support multi-site or ongoing work?",
+            answer: "Yes. The commercial path is the right starting place for anything that goes beyond a simple residential service request.",
+          },
+        ],
         relatedLinks,
       };
     case "provider":
@@ -294,6 +464,9 @@ export function getPlumbingEntrypoint(
         title: "Join the plumbing provider network with real coverage, specialties, and capacity",
         summary:
           "This is a supply-side path, not a directory signup. Providers use it to declare service area, emergency readiness, specialties, and job fit so LeadOS can route better work.",
+        audienceLabel: "For plumbers and service teams that want better-fit work",
+        heroHighlights: ["Coverage and capacity first", "No junk-lead directory framing", "Operational readiness matters"],
+        commitmentNote: "This page should convert serious providers by showing operational relevance and opportunity quality, not by using generic recruiting copy.",
         chipsLabel: "Provider setup topics",
         chips: ["Service area", "Emergency coverage", "Specialties", "Commercial capacity", "Response readiness"],
         pathLabel: "How provider onboarding works",
@@ -315,6 +488,34 @@ export function getPlumbingEntrypoint(
           "Local ZIP demand pages",
           "Emergency dispatch path for urgent buyers",
         ],
+        valueCards: [
+          {
+            title: "Better-fit job promise",
+            detail: "Providers are more likely to convert when they see that routing depends on geography, issue fit, and readiness rather than random rotation.",
+          },
+          {
+            title: "Less signup fatigue",
+            detail: "The path asks for the information that matters to dispatch quality instead of bloated directory-style profile trivia.",
+          },
+          {
+            title: "Operational upside",
+            detail: "Providers can see why accurate coverage and capacity data improves the quality of the opportunities they receive.",
+          },
+        ],
+        faq: [
+          {
+            question: "What kinds of providers should apply?",
+            answer: "Providers with clear service areas, issue fit, and real dispatch capacity are the best fit for this onboarding path.",
+          },
+          {
+            question: "Why ask about coverage and specialties so early?",
+            answer: "Because those details are what make the marketplace useful. They improve lead fit, routing accuracy, and response quality.",
+          },
+          {
+            question: "Is this a public directory signup?",
+            answer: "No. It is a dispatch-readiness path designed to map providers into the routing engine more intelligently.",
+          },
+        ],
         relatedLinks,
       };
     case "local":
@@ -330,6 +531,9 @@ export function getPlumbingEntrypoint(
         title: `Plumbing help in ${formatZipLabel(zip)} without generic national-directory friction`,
         summary:
           "This entry point is designed for ZIP-level traffic. It keeps local trust, urgency, and service relevance close to the first action so search-driven visitors do not bounce.",
+        audienceLabel: `For people searching for plumbing help in ${formatZipLabel(zip)}`,
+        heroHighlights: ["ZIP-aware trust framing", "Urgent and estimate split", "Local-feeling next step"],
+        commitmentNote: "Local search visitors decide quickly whether a page feels relevant. This page should prove locality and usefulness before asking for much effort.",
         chipsLabel: "Common local intents",
         chips: ["Need help now", "Book an estimate", "Commercial service", "Talk to dispatch", "Compare local options"],
         pathLabel: "How local routing works",
@@ -350,6 +554,34 @@ export function getPlumbingEntrypoint(
           withZipCopy("Estimate flow in {zip}", zip),
           withZipCopy("Commercial service in {zip}", zip),
           "Provider network remains a separate entry path",
+        ],
+        valueCards: [
+          {
+            title: "Local relevance fast",
+            detail: `Keeping ${formatZipLabel(zip)} visible early reduces the “generic national lead site” feeling that causes search users to bounce.`,
+          },
+          {
+            title: "Better search-intent fit",
+            detail: "The page acknowledges that some local visitors need urgent help while others are comparing options or booking planned work.",
+          },
+          {
+            title: "Cleaner next-step trust",
+            detail: "Local pages work best when they connect location, service type, and next-step certainty without forcing a long scroll first.",
+          },
+        ],
+        faq: [
+          {
+            question: "Is this page specific to my area?",
+            answer: `Yes. The page is meant to keep ${formatZipLabel(zip)} visible so the visitor feels local fit before they commit to the next step.`,
+          },
+          {
+            question: "What should I do if I need help now?",
+            answer: "Use the urgent path first. It is designed to shorten the decision and contact process for active plumbing problems.",
+          },
+          {
+            question: "What if I’m just comparing plumbers in this ZIP?",
+            answer: "The local page still supports estimate and commercial branches so comparison-minded visitors can keep moving without false urgency.",
+          },
         ],
         relatedLinks,
       };

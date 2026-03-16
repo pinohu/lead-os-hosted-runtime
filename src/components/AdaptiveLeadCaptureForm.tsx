@@ -37,9 +37,26 @@ function normalizePhone(value: string) {
   return value.replace(/[^\d+]/g, "");
 }
 
+function getPathLabel(service: string, providerAudience: boolean) {
+  if (providerAudience) {
+    return "Provider onboarding";
+  }
+  if (service.includes("emergency")) {
+    return "Emergency help";
+  }
+  if (service.includes("commercial")) {
+    return "Commercial service";
+  }
+  if (service.includes("estimate")) {
+    return "Estimate path";
+  }
+  return "Guided help";
+}
+
 export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
   const plumbingLike = props.niche === "plumbing" || props.niche === "home-services";
   const providerAudience = props.profile.audience === "provider";
+  const pathLabel = getPathLabel(props.service, providerAudience);
   const [step, setStep] = useState(1);
   const [selectedGoalId, setSelectedGoalId] = useState(props.profile.discoveryOptions[0]?.id ?? "");
   const [firstName, setFirstName] = useState("");
@@ -166,15 +183,19 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
     <section className="capture-shell panel" id="capture-form" aria-labelledby="capture-form-title">
       <div className="capture-header">
         <div>
-          <p className="eyebrow">Adaptive capture path</p>
+          <p className="eyebrow">{providerAudience ? "Provider path" : plumbingLike ? "Fast next step" : "Guided next step"}</p>
           <h2 id="capture-form-title">
             {plumbingLike
-              ? "Confirm urgency, keep the path short, and get the right next step"
+              ? providerAudience
+                ? "Show your coverage and keep provider onboarding short"
+                : "Keep this short and get the right plumbing next step"
               : "Get the right next step without starting from scratch"}
           </h2>
           <p className="muted">
             {plumbingLike
-              ? "We collect just enough to route the job fast, preserve context, and keep dispatch or estimate follow-up moving."
+              ? providerAudience
+                ? "We collect only what is needed to map service fit, coverage, and dispatch readiness."
+                : "We collect just enough to route the job fast, preserve context, and keep the next action moving."
               : "We use one light commitment first, then tailor the next step around your actual intent."}
           </p>
         </div>
@@ -185,23 +206,23 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
               className={item === step ? "current" : item < step ? "complete" : undefined}
             >
               <span>{item}</span>
-              <strong>{item === 1 ? "Goal" : item === 2 ? "Contact" : "Confirm"}</strong>
+              <strong>{item === 1 ? "Need" : item === 2 ? "Contact" : "Confirm"}</strong>
             </li>
           ))}
         </ol>
       </div>
 
       <div className="sticky-summary" aria-live="polite">
-        <span>Audience: {providerAudience ? "provider" : "client"}</span>
-        <span>Mode: {props.profile.mode.replace("-", " ")}</span>
-        <span>Outcome: {selectedGoal?.label ?? "Choose one"}</span>
-        <span>Progress: step {step} of 3</span>
+        <span>Path: {pathLabel}</span>
+        <span>Contact: {requiresPhone ? "phone-first" : "email or phone"}</span>
+        <span>{selectedGoal?.label ?? "Choose a goal"}</span>
+        <span>Step {step} of 3</span>
       </div>
 
       <div className="conversion-assurance" aria-label="Conversion reassurance">
         <span>Takes about 30 to 60 seconds</span>
         <span>{contactRequirement}</span>
-        <span>{providerAudience ? "Network ops fallback stays available" : "Human fallback stays available"}</span>
+        <span>{providerAudience ? "Talk to network ops if needed" : "Human fallback stays available"}</span>
       </div>
 
       {result ? (
@@ -215,7 +236,7 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
           </h3>
           <p>{result.nextStep.message}</p>
           <p className="muted">
-            Priority: {result.scoreBand} {result.hot ? "- Fast path activated" : "- Standard follow-up path activated"}
+            {result.hot ? "Fast path activated." : "Standard follow-up path activated."} We saved your context so you should not need to start over.
           </p>
           <div className="cta-row">
             <Link href={result.nextStep.destination} className="primary">
@@ -365,7 +386,7 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
                     : "Optional context"}
                 <span className="field-help">
                   {providerAudience
-                    ? "Add service-area notes, licensing detail, or scheduling context only if it helps."
+                    ? "Add service-area notes, specialties, licensing detail, or scheduling context only if it helps."
                     : plumbingLike
                       ? "Add access notes, issue detail, or timing context only if it helps."
                       : "Add extra context only if it makes the next step easier."}

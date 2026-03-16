@@ -212,6 +212,30 @@ main > * + *,
   max-width: 58ch;
 }
 
+.hero-audience {
+  margin-top: 12px;
+  color: #173e30;
+  font-weight: 700;
+}
+
+.hero-highlight-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.hero-highlight {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(34, 95, 84, 0.1);
+  color: #174036;
+  font-weight: 700;
+}
+
 .trust-copy {
   padding: 14px 16px;
   border-radius: var(--radius-sm);
@@ -404,6 +428,27 @@ button[disabled] {
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
 }
 
+.value-card-grid,
+.faq-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.value-card,
+.faq-card {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(20, 33, 29, 0.1);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.value-card h3,
+.faq-card h3 {
+  margin-bottom: 0;
+}
+
 .proof-card {
   background: rgba(255, 252, 247, 0.9);
 }
@@ -491,6 +536,7 @@ button[disabled] {
   border-radius: 999px;
   background: rgba(34, 95, 84, 0.08);
   color: #1a3e36;
+  font-weight: 700;
 }
 
 .capture-step {
@@ -1006,6 +1052,10 @@ button[disabled] {
   .mapping-row {
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.1fr) auto;
     align-items: start;
+  }
+
+  .value-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

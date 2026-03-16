@@ -87,41 +87,42 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
   const emergencyProviders = activeProviders.filter((provider) => provider.acceptsEmergency);
   const providerScore = consoleSnapshot.plumbingDispatch.providerScores[0];
   const integrations = buildPlumbingIntegrationBundle(entry, tenantConfig.siteUrl);
+  const showBlueprint = asBoolean(searchParams.blueprint) || asString(searchParams.view) === "blueprint";
 
   const metrics =
     entry.audience === "provider"
       ? [
           {
-            label: "Active provider roster",
+            label: "Dispatch-ready network",
             value: `${activeProviders.length}`,
-            detail: "Providers currently mapped for routing across service areas and specialties.",
+            detail: "Providers currently mapped across service areas, specialties, and active capacity signals.",
           },
           {
-            label: "Emergency-ready providers",
+            label: "Emergency-capable coverage",
             value: `${emergencyProviders.length}`,
-            detail: "Roster entries currently marked as ready for urgent plumbing demand.",
+            detail: "Providers currently marked as ready for urgent plumbing demand and fast-response coverage.",
           },
           {
-            label: "Top routing confidence",
+            label: "Top-fit routing score",
             value: providerScore ? String(providerScore.routingScore) : "n/a",
-            detail: "Outcome-aware ranking snapshot for the strongest current provider fit.",
+            detail: "Outcome-aware snapshot of how confidently the marketplace can match the best current provider fit.",
           },
         ]
       : [
           {
-            label: "Hot plumbing leads",
+            label: "Urgent demand recognized",
             value: `${snapshot.totals.hotLeads}`,
-            detail: "Urgent or booking-intent plumbing demand currently recognized by the runtime.",
+            detail: "Plumbing requests currently recognized by the runtime as hot, urgent, or fast-booking intent.",
           },
           {
-            label: "Booked or offered",
+            label: "Moved to next step",
             value: `${snapshot.milestones.lead.bookedOrOffered}`,
-            detail: "Jobs already moved into booking, estimate, or proposal momentum.",
+            detail: "Jobs already moved into booking, estimate, proposal, or another high-intent next step.",
           },
           {
-            label: "Dispatch channels",
+            label: "Routing and follow-up state",
             value: health.liveMode ? "Live" : "Dry run",
-            detail: "Booking, follow-up, and workflow channels connected behind this entry path.",
+            detail: "Whether booking, workflow, and follow-up channels behind this public path are currently live.",
           },
         ];
 
@@ -149,11 +150,15 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
       summary={entry.summary}
       profile={profile}
       metrics={metrics}
+      heroSignals={entry.heroHighlights}
+      audienceLabel={entry.audienceLabel}
+      commitmentNote={entry.commitmentNote}
     >
       <section className="grid two">
         <article className="panel">
-          <p className="eyebrow">{entry.chipsLabel}</p>
-          <h2>Entry-point signals that should be obvious immediately</h2>
+          <p className="eyebrow">Best for this path</p>
+          <h2>What someone should recognize within the first few seconds</h2>
+          <p className="muted">{entry.commitmentNote}</p>
           <div className="signal-pill-grid" aria-label={entry.chipsLabel}>
             {entry.chips.map((chip) => (
               <span key={chip} className="signal-pill">
@@ -163,13 +168,28 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
           </div>
         </article>
         <article className="panel">
-          <p className="eyebrow">Marketplace split</p>
+          <p className="eyebrow">Need a different path?</p>
           <h2>{splitLink.label}</h2>
           <p className="muted">{splitLink.description}</p>
           <div className="cta-row">
             <Link href={splitLink.href} className="secondary">
               {splitLink.cta}
             </Link>
+          </div>
+        </article>
+      </section>
+
+      <section className="grid two">
+        <article className="panel">
+          <p className="eyebrow">Why this page should convert better</p>
+          <h2>Clarity, relevance, and reduced effort</h2>
+          <div className="value-card-grid">
+            {entry.valueCards.map((card) => (
+              <article key={card.title} className="value-card">
+                <h3>{card.title}</h3>
+                <p className="muted">{card.detail}</p>
+              </article>
+            ))}
           </div>
         </article>
         <article className="panel">
@@ -181,6 +201,9 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
             ))}
           </ol>
         </article>
+      </section>
+
+      <section className="grid two">
         <article className="panel">
           <p className="eyebrow">{entry.trustLabel}</p>
           <h2>Trust architecture near the ask</h2>
@@ -190,12 +213,24 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
             ))}
           </ul>
         </article>
+        <article className="panel">
+          <p className="eyebrow">Questions people ask before they act</p>
+          <h2>Answer the friction before it becomes abandonment</h2>
+          <div className="faq-stack">
+            {entry.faq.map((item) => (
+              <article key={item.question} className="faq-card">
+                <h3>{item.question}</h3>
+                <p className="muted">{item.answer}</p>
+              </article>
+            ))}
+          </div>
+        </article>
       </section>
 
       <section className="grid two">
         <article className="panel">
           <p className="eyebrow">{entry.proofLabel}</p>
-          <h2>Related entry points inside the same marketplace</h2>
+          <h2>Other high-intent paths in the same marketplace</h2>
           <div className="entry-link-grid">
             {entry.relatedLinks.map((link) => (
               <Link key={link.href} href={link.href} className="entry-link-card">
@@ -207,54 +242,11 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
         </article>
         <article className="panel">
           <p className="eyebrow">Local and operational context</p>
-          <h2>Built for ZIP-aware routing and large marketplace operations</h2>
+          <h2>Why this path still scales operationally</h2>
           <ul className="check-list">
             <li>ZIP, city, county, service radius, and emergency coverage stay part of the routing model.</li>
             <li>Demand and supply enter through different funnels, then meet through dispatch logic rather than directory browsing.</li>
             <li>Every path keeps one dominant action, one safe fallback, and a clear explanation of what happens next.</li>
-          </ul>
-        </article>
-      </section>
-
-      <section className="grid two">
-        <article className="panel">
-          <p className="eyebrow">Hosted deployment</p>
-          <h2>Direct link for this entry point</h2>
-          <p className="muted">
-            Use this URL for buttons, ads, email, SMS, QR flows, directory listings, or a dedicated subdomain handoff.
-          </p>
-          <div className="code-card">
-            <pre><code>{integrations.hostedUrl}</code></pre>
-          </div>
-        </article>
-        <article className="panel">
-          <p className="eyebrow">Embed deployment</p>
-          <h2>Widget install code for client websites</h2>
-          <p className="muted">
-            This script launches the matching LeadOS widget for this exact entry path and service intent.
-          </p>
-          <div className="code-card">
-            <pre><code>{integrations.widgetScript}</code></pre>
-          </div>
-        </article>
-        <article className="panel">
-          <p className="eyebrow">Iframe handoff</p>
-          <h2>Embedded hosted-page fallback</h2>
-          <p className="muted">
-            Use this when a client wants the full hosted page embedded instead of the drawer widget.
-          </p>
-          <div className="code-card">
-            <pre><code>{integrations.iframeEmbed}</code></pre>
-          </div>
-        </article>
-        <article className="panel">
-          <p className="eyebrow">Integration endpoints</p>
-          <h2>Boot and manifest endpoints</h2>
-          <ul className="check-list">
-            <li><strong>Widget boot</strong>: <span className="portal-breakable">{integrations.bootEndpoint}</span></li>
-            <li><strong>Embed manifest</strong>: <span className="portal-breakable">{integrations.manifestEndpoint}</span></li>
-            <li><strong>Launcher label</strong>: {integrations.launcherLabel}</li>
-            <li><strong>Deployment blueprint</strong>: <Link href="/deployments/plumbing" className="link-inline">Open generator page</Link></li>
           </ul>
         </article>
       </section>
@@ -268,6 +260,78 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
         returning={asBoolean(searchParams.returning)}
         profile={profile}
       />
+
+      {showBlueprint ? (
+        <section className="grid two">
+          <article className="panel">
+            <p className="eyebrow">Hosted deployment</p>
+            <h2>Direct link for this entry point</h2>
+            <p className="muted">
+              Use this URL for buttons, ads, email, SMS, QR flows, directory listings, or a dedicated subdomain handoff.
+            </p>
+            <div className="code-card">
+              <pre><code>{integrations.hostedUrl}</code></pre>
+            </div>
+          </article>
+          <article className="panel">
+            <p className="eyebrow">Embed deployment</p>
+            <h2>Widget install code for client websites</h2>
+            <p className="muted">
+              This script launches the matching LeadOS widget for this exact entry path and service intent.
+            </p>
+            <div className="code-card">
+              <pre><code>{integrations.widgetScript}</code></pre>
+            </div>
+          </article>
+          <article className="panel">
+            <p className="eyebrow">Iframe handoff</p>
+            <h2>Embedded hosted-page fallback</h2>
+            <p className="muted">
+              Use this when a client wants the full hosted page embedded instead of the drawer widget.
+            </p>
+            <div className="code-card">
+              <pre><code>{integrations.iframeEmbed}</code></pre>
+            </div>
+          </article>
+          <article className="panel">
+            <p className="eyebrow">Integration endpoints</p>
+            <h2>Boot and manifest endpoints</h2>
+            <ul className="check-list">
+              <li><strong>Widget boot</strong>: <span className="portal-breakable">{integrations.bootEndpoint}</span></li>
+              <li><strong>Embed manifest</strong>: <span className="portal-breakable">{integrations.manifestEndpoint}</span></li>
+              <li><strong>Launcher label</strong>: {integrations.launcherLabel}</li>
+              <li><strong>Deployment blueprint</strong>: <Link href="/deployments/plumbing" className="link-inline">Open generator page</Link></li>
+            </ul>
+          </article>
+        </section>
+      ) : (
+        <section className="grid two">
+          <article className="panel">
+            <p className="eyebrow">Need this as a deployed asset?</p>
+            <h2>Use the deployment blueprint instead of exposing integration code to buyers</h2>
+            <p className="muted">
+              This customer-facing page is optimized for conversion. If you need hosted URLs, widget snippets, bulk ZIP rollout, or WordPress packages, open the operator blueprint surface.
+            </p>
+            <div className="cta-row">
+              <Link href="/deployments/plumbing" className="secondary">
+                Open deployment blueprint
+              </Link>
+              <Link href={`${entry.route}?blueprint=1`} className="secondary">
+                View page blueprint details
+              </Link>
+            </div>
+          </article>
+          <article className="panel">
+            <p className="eyebrow">Implementation rule</p>
+            <h2>Keep the public page persuasive, keep the integration layer separate</h2>
+            <ul className="check-list">
+              <li>Use this public page for ads, SEO, directories, email, QR, SMS, and client-side traffic.</li>
+              <li>Use the deployment blueprint when an operator, implementer, or agency needs code, embed presets, or rollout packages.</li>
+              <li>That separation protects customer conversion while still giving the operations team everything needed to deploy at scale.</li>
+            </ul>
+          </article>
+        </section>
+      )}
     </ExperienceScaffold>
   );
 }
