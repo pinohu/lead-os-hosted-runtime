@@ -7,20 +7,9 @@ import {
   type PlumbingEntrypointDefinition,
 } from "@/lib/plumbing-entrypoints";
 import { getNiche } from "@/lib/catalog";
-import { buildDashboardSnapshot, buildOperatorConsoleSnapshot } from "@/lib/dashboard";
 import { EXPERIENCE_ASSIGNMENT_HEADER } from "@/lib/experiments";
 import { resolveExperienceProfile } from "@/lib/experience";
-import { getAutomationHealth } from "@/lib/providers";
 import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
-import {
-  getBookingJobs,
-  getCanonicalEvents,
-  getExecutionTasks,
-  getLeadRecords,
-  getProviderDispatchRequests,
-  getProviderExecutions,
-  getWorkflowRuns,
-} from "@/lib/runtime-store";
 import { tenantConfig } from "@/lib/tenant";
 
 type PlumbingEntryPageProps = {
@@ -37,34 +26,130 @@ function asBoolean(value: string | string[] | undefined) {
   return normalized === "1" || normalized === "true" || normalized === "yes";
 }
 
+function buildPublicMetrics(entry: PlumbingEntrypointDefinition) {
+  if (entry.audience === "provider") {
+    return [
+      {
+        label: "Job quality",
+        value: "Better-fit work",
+        detail: "Service area, specialty, and readiness matter before jobs are routed.",
+      },
+      {
+        label: "Setup style",
+        value: "Short and practical",
+        detail: "The first step focuses on coverage, emergency availability, and the kinds of jobs you want.",
+      },
+      {
+        label: "Best outcome",
+        value: "More relevant leads",
+        detail: "Good provider pages should feel selective, operational, and worth completing.",
+      },
+    ];
+  }
+
+  if (entry.kind === "emergency") {
+    return [
+      {
+        label: "Speed",
+        value: "Fast path",
+        detail: "Urgent visitors should be able to act quickly without a long quote form.",
+      },
+      {
+        label: "Contact",
+        value: "Phone-first",
+        detail: "The page keeps the best contact path obvious when timing matters most.",
+      },
+      {
+        label: "Fallback",
+        value: "Human help",
+        detail: "If the issue is unusual, a dispatch-style fallback stays visible.",
+      },
+    ];
+  }
+
+  if (entry.kind === "estimate") {
+    return [
+      {
+        label: "Pressure",
+        value: "Lower-pressure flow",
+        detail: "Planned jobs should feel calm, useful, and easy to continue.",
+      },
+      {
+        label: "Detail level",
+        value: "Only what is needed",
+        detail: "The page asks for enough context to move forward, not everything at once.",
+      },
+      {
+        label: "Best outcome",
+        value: "Better estimate requests",
+        detail: "Comparison-minded visitors get a cleaner route to the next step.",
+      },
+    ];
+  }
+
+  if (entry.kind === "commercial") {
+    return [
+      {
+        label: "Language",
+        value: "Commercial-safe",
+        detail: "Property and facilities teams should not feel like they landed on a homeowner emergency page.",
+      },
+      {
+        label: "Intake",
+        value: "Structured request",
+        detail: "The flow leaves room for site, building, and coordination context.",
+      },
+      {
+        label: "Best outcome",
+        value: "Qualified service requests",
+        detail: "Commercial buyers should know what happens next and what kind of request they are making.",
+      },
+    ];
+  }
+
+  if (entry.kind === "local") {
+    return [
+      {
+        label: "Local feel",
+        value: "ZIP-specific",
+        detail: "Local visitors should see their area reflected before they commit.",
+      },
+      {
+        label: "Intent fit",
+        value: "Urgent or planned",
+        detail: "Search traffic can split into emergency, estimate, or commercial help without friction.",
+      },
+      {
+        label: "Best outcome",
+        value: "Less bounce",
+        detail: "Local relevance and a clear next step keep geo pages from feeling generic.",
+      },
+    ];
+  }
+
+  return [
+    {
+      label: "Clarity",
+      value: "Right path first",
+      detail: "Visitors should know where to go without guessing whether this is urgent, planned, or commercial.",
+    },
+    {
+      label: "Effort",
+      value: "Short first step",
+      detail: "The page should reduce decision effort before it asks for much information.",
+    },
+    {
+      label: "Best outcome",
+      value: "Clear next step",
+      detail: "People convert better when the next action feels obvious, local, and credible.",
+    },
+  ];
+}
+
 export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEntryPageProps) {
   const niche = getNiche("plumbing");
   const headerStore = await headers();
-  const [health, leads, events, bookingJobs, executionTasks, providerDispatchRequests, providerExecutions, workflowRuns, runtimeConfig] =
-    await Promise.all([
-      Promise.resolve(getAutomationHealth()),
-      getLeadRecords(),
-      getCanonicalEvents(),
-      getBookingJobs(),
-      getExecutionTasks(),
-      getProviderDispatchRequests(),
-      getProviderExecutions(),
-      getWorkflowRuns(),
-      getOperationalRuntimeConfig(),
-    ]);
-  const snapshot = buildDashboardSnapshot(leads, events);
-  const consoleSnapshot = buildOperatorConsoleSnapshot(
-    leads,
-    events,
-    bookingJobs,
-    executionTasks,
-    providerDispatchRequests,
-    providerExecutions,
-    workflowRuns,
-    runtimeConfig.dispatch.providers,
-    runtimeConfig.marketplace,
-    {},
-  );
+  const runtimeConfig = await getOperationalRuntimeConfig();
 
   const profile = resolveExperienceProfile({
     family: entry.family,
@@ -83,48 +168,9 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
     experimentPromotions: runtimeConfig.experiments.promotions,
   });
 
-  const activeProviders = runtimeConfig.dispatch.providers.filter((provider) => provider.active !== false);
-  const emergencyProviders = activeProviders.filter((provider) => provider.acceptsEmergency);
-  const providerScore = consoleSnapshot.plumbingDispatch.providerScores[0];
   const integrations = buildPlumbingIntegrationBundle(entry, tenantConfig.siteUrl);
   const showBlueprint = asBoolean(searchParams.blueprint) || asString(searchParams.view) === "blueprint";
-
-  const metrics =
-    entry.audience === "provider"
-      ? [
-          {
-            label: "Dispatch-ready network",
-            value: `${activeProviders.length}`,
-            detail: "Providers currently mapped across service areas, specialties, and active capacity signals.",
-          },
-          {
-            label: "Emergency-capable coverage",
-            value: `${emergencyProviders.length}`,
-            detail: "Providers currently marked as ready for urgent plumbing demand and fast-response coverage.",
-          },
-          {
-            label: "Top-fit routing score",
-            value: providerScore ? String(providerScore.routingScore) : "n/a",
-            detail: "Outcome-aware snapshot of how confidently the marketplace can match the best current provider fit.",
-          },
-        ]
-      : [
-          {
-            label: "Urgent demand recognized",
-            value: `${snapshot.totals.hotLeads}`,
-            detail: "Plumbing requests currently recognized by the runtime as hot, urgent, or fast-booking intent.",
-          },
-          {
-            label: "Moved to next step",
-            value: `${snapshot.milestones.lead.bookedOrOffered}`,
-            detail: "Jobs already moved into booking, estimate, proposal, or another high-intent next step.",
-          },
-          {
-            label: "Routing and follow-up state",
-            value: health.liveMode ? "Live" : "Dry run",
-            detail: "Whether booking, workflow, and follow-up channels behind this public path are currently live.",
-          },
-        ];
+  const metrics = buildPublicMetrics(entry);
 
   const splitLink =
     entry.audience === "provider"
@@ -132,14 +178,14 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
           href: "/get-plumbing-help",
           label: "Need plumbing help instead?",
           description:
-            "Use the demand-side marketplace path for homeowners, tenants, and commercial buyers who need service.",
+            "Use the customer-side path for homeowners, tenants, and commercial buyers who need service.",
           cta: "Go to plumbing help",
         }
       : {
           href: "/join-provider-network",
           label: "Need the provider side instead?",
           description:
-            "Use the supply-side marketplace path for plumbers and service companies who want to join the network.",
+            "Use the provider path if you are a plumber or service company interested in joining the network.",
           cta: "Go to provider onboarding",
         };
 
@@ -156,8 +202,8 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
     >
       <section className="grid two">
         <article className="panel">
-          <p className="eyebrow">Best for this path</p>
-          <h2>What someone should recognize within the first few seconds</h2>
+          <p className="eyebrow">{entry.chipsLabel}</p>
+          <h2>{entry.audience === "provider" ? "What serious providers should recognize quickly" : "What people usually need help with here"}</h2>
           <p className="muted">{entry.commitmentNote}</p>
           <div className="signal-pill-grid" aria-label={entry.chipsLabel}>
             {entry.chips.map((chip) => (
@@ -168,7 +214,7 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
           </div>
         </article>
         <article className="panel">
-          <p className="eyebrow">Need a different path?</p>
+          <p className="eyebrow">Need something else?</p>
           <h2>{splitLink.label}</h2>
           <p className="muted">{splitLink.description}</p>
           <div className="cta-row">
@@ -181,8 +227,8 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
 
       <section className="grid two">
         <article className="panel">
-          <p className="eyebrow">Why this page should convert better</p>
-          <h2>Clarity, relevance, and reduced effort</h2>
+          <p className="eyebrow">Why people choose this path</p>
+          <h2>{entry.audience === "provider" ? "Built for the way plumbing teams actually work" : "Built to feel clear and easy to act on"}</h2>
           <div className="value-card-grid">
             {entry.valueCards.map((card) => (
               <article key={card.title} className="value-card">
@@ -194,7 +240,7 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
         </article>
         <article className="panel">
           <p className="eyebrow">{entry.pathLabel}</p>
-          <h2>What the next step should feel like</h2>
+          <h2>What happens after you start</h2>
           <ol className="step-list">
             {entry.pathSteps.map((step) => (
               <li key={step}>{step}</li>
@@ -206,7 +252,7 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
       <section className="grid two">
         <article className="panel">
           <p className="eyebrow">{entry.trustLabel}</p>
-          <h2>Trust architecture near the ask</h2>
+          <h2>{entry.audience === "provider" ? "Why this feels worth your time" : "Why people feel comfortable moving forward"}</h2>
           <ul className="check-list">
             {entry.trustSignals.map((signal) => (
               <li key={signal}>{signal}</li>
@@ -214,8 +260,8 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
           </ul>
         </article>
         <article className="panel">
-          <p className="eyebrow">Questions people ask before they act</p>
-          <h2>Answer the friction before it becomes abandonment</h2>
+          <p className="eyebrow">Questions we hear a lot</p>
+          <h2>{entry.audience === "provider" ? "Answers before you decide to apply" : "Answers before you decide to reach out"}</h2>
           <div className="faq-stack">
             {entry.faq.map((item) => (
               <article key={item.question} className="faq-card">
@@ -230,7 +276,7 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
       <section className="grid two">
         <article className="panel">
           <p className="eyebrow">{entry.proofLabel}</p>
-          <h2>Other high-intent paths in the same marketplace</h2>
+          <h2>{entry.audience === "provider" ? "Looking for the customer side instead?" : "Looking for a different kind of plumbing help?"}</h2>
           <div className="entry-link-grid">
             {entry.relatedLinks.map((link) => (
               <Link key={link.href} href={link.href} className="entry-link-card">
@@ -241,12 +287,12 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
           </div>
         </article>
         <article className="panel">
-          <p className="eyebrow">Local and operational context</p>
-          <h2>Why this path still scales operationally</h2>
+          <p className="eyebrow">What to expect</p>
+          <h2>{entry.audience === "provider" ? "What this path is designed to make easier" : "What this page is designed to make easier"}</h2>
           <ul className="check-list">
-            <li>ZIP, city, county, service radius, and emergency coverage stay part of the routing model.</li>
-            <li>Demand and supply enter through different funnels, then meet through dispatch logic rather than directory browsing.</li>
-            <li>Every path keeps one dominant action, one safe fallback, and a clear explanation of what happens next.</li>
+            {entry.proofSignals.map((signal) => (
+              <li key={signal}>{signal}</li>
+            ))}
           </ul>
         </article>
       </section>
@@ -304,34 +350,7 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
             </ul>
           </article>
         </section>
-      ) : (
-        <section className="grid two">
-          <article className="panel">
-            <p className="eyebrow">Need this as a deployed asset?</p>
-            <h2>Use the deployment blueprint instead of exposing integration code to buyers</h2>
-            <p className="muted">
-              This customer-facing page is optimized for conversion. If you need hosted URLs, widget snippets, bulk ZIP rollout, or WordPress packages, open the operator blueprint surface.
-            </p>
-            <div className="cta-row">
-              <Link href="/deployments/plumbing" className="secondary">
-                Open deployment blueprint
-              </Link>
-              <Link href={`${entry.route}?blueprint=1`} className="secondary">
-                View page blueprint details
-              </Link>
-            </div>
-          </article>
-          <article className="panel">
-            <p className="eyebrow">Implementation rule</p>
-            <h2>Keep the public page persuasive, keep the integration layer separate</h2>
-            <ul className="check-list">
-              <li>Use this public page for ads, SEO, directories, email, QR, SMS, and client-side traffic.</li>
-              <li>Use the deployment blueprint when an operator, implementer, or agency needs code, embed presets, or rollout packages.</li>
-              <li>That separation protects customer conversion while still giving the operations team everything needed to deploy at scale.</li>
-            </ul>
-          </article>
-        </section>
-      )}
+      ) : null}
     </ExperienceScaffold>
   );
 }
