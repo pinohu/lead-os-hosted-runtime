@@ -1,4 +1,5 @@
 import { generateDeploymentPackage, type DeploymentGeneratorQuery } from "./embed-deployment.ts";
+import { getOperationalRuntimeConfig } from "./runtime-config.ts";
 import { tenantConfig } from "./tenant.ts";
 import {
   getDeploymentRegistryRecords,
@@ -75,7 +76,8 @@ export async function registerDeployment(input: RegisterDeploymentInput) {
     ...existingSeed,
     ...input,
   };
-  const deployment = generateDeploymentPackage(mergedInput, tenantConfig);
+  const runtimeConfig = await getOperationalRuntimeConfig();
+  const deployment = generateDeploymentPackage(mergedInput, tenantConfig, runtimeConfig.experiments.promotions);
   const id = input.id ?? buildDeploymentId(mergedInput, deployment.bundle.hostedUrl);
   const record: Omit<DeploymentRegistryRecord, "createdAt" | "updatedAt"> & { createdAt?: string; updatedAt?: string } = {
     id,

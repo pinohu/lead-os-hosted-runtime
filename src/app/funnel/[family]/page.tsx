@@ -7,6 +7,7 @@ import { getNiche } from "@/lib/catalog";
 import { EXPERIENCE_ASSIGNMENT_HEADER } from "@/lib/experiments";
 import { resolveExperienceProfile } from "@/lib/experience";
 import { buildDefaultFunnelGraphs } from "@/lib/funnel-library";
+import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import type { FunnelFamily } from "@/lib/runtime-schema";
 import { tenantConfig } from "@/lib/tenant";
 
@@ -47,6 +48,7 @@ export default async function FunnelFamilyPage({ params, searchParams }: FunnelF
   const niche = getNiche(asString(query.niche) ?? tenantConfig.defaultNiche);
   const audience = asAudience(query.audience) ?? "client";
   const headerStore = await headers();
+  const runtimeConfig = await getOperationalRuntimeConfig();
   const recipe = getRecipeForFamily(graph.family);
   const profile = resolveExperienceProfile({
     family: graph.family,
@@ -62,6 +64,7 @@ export default async function FunnelFamilyPage({ params, searchParams }: FunnelF
     assignmentKey: headerStore.get(EXPERIENCE_ASSIGNMENT_HEADER) ?? undefined,
     userAgent: headerStore.get("user-agent") ?? undefined,
     referrer: headerStore.get("referer") ?? undefined,
+    experimentPromotions: runtimeConfig.experiments.promotions,
   });
 
   return (

@@ -4,6 +4,7 @@ import { ExperienceScaffold } from "@/components/ExperienceScaffold";
 import { getNiche } from "@/lib/catalog";
 import { EXPERIENCE_ASSIGNMENT_HEADER } from "@/lib/experiments";
 import { resolveExperienceProfile } from "@/lib/experience";
+import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import { tenantConfig } from "@/lib/tenant";
 
 type OfferPageProps = {
@@ -25,6 +26,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
   const query = await searchParams;
   const niche = getNiche(slug);
   const headerStore = await headers();
+  const runtimeConfig = await getOperationalRuntimeConfig();
   const profile = resolveExperienceProfile({
     family: "checkout",
     niche,
@@ -38,6 +40,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
     assignmentKey: headerStore.get(EXPERIENCE_ASSIGNMENT_HEADER) ?? undefined,
     userAgent: headerStore.get("user-agent") ?? undefined,
     referrer: headerStore.get("referer") ?? undefined,
+    experimentPromotions: runtimeConfig.experiments.promotions,
   });
 
   return (

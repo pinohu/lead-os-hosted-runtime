@@ -127,6 +127,23 @@ It verifies:
 
 The deployment registry now stores verification status directly on each record so operators can filter drift, broken installs, and stale rollout assumptions from the dashboard.
 
+## Experiment promotion
+
+LeadOS now supports promoting winning experience variants into the live resolver.
+
+- operators review economics on `/dashboard/experiments`
+- admins can promote a non-holdout winner through `/api/experiments/promote`
+- promoted winners are stored in runtime config and applied synchronously across:
+  - hosted assessment pages
+  - hosted funnel pages
+  - hosted offer pages
+  - calculator pages
+  - plumbing entry pages
+  - widget boot payload resolution
+  - deployment generator output
+  - bulk ZIP generation output
+  - generated WordPress plugin packages
+
 ### `/deployments/plumbing`
 
 Use this as the human-facing operator blueprint page for:

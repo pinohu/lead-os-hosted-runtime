@@ -80,3 +80,25 @@ test("plumbing provider onboarding can resolve into randomized provider variants
   assert.equal(profile.randomizedExperiment, true);
   assert.ok(["coverage-proof", "ops-guided", "holdout-basic-form"].includes(profile.variantId));
 });
+
+test("promoted experiment winners override randomized assignment for live resolution", () => {
+  const profile = resolveExperienceProfile({
+    family: "qualification",
+    niche: nicheCatalog.plumbing,
+    assignmentKey: "visitor-123",
+    supportEmail: "support@yourdeputy.com",
+    experimentPromotions: [
+      {
+        experimentId: "plumbing-client-entry-v1:desktop",
+        variantId: "dispatch-proof",
+        promotedAt: "2026-03-15T12:00:00Z",
+        promotedBy: "admin@example.com",
+      },
+    ],
+  });
+
+  assert.equal(profile.variantId, "dispatch-proof");
+  assert.equal(profile.promotedExperiment, true);
+  assert.equal(profile.randomizedExperiment, false);
+  assert.equal(profile.mode, "booking-first");
+});

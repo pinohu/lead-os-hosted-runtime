@@ -3,6 +3,7 @@ import {
   upsertRuntimeConfig,
   type RuntimeConfigRecord,
 } from "./runtime-store.ts";
+import type { ExperienceExperimentPromotion } from "./experiments.ts";
 import { OBSERVABILITY_RULE_IDS } from "./observability-rules.ts";
 
 export type OperationalRuntimeConfig = {
@@ -20,6 +21,9 @@ export type OperationalRuntimeConfig = {
         ruleIds: string[];
       }>;
     };
+  };
+  experiments: {
+    promotions: ExperienceExperimentPromotion[];
   };
   trafft: {
     publicBookingUrl?: string;
@@ -83,6 +87,9 @@ const DEFAULT_CONFIG: OperationalRuntimeConfig = {
       recipients: [],
     },
   },
+  experiments: {
+    promotions: [],
+  },
   trafft: {
     serviceMap: {},
   },
@@ -98,6 +105,7 @@ const DEFAULT_CONFIG: OperationalRuntimeConfig = {
 
 const RECORD_KEYS: Record<RuntimeConfigSectionKey, string> = {
   observability: "runtime.observability",
+  experiments: "runtime.experiments",
   trafft: "provider.trafft",
   dispatch: "provider.dispatch",
   marketplace: "provider.marketplace",
@@ -213,6 +221,34 @@ function sanitizeObservabilitySection(value: Partial<OperationalRuntimeConfig["o
       recipients: sanitizeObservabilityRecipients(notifications.recipients),
     },
   } satisfies OperationalRuntimeConfig["observability"];
+}
+
+function sanitizeExperimentPromotions(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [] as ExperienceExperimentPromotion[];
+  }
+
+  return value
+    .map((entry) => entry && typeof entry === "object" ? entry as Record<string, unknown> : null)
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry))
+    .map((entry) => ({
+      experimentId: getStringValue(entry.experimentId) ?? "",
+      variantId: getStringValue(entry.variantId) ?? "",
+      promotedAt: getStringValue(entry.promotedAt) ?? new Date().toISOString(),
+      promotedBy: getStringValue(entry.promotedBy),
+      reason: getStringValue(entry.reason),
+    }))
+    .filter((entry) => entry.experimentId.length > 0 && entry.variantId.length > 0);
+}
+
+function sanitizeExperimentsSection(value: Partial<OperationalRuntimeConfig["experiments"]> | undefined) {
+  if (!value) {
+    return DEFAULT_CONFIG.experiments;
+  }
+
+  return {
+    promotions: sanitizeExperimentPromotions(value.promotions),
+  } satisfies OperationalRuntimeConfig["experiments"];
 }
 
 function sanitizeDispatchProviders(value: unknown) {
@@ -332,8 +368,9 @@ function sanitizeCroveSection(value: Partial<OperationalRuntimeConfig["crove"]> 
 }
 
 export async function getOperationalRuntimeConfig(): Promise<OperationalRuntimeConfig> {
-  const [observability, trafft, dispatch, marketplace, documentero, crove] = await Promise.all([
+  const [observability, experiments, trafft, dispatch, marketplace, documentero, crove] = await Promise.all([
     getRuntimeConfig(RECORD_KEYS.observability),
+    getRuntimeConfig(RECORD_KEYS.experiments),
     getRuntimeConfig(RECORD_KEYS.trafft),
     getRuntimeConfig(RECORD_KEYS.dispatch),
     getRuntimeConfig(RECORD_KEYS.marketplace),
@@ -343,6 +380,7 @@ export async function getOperationalRuntimeConfig(): Promise<OperationalRuntimeC
 
   return {
     observability: sanitizeObservabilitySection(getRecordValue(observability) as OperationalRuntimeConfig["observability"]),
+    experiments: sanitizeExperimentsSection(getRecordValue(experiments) as OperationalRuntimeConfig["experiments"]),
     trafft: sanitizeTrafftSection(getRecordValue(trafft) as OperationalRuntimeConfig["trafft"]),
     dispatch: sanitizeDispatchSection(getRecordValue(dispatch) as OperationalRuntimeConfig["dispatch"]),
     marketplace: sanitizeMarketplaceSection(getRecordValue(marketplace) as OperationalRuntimeConfig["marketplace"]),
@@ -372,6 +410,9 @@ export async function updateOperationalRuntimeConfig(
         ...config.observability?.notifications,
       },
     }),
+    experiments: sanitizeExperimentsSection({
+      promotions: config.experiments?.promotions ?? current.experiments.promotions,
+    }),
     trafft: sanitizeTrafftSection({ ...current.trafft, ...config.trafft }),
     dispatch: sanitizeDispatchSection({ ...current.dispatch, ...config.dispatch }),
     marketplace: sanitizeMarketplaceSection({ ...current.marketplace, ...config.marketplace }),
@@ -383,6 +424,11 @@ export async function updateOperationalRuntimeConfig(
     upsertRuntimeConfig({
       key: RECORD_KEYS.observability,
       value: next.observability,
+      updatedBy,
+    }),
+    upsertRuntimeConfig({
+      key: RECORD_KEYS.experiments,
+      value: next.experiments,
       updatedBy,
     }),
     upsertRuntimeConfig({
@@ -430,6 +476,9 @@ export function buildRuntimeConfigSummary(config: OperationalRuntimeConfig) {
       emailRecipients: config.observability.notifications.recipients.filter((recipient) =>
         recipient.active && recipient.channels.includes("email") && Boolean(recipient.email)
       ).length,
+    },
+    experiments: {
+      promotedVariants: config.experiments.promotions.length,
     },
     trafft: {
       hasPublicBookingUrl: Boolean(config.trafft.publicBookingUrl),

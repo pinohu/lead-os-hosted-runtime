@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ExperimentPromotionForm } from "@/components/ExperimentPromotionForm";
 import { buildDashboardSnapshotWithOptions } from "@/lib/dashboard";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
 import { formatCurrency } from "@/lib/operator-ui";
@@ -51,6 +52,9 @@ export default async function ExperimentsPage() {
     dispatchProviders: runtimeConfig.dispatch.providers,
     marketplace: runtimeConfig.marketplace,
   });
+  const promotedByExperiment = new Map(
+    runtimeConfig.experiments.promotions.map((promotion) => [promotion.experimentId, promotion]),
+  );
 
   return (
     <main className="experience-page">
@@ -107,6 +111,7 @@ export default async function ExperimentsPage() {
               <div className="portal-status-row">
                 <span className="portal-chip">{experiment.experimentId}</span>
                 <span className="portal-chip">{classifyExperiment(experiment).status}</span>
+                {promotedByExperiment.has(experiment.experimentId) ? <span className="portal-chip">live default</span> : null}
               </div>
               <h2>{experiment.entries} entries</h2>
               <p className="muted">
@@ -134,6 +139,18 @@ export default async function ExperimentsPage() {
                   </li>
                 ))}
               </ul>
+              {experiment.topVariants.filter((variant) => !variant.variantId.includes("holdout")).slice(0, 1).map((variant) => (
+                <div key={`${experiment.experimentId}:${variant.variantId}`} className="stack-grid">
+                  <p className="muted portal-breakable">
+                    Promote the current lead variant winner into the synchronous live resolver so new visitors stop randomizing for this experiment.
+                  </p>
+                  <ExperimentPromotionForm
+                    experimentId={experiment.experimentId}
+                    variantId={variant.variantId}
+                    promoted={promotedByExperiment.get(experiment.experimentId)?.variantId === variant.variantId}
+                  />
+                </div>
+              ))}
             </article>
           ))
         )}

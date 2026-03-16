@@ -173,3 +173,28 @@ test("runtime config summary reports executable coverage", async () => {
   assert.equal(summary.documentero.hasProposalTemplate, true);
   assert.equal(summary.crove.hasWebhookUrl, true);
 });
+
+test("runtime config persists promoted experiment winners", async () => {
+  await resetRuntimeStore();
+  await updateOperationalRuntimeConfig({
+    experiments: {
+      promotions: [
+        {
+          experimentId: "plumbing-client-entry-v1:desktop",
+          variantId: "dispatch-proof",
+          promotedAt: "2026-03-15T12:00:00Z",
+          promotedBy: "admin@example.com",
+          reason: "Highest contribution margin with no complaints",
+        },
+      ],
+    },
+  });
+
+  const config = await getOperationalRuntimeConfig();
+  assert.equal(config.experiments.promotions.length, 1);
+  assert.equal(config.experiments.promotions[0]?.experimentId, "plumbing-client-entry-v1:desktop");
+  assert.equal(config.experiments.promotions[0]?.variantId, "dispatch-proof");
+
+  const summary = buildRuntimeConfigSummary(config);
+  assert.equal(summary.experiments.promotedVariants, 1);
+});

@@ -1,5 +1,5 @@
 import type { NicheDefinition } from "./catalog.ts";
-import { resolveExperienceExperiment } from "./experiments.ts";
+import { resolveExperienceExperiment, type ExperienceExperimentPromotion } from "./experiments.ts";
 import type { FunnelFamily, MarketplaceAudience } from "./runtime-schema.ts";
 
 export type ExperienceMode =
@@ -35,6 +35,7 @@ export type ExperienceInput = {
   score?: number;
   userAgent?: string;
   referrer?: string;
+  experimentPromotions?: ExperienceExperimentPromotion[];
 };
 
 export type ExperienceProfile = {
@@ -45,6 +46,7 @@ export type ExperienceProfile = {
   experimentId: string;
   variantId: string;
   randomizedExperiment: boolean;
+  promotedExperiment: boolean;
   holdout: boolean;
   heroTitle: string;
   heroSummary: string;
@@ -432,6 +434,7 @@ export function resolveExperienceProfile(input: ExperienceInput): ExperienceProf
     audience,
     device,
     baseMode,
+    promotions: input.experimentPromotions,
   });
   const mode = assignment.mode;
   const destination = buildDestination(family, input.niche, audience);
@@ -456,6 +459,7 @@ export function resolveExperienceProfile(input: ExperienceInput): ExperienceProf
     experimentId: assignment.experimentId,
     variantId: assignment.variantId,
     randomizedExperiment: assignment.randomized,
+    promotedExperiment: assignment.promoted,
     holdout: assignment.holdout,
     heroTitle:
       audience === "provider" && plumbingLike
@@ -544,17 +548,24 @@ export function resolveExperienceProfile(input: ExperienceInput): ExperienceProf
       input.referrer ? `Arrived from ${new URL(input.referrer).hostname}` : plumbingLike ? "Adaptive by urgency, service type, and entry source" : "Adaptive by source and referral context",
       device === "mobile" ? "Mobile-optimized path with lower cognitive load" : "Desktop path can support richer proof and comparison",
       ...(plumbingLike ? [`Service model: ${input.niche.serviceCategories.slice(0, 3).join(", ")}`] : []),
-      assignment.randomized ? `Experiment assignment: ${assignment.variantId}${assignment.holdout ? " (holdout)" : ""}` : "Deterministic default experience path",
+      assignment.promoted
+        ? `Promoted winner active: ${assignment.variantId}`
+        : assignment.randomized
+          ? `Experiment assignment: ${assignment.variantId}${assignment.holdout ? " (holdout)" : ""}`
+          : "Deterministic default experience path",
       returnOffer,
     ],
     returnOffer,
   };
 }
 
-export function buildExperienceManifest(niche: NicheDefinition) {
+export function buildExperienceManifest(
+  niche: NicheDefinition,
+  experimentPromotions?: ExperienceExperimentPromotion[],
+) {
   return {
     heuristics: EXPERIENCE_HEURISTICS,
     supportedModes: ["chat-first", "form-first", "calculator-first", "webinar-first", "booking-first"],
-    defaults: resolveExperienceProfile({ niche }),
+    defaults: resolveExperienceProfile({ niche, experimentPromotions }),
   };
 }

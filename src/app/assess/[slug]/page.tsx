@@ -5,6 +5,7 @@ import { ExperienceScaffold } from "@/components/ExperienceScaffold";
 import { getNiche, nicheCatalog } from "@/lib/catalog";
 import { EXPERIENCE_ASSIGNMENT_HEADER } from "@/lib/experiments";
 import { resolveExperienceProfile } from "@/lib/experience";
+import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import { tenantConfig } from "@/lib/tenant";
 
 type AssessmentPageProps = {
@@ -39,6 +40,7 @@ export default async function AssessmentPage({ params, searchParams }: Assessmen
   if (!niche) notFound();
 
   const headerStore = await headers();
+  const runtimeConfig = await getOperationalRuntimeConfig();
   const profile = resolveExperienceProfile({
     family: "qualification",
     niche,
@@ -53,6 +55,7 @@ export default async function AssessmentPage({ params, searchParams }: Assessmen
     assignmentKey: headerStore.get(EXPERIENCE_ASSIGNMENT_HEADER) ?? undefined,
     userAgent: headerStore.get("user-agent") ?? undefined,
     referrer: headerStore.get("referer") ?? undefined,
+    experimentPromotions: runtimeConfig.experiments.promotions,
   });
 
   return (

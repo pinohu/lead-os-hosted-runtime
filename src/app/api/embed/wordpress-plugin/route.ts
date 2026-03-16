@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildCorsHeaders } from "@/lib/cors";
 import { generateDeploymentPackage } from "@/lib/embed-deployment";
+import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import { tenantConfig } from "@/lib/tenant";
 import { generateWordPressPluginPackage } from "@/lib/wordpress-plugin";
 
@@ -13,6 +14,7 @@ export async function OPTIONS(request: Request) {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  const runtimeConfig = await getOperationalRuntimeConfig();
   const deployment = generateDeploymentPackage({
     recipe: url.searchParams.get("recipe") ?? undefined,
     niche: url.searchParams.get("niche") ?? undefined,
@@ -25,7 +27,7 @@ export async function GET(request: Request) {
     city: url.searchParams.get("city") ?? undefined,
     pageType: url.searchParams.get("pageType") ?? undefined,
     launcherLabel: url.searchParams.get("launcherLabel") ?? undefined,
-  }, tenantConfig);
+  }, tenantConfig, runtimeConfig.experiments.promotions);
   const pluginPackage = generateWordPressPluginPackage(deployment, tenantConfig);
 
   if (url.searchParams.get("download") === "1") {

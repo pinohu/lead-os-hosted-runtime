@@ -4,6 +4,7 @@ import { ExperienceScaffold } from "@/components/ExperienceScaffold";
 import { getNiche } from "@/lib/catalog";
 import { EXPERIENCE_ASSIGNMENT_HEADER } from "@/lib/experiments";
 import { resolveExperienceProfile } from "@/lib/experience";
+import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import { tenantConfig } from "@/lib/tenant";
 
 type CalculatorPageProps = {
@@ -23,6 +24,7 @@ export default async function CalculatorPage({ searchParams }: CalculatorPagePro
   const query = await searchParams;
   const niche = getNiche(asString(query.niche));
   const headerStore = await headers();
+  const runtimeConfig = await getOperationalRuntimeConfig();
   const profile = resolveExperienceProfile({
     family: asString(query.mode) === "chat-first" ? "chat" : "lead-magnet",
     niche,
@@ -36,6 +38,7 @@ export default async function CalculatorPage({ searchParams }: CalculatorPagePro
     assignmentKey: headerStore.get(EXPERIENCE_ASSIGNMENT_HEADER) ?? undefined,
     userAgent: headerStore.get("user-agent") ?? undefined,
     referrer: headerStore.get("referer") ?? undefined,
+    experimentPromotions: runtimeConfig.experiments.promotions,
   });
 
   return (

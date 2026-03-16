@@ -3,6 +3,7 @@ import { buildCorsHeaders } from "@/lib/cors";
 import { resolveWidgetBoot } from "@/lib/embed-deployment";
 import { buildDefaultFunnelGraphs } from "@/lib/funnel-library";
 import { getAutomationHealth } from "@/lib/providers";
+import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import { tenantConfig } from "@/lib/tenant";
 
 export async function OPTIONS(request: Request) {
@@ -16,6 +17,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const funnels = buildDefaultFunnelGraphs(tenantConfig.tenantId);
   const health = getAutomationHealth();
+  const runtimeConfig = await getOperationalRuntimeConfig();
   const resolved = resolveWidgetBoot({
     niche: url.searchParams.get("niche") ?? undefined,
     service: url.searchParams.get("service") ?? undefined,
@@ -27,7 +29,7 @@ export async function GET(request: Request) {
     city: url.searchParams.get("city") ?? undefined,
     pageType: url.searchParams.get("pageType") ?? undefined,
     launcherLabel: url.searchParams.get("launcherLabel") ?? undefined,
-  }, tenantConfig);
+  }, tenantConfig, runtimeConfig.experiments.promotions);
   return NextResponse.json({
     success: true,
     widget: {

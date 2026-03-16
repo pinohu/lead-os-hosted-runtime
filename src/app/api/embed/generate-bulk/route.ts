@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildCorsHeaders } from "@/lib/cors";
 import { generateBulkZipDeploymentPackage } from "@/lib/embed-deployment";
+import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import { tenantConfig } from "@/lib/tenant";
 
 function splitCsv(value?: string | null) {
@@ -49,6 +50,7 @@ export async function OPTIONS(request: Request) {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const format = url.searchParams.get("format") ?? "json";
+  const runtimeConfig = await getOperationalRuntimeConfig();
   const deployment = generateBulkZipDeploymentPackage({
     recipe: url.searchParams.get("recipe") ?? undefined,
     niche: url.searchParams.get("niche") ?? undefined,
@@ -62,7 +64,7 @@ export async function GET(request: Request) {
     launcherLabel: url.searchParams.get("launcherLabel") ?? undefined,
     zips: splitCsv(url.searchParams.get("zips")),
     limit: Number(url.searchParams.get("limit") ?? 25),
-  }, tenantConfig);
+  }, tenantConfig, runtimeConfig.experiments.promotions);
 
   if (format === "csv") {
     return new NextResponse(toCsv(deployment), {

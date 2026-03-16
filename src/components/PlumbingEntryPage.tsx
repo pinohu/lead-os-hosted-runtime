@@ -80,6 +80,7 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
     assignmentKey: headerStore.get(EXPERIENCE_ASSIGNMENT_HEADER) ?? undefined,
     userAgent: headerStore.get("user-agent") ?? undefined,
     referrer: headerStore.get("referer") ?? undefined,
+    experimentPromotions: runtimeConfig.experiments.promotions,
   });
 
   const activeProviders = runtimeConfig.dispatch.providers.filter((provider) => provider.active !== false);

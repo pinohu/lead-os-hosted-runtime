@@ -68,6 +68,29 @@ test("generateDeploymentPackage returns preset-aware snippets for ZIP deployment
   assert.match(generated.generatorEndpoint, /recipe=zip-seo-page-urgent-widget/);
 });
 
+test("generateDeploymentPackage carries promoted winners into generated experience defaults", () => {
+  const generated = generateDeploymentPackage(
+    {
+      recipe: "provider-homepage-emergency-widget",
+      niche: "plumbing",
+    },
+    tenantConfig,
+    [
+      {
+        experimentId: "plumbing-client-entry-v1:desktop",
+        variantId: "dispatch-proof",
+        promotedAt: "2026-03-15T12:00:00.000Z",
+        promotedBy: "ops@example.com",
+        reason: "Winner on completed contribution margin",
+      },
+    ],
+  );
+
+  assert.equal(generated.experience.defaults.promotedExperiment, true);
+  assert.equal(generated.experience.defaults.variantId, "dispatch-proof");
+  assert.match(generated.experience.defaults.supportingSignals.join(" "), /Promoted winner active/);
+});
+
 test("generateBulkZipDeploymentPackage returns many localized deployment packages", () => {
   const generated = generateBulkZipDeploymentPackage(
     {

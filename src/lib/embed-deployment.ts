@@ -1,5 +1,6 @@
 import { getNiche, nicheCatalog } from "./catalog.ts";
 import { buildExperienceManifest, resolveExperienceProfile, type ExperienceMode } from "./experience.ts";
+import type { ExperienceExperimentPromotion } from "./experiments.ts";
 import {
   buildPlumbingIntegrationBundle,
   getPlumbingEntrypoint,
@@ -390,7 +391,11 @@ function overrideEntry(entry: PlumbingEntrypointDefinition, query: BootQuery) {
   };
 }
 
-export function resolveWidgetBoot(query: BootQuery, tenantConfig: TenantConfig): ResolvedWidgetBoot {
+export function resolveWidgetBoot(
+  query: BootQuery,
+  tenantConfig: TenantConfig,
+  experimentPromotions: ExperienceExperimentPromotion[] = [],
+): ResolvedWidgetBoot {
   const entrypoint = inferEntrypointKind(query);
   const baseEntry = getPlumbingEntrypoint(entrypoint, { zip: query.zip });
   const entry = overrideEntry(baseEntry, query);
@@ -410,6 +415,7 @@ export function resolveWidgetBoot(query: BootQuery, tenantConfig: TenantConfig):
     preferredMode: entry.preferredMode,
     intent: entry.intent,
     source: "embedded_widget",
+    experimentPromotions,
   });
 
   return {
@@ -424,15 +430,18 @@ export function resolveWidgetBoot(query: BootQuery, tenantConfig: TenantConfig):
     audience,
     zip: query.zip,
     city: query.city,
-    experience: buildExperienceManifest(nicheDef),
+    experience: buildExperienceManifest(nicheDef, experimentPromotions),
     resolvedProfile,
   };
 }
 
-export function buildManifestCatalog(tenantConfig: TenantConfig) {
+export function buildManifestCatalog(
+  tenantConfig: TenantConfig,
+  experimentPromotions: ExperienceExperimentPromotion[] = [],
+) {
   const experienceCatalog = Object.values(nicheCatalog).map((niche) => ({
     niche: niche.slug,
-    manifest: buildExperienceManifest(niche),
+    manifest: buildExperienceManifest(niche, experimentPromotions),
   }));
 
   return {
@@ -539,9 +548,10 @@ function normalizeZipList(zips?: string[]) {
 export function generateDeploymentPackage(
   query: DeploymentGeneratorQuery,
   tenantConfig: TenantConfig,
+  experimentPromotions: ExperienceExperimentPromotion[] = [],
 ): GeneratedDeploymentPackage {
   const normalized = normalizeGeneratorQuery(query);
-  const resolved = resolveWidgetBoot(normalized, tenantConfig);
+  const resolved = resolveWidgetBoot(normalized, tenantConfig, experimentPromotions);
   const entry = resolveDeploymentEntry(resolved, normalized);
   const bundle = buildPlumbingIntegrationBundle(entry, tenantConfig.siteUrl, {
     zip: resolved.zip,
@@ -574,6 +584,7 @@ export function generateDeploymentPackage(
 export function generateBulkZipDeploymentPackage(
   query: BulkZipDeploymentQuery,
   tenantConfig: TenantConfig,
+  experimentPromotions: ExperienceExperimentPromotion[] = [],
 ): BulkZipDeploymentPackage {
   const limit = Math.max(1, Math.min(query.limit ?? 25, 250));
   const zipList = normalizeZipList(query.zips).slice(0, limit);
@@ -581,7 +592,7 @@ export function generateBulkZipDeploymentPackage(
     generateDeploymentPackage({
       ...query,
       zip,
-    }, tenantConfig),
+    }, tenantConfig, experimentPromotions),
   );
 
   return {

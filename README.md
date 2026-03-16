@@ -22,6 +22,7 @@ The hosted runtime owns:
 - multi-ZIP marketplace assumptions for thousands of providers and customers
 - exact-once execution queues for booking, documents, workflow, outbound follow-up, and hot-lead alerts
 - observability dashboards for lead journeys, bird's-eye operations, alert delivery health, and rollout drift
+- experiment winners that can be promoted into live public experience defaults without code changes
 
 ## Key docs
 

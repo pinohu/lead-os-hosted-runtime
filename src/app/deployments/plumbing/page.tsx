@@ -4,6 +4,7 @@ import {
   generateBulkZipDeploymentPackage,
   generateDeploymentPackage,
 } from "@/lib/embed-deployment";
+import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import { tenantConfig } from "@/lib/tenant";
 import { generateWordPressPluginPackage } from "@/lib/wordpress-plugin";
 
@@ -21,13 +22,15 @@ export default async function DeploymentBlueprintPage({ searchParams }: Deployme
   const city = asString(params.city) ?? "Philadelphia";
   const recipe = asString(params.recipe) ?? "provider-homepage-emergency-widget";
   const bulkZipInput = asString(params.zips) ?? "19103,19104,19107";
-  const catalog = buildManifestCatalog(tenantConfig);
+  const runtimeConfig = await getOperationalRuntimeConfig();
+  const promotions = runtimeConfig.experiments.promotions;
+  const catalog = buildManifestCatalog(tenantConfig, promotions);
   const activeDeployment = generateDeploymentPackage({
     recipe,
     zip,
     city,
     niche: "plumbing",
-  }, tenantConfig);
+  }, tenantConfig, promotions);
   const wordpressPlugin = generateWordPressPluginPackage(activeDeployment, tenantConfig);
   const bulkDeployment = generateBulkZipDeploymentPackage({
     recipe,
@@ -35,7 +38,7 @@ export default async function DeploymentBlueprintPage({ searchParams }: Deployme
     city,
     zips: bulkZipInput.split(","),
     limit: 12,
-  }, tenantConfig);
+  }, tenantConfig, promotions);
 
   return (
     <main className="page-shell">

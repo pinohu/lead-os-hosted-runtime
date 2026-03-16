@@ -4,6 +4,7 @@ import { buildManifestCatalog } from "@/lib/embed-deployment";
 import { getRecipeForFamily } from "@/lib/automation";
 import { buildDefaultFunnelGraphs } from "@/lib/funnel-library";
 import { getAutomationHealth } from "@/lib/providers";
+import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import { tenantConfig } from "@/lib/tenant";
 
 export async function OPTIONS(request: Request) {
@@ -16,7 +17,8 @@ export async function OPTIONS(request: Request) {
 export async function GET(request: Request) {
   const graphs = buildDefaultFunnelGraphs(tenantConfig.tenantId);
   const health = getAutomationHealth();
-  const catalog = buildManifestCatalog(tenantConfig);
+  const runtimeConfig = await getOperationalRuntimeConfig();
+  const catalog = buildManifestCatalog(tenantConfig, runtimeConfig.experiments.promotions);
   return NextResponse.json({
     success: true,
     tenant: tenantConfig,
