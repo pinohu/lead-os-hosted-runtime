@@ -29,7 +29,7 @@ const buyerFunnels: ShowroomItem[] = [
     label: "Emergency plumbing",
     href: "/plumbing/emergency",
     summary: "Fast, urgent, dispatch-first path for active plumbing issues and mobile solve-now traffic.",
-    bestFor: "Paid traffic, urgent SEO, sticky CTAs, and “need help now” entry points.",
+    bestFor: "Paid traffic, urgent SEO, sticky CTAs, and \"need help now\" entry points.",
   },
   {
     audience: "Customer",

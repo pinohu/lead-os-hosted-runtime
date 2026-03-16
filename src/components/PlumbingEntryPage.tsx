@@ -732,6 +732,56 @@ function renderPremiumModules(entry: PlumbingEntrypointDefinition) {
           </div>
         </section>
       );
+    case "local":
+      return (
+        <section className="premium-module premium-module--local">
+          <article className="panel premium-module__lead">
+            <p className="eyebrow">Local confidence</p>
+            <h2>Local visitors convert when the page proves it belongs to their search</h2>
+            <div className="premium-metric-grid">
+              <article className="premium-metric-card">
+                <strong>ZIP-first</strong>
+                <span>Keep the area visible early</span>
+                <p className="muted">
+                  Area relevance should be obvious before the visitor wonders whether the page is actually local.
+                </p>
+              </article>
+              <article className="premium-metric-card">
+                <strong>Intent split</strong>
+                <span>Urgent and planned paths stay separate</span>
+                <p className="muted">
+                  Local traffic includes both solve-now visitors and comparison shoppers, and both need clear lanes.
+                </p>
+              </article>
+              <article className="premium-metric-card">
+                <strong>Search trust</strong>
+                <span>Specific beats generic</span>
+                <p className="muted">
+                  The page should feel like a service destination, not a placeholder on the way to another form.
+                </p>
+              </article>
+            </div>
+          </article>
+          <div className="premium-split">
+            <article className="premium-card">
+              <p className="eyebrow">Area-specific cues</p>
+              <h3>What should feel local immediately</h3>
+              <ul className="check-list">
+                <li>ZIP or area reference in the hero</li>
+                <li>Relevant next-step choices for urgent and planned demand</li>
+                <li>Language that feels nearby instead of nationwide and vague</li>
+              </ul>
+            </article>
+            <article className="premium-card">
+              <p className="eyebrow">Why this matters</p>
+              <h3>Local search visitors decide quickly whether to stay</h3>
+              <p className="muted">
+                Strong local pages reassure the visitor that this is a relevant, useful place to act right now, not just another generic listing.
+              </p>
+            </article>
+          </div>
+        </section>
+      );
     default:
       return null;
   }
@@ -828,6 +878,28 @@ function renderPremiumProofMosaic(entry: PlumbingEntrypointDefinition) {
             <p className="eyebrow">Provider behavior</p>
             <h3>Strong operators filter quickly</h3>
             <p className="muted">The page should help a serious provider decide fast whether this is a quality opportunity worth their time.</p>
+          </article>
+        </section>
+      );
+    case "local":
+      return (
+        <section className="premium-proof-mosaic premium-proof-mosaic--local">
+          <article className="premium-proof-card premium-proof-card--wide">
+            <p className="eyebrow">Five-star local experience</p>
+            <h2>Local pages win when they feel nearby, useful, and easy to trust</h2>
+            <p className="muted">
+              The strongest local landing pages do not feel like SEO bait. They feel like a real service page that understands why the visitor searched in the first place.
+            </p>
+          </article>
+          <article className="premium-proof-card">
+            <p className="eyebrow">Trust cue</p>
+            <h3>Specificity beats generic language</h3>
+            <p className="muted">Show area relevance, service intent, and a real next step before the visitor bounces back to search results.</p>
+          </article>
+          <article className="premium-proof-card">
+            <p className="eyebrow">Search behavior</p>
+            <h3>People judge local fit in seconds</h3>
+            <p className="muted">A local visitor wants to know whether the page feels close, relevant, and worth acting on right now.</p>
           </article>
         </section>
       );
