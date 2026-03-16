@@ -465,19 +465,30 @@ button[disabled] {
   gap: 18px;
 }
 
+.premium-module {
+  display: grid;
+  gap: 18px;
+}
+
 .spotlight-lead,
-.closing-lead {
+.closing-lead,
+.premium-module__lead {
   min-width: 0;
 }
 
 .spotlight-grid,
-.closing-checks {
+.closing-checks,
+.premium-split {
   display: grid;
   gap: 14px;
 }
 
 .spotlight-card,
-.closing-card {
+.closing-card,
+.premium-card,
+.premium-metric-card,
+.premium-gallery-card,
+.service-matrix__card {
   display: grid;
   gap: 8px;
   padding: 22px;
@@ -488,6 +499,31 @@ button[disabled] {
 }
 
 .danger-card {
+  background: linear-gradient(180deg, rgba(255, 243, 242, 0.94), rgba(255, 255, 255, 0.82));
+  border-color: rgba(161, 39, 47, 0.14);
+}
+
+.premium-metric-grid,
+.premium-gallery-grid,
+.service-matrix {
+  display: grid;
+  gap: 14px;
+}
+
+.premium-metric-card strong,
+.premium-gallery-card strong,
+.service-matrix__card strong {
+  font-size: 1rem;
+}
+
+.premium-metric-card span,
+.premium-gallery-card span,
+.service-matrix__card span {
+  color: #1d4339;
+  font-weight: 700;
+}
+
+.premium-card--urgent {
   background: linear-gradient(180deg, rgba(255, 243, 242, 0.94), rgba(255, 255, 255, 0.82));
   border-color: rgba(161, 39, 47, 0.14);
 }
@@ -509,6 +545,21 @@ button[disabled] {
 }
 
 .closing-band--provider .closing-card {
+  background: linear-gradient(180deg, rgba(241, 247, 245, 0.96), rgba(255, 255, 255, 0.84));
+}
+
+.premium-module--estimate .premium-card,
+.premium-module--estimate .premium-gallery-card {
+  background: linear-gradient(180deg, rgba(255, 251, 245, 0.96), rgba(255, 255, 255, 0.84));
+}
+
+.premium-module--commercial .premium-card,
+.premium-module--commercial .service-matrix__card {
+  background: linear-gradient(180deg, rgba(244, 248, 246, 0.96), rgba(255, 255, 255, 0.84));
+}
+
+.premium-module--provider .premium-card,
+.premium-module--provider .premium-gallery-card {
   background: linear-gradient(180deg, rgba(241, 247, 245, 0.96), rgba(255, 255, 255, 0.84));
 }
 
@@ -1115,13 +1166,18 @@ button[disabled] {
   }
 
   .funnel-spotlight,
+  .premium-module,
   .closing-band {
     grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
     align-items: start;
   }
 
   .spotlight-grid,
-  .closing-checks {
+  .closing-checks,
+  .premium-split,
+  .premium-metric-grid,
+  .premium-gallery-grid,
+  .service-matrix {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
