@@ -1234,15 +1234,6 @@ button[disabled] {
   .manual-surface-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .manual-sop-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
-  }
-
-  .manual-sop-grid > :last-child {
-    grid-column: 1 / -1;
-  }
 }
 
 @media (max-width: 719px) {

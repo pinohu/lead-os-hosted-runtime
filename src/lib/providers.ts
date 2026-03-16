@@ -525,6 +525,39 @@ function getEmailReplyToAddress() {
   return isPlaceholderEmail(supportEmail) ? undefined : extractEmailAddress(supportEmail);
 }
 
+function getEmailSenderCandidates() {
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+
+  const pushCandidate = (value?: string) => {
+    if (!value) return;
+    const normalized = value.trim();
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    candidates.push(normalized);
+  };
+
+  const primary = getEmailSenderAddress();
+  pushCandidate(primary);
+  pushCandidate(extractEmailAddress(primary));
+
+  const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? tenantConfig.supportEmail;
+  const supportAddress = extractEmailAddress(supportEmail);
+  if (supportAddress && !isPlaceholderEmail(supportAddress)) {
+    pushCandidate(`${tenantConfig.brandName} <${supportAddress}>`);
+    pushCandidate(supportAddress);
+  }
+
+  const siteDomain = deriveSiteRootDomain();
+  if (siteDomain) {
+    pushCandidate(`${tenantConfig.brandName} <hello@${siteDomain}>`);
+    pushCandidate(`hello@${siteDomain}`);
+    pushCandidate(`ops@${siteDomain}`);
+  }
+
+  return candidates;
+}
+
 async function request(url: string, init: RequestInit): Promise<HttpResult> {
   const response = await fetch(url, init);
   const text = await response.text();
@@ -1178,34 +1211,70 @@ export async function sendEmailAction(payload: {
   }
 
   try {
-    const from = getEmailSenderAddress();
+    const senderCandidates = getEmailSenderCandidates();
     const replyTo = getEmailReplyToAddress();
-    const response = await postJson(
-      "https://api.emailit.com/v1/emails",
-      {
-        from,
-        to: payload.to,
-        subject: payload.subject,
-        html: payload.html,
-        text: stripHtml(payload.html),
-        ...(replyTo ? { reply_to: replyTo } : {}),
-        headers: {
-          ...(payload.trace.leadKey ? { "X-LeadOS-Lead-Key": payload.trace.leadKey } : {}),
-          ...(payload.trace.blueprintId ? { "X-LeadOS-Blueprint-Id": payload.trace.blueprintId } : {}),
+    const authHeaders = { Authorization: `Bearer ${process.env.EMAILIT_API_KEY ?? embeddedSecrets.emailit.apiKey}` };
+    const text = stripHtml(payload.html);
+    const responseAttempts: Array<Record<string, unknown>> = [];
+
+    for (const from of senderCandidates) {
+      const variants: Array<Record<string, unknown>> = [
+        {
+          from,
+          to: payload.to,
+          subject: payload.subject,
+          html: payload.html,
+          text,
+          ...(replyTo ? { reply_to: replyTo } : {}),
+          headers: {
+            ...(payload.trace.leadKey ? { "X-LeadOS-Lead-Key": payload.trace.leadKey } : {}),
+            ...(payload.trace.blueprintId ? { "X-LeadOS-Blueprint-Id": payload.trace.blueprintId } : {}),
+          },
         },
-      },
-      { Authorization: `Bearer ${process.env.EMAILIT_API_KEY ?? embeddedSecrets.emailit.apiKey}` },
-    );
+        {
+          from,
+          to: payload.to,
+          subject: payload.subject,
+          html: payload.html,
+          text,
+          ...(replyTo ? { reply_to: replyTo } : {}),
+        },
+      ];
+
+      for (const body of variants) {
+        const response = await postJson("https://api.emailit.com/v1/emails", body, authHeaders);
+        if (response.ok) {
+          return {
+            ok: true,
+            provider: "Emailit",
+            mode: "live",
+            detail: responseAttempts.length === 0 ? "Email sent" : "Email sent after sender fallback",
+          } satisfies ProviderResult;
+        }
+
+        responseAttempts.push({
+          from,
+          variant: "headers" in body ? "rich" : "basic",
+          status: response.status,
+          response: response.json ?? response.text,
+        });
+      }
+    }
+
+    const lastAttempt = responseAttempts[responseAttempts.length - 1];
+    const responseSummary =
+      typeof lastAttempt?.response === "string"
+        ? lastAttempt.response
+        : JSON.stringify(lastAttempt?.response ?? {});
 
     return {
-      ok: response.ok,
+      ok: false,
       provider: "Emailit",
       mode: "live",
-      detail: response.ok ? "Email sent" : `Email failed: ${response.status}`,
-      payload: response.ok ? undefined : {
-        from,
+      detail: `Email failed: ${String(lastAttempt?.status ?? "unknown")}${responseSummary ? ` - ${responseSummary.slice(0, 180)}` : ""}`,
+      payload: {
         replyTo,
-        response: response.json ?? response.text,
+        attempts: responseAttempts,
       },
     } satisfies ProviderResult;
   } catch (error) {

@@ -32,20 +32,26 @@ export default async function CheckEmailPage({ searchParams }: CheckEmailPagePro
 
       <section className="panel auth-panel">
         {deliveryFailed ? (
-          <>
+          <div className="stack-grid">
             <div className="status-banner error" role="alert">
-              Email delivery is currently unavailable. Operator access now requires possession of the
-              mailbox, so there is no same-browser fallback.
+              Email delivery is currently unavailable. Operator access now requires mailbox
+              possession, so there is no same-browser fallback.
             </div>
             {reason ? (
-              <p className="muted">Provider detail: {reason}</p>
+              <div className="portal-notice">
+                <strong>Provider response</strong>
+                <p className="muted portal-breakable">{reason}</p>
+              </div>
             ) : null}
-            <p className="muted">
-              Restore delivery for the configured provider, then request a new sign-in link. If you
-              already have an active session in another tab, that session will continue to work
-              until it expires or you sign out.
-            </p>
-          </>
+            <div className="portal-notice">
+              <strong>How to recover</strong>
+              <ul className="check-list">
+                <li>Verify the configured sender email or domain is accepted by the live email provider.</li>
+                <li>Check Emailit provider health and retry the sign-in request after sender verification is restored.</li>
+                <li>If you still have an active operator session in another tab, keep using that session while delivery is repaired.</li>
+              </ul>
+            </div>
+          </div>
         ) : (
           <p className="muted">
             The link expires in 15 minutes. If you do not see it, check spam and then request a new
