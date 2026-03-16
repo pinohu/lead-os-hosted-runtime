@@ -179,6 +179,7 @@ test("buildLeadJourneySnapshot creates chronological timeline and operator issue
   assert.equal(snapshot.timeline.at(-1)?.id, "operator:action-1");
   assert.equal(snapshot.issues.length, 4);
   assert.match(snapshot.issues[0]?.resolution ?? "", /booking queue|workflow run history|backup provider/i);
+  assert.equal(typeof snapshot.issues[0]?.href, "string");
 });
 
 test("buildSystemOverviewSnapshot combines queue, rollout, and provider alerts", () => {
@@ -231,5 +232,7 @@ test("buildSystemOverviewSnapshot combines queue, rollout, and provider alerts",
   assert.equal(snapshot.rolloutPulse[2]?.value, 1);
   assert.equal(snapshot.providerPulse[3]?.value, 1200);
   assert.equal(snapshot.activeAlerts.some((issue) => issue.source === "rollout registry"), true);
+  assert.equal(snapshot.rules.some((rule) => rule.id === "execution-failures" && rule.triggered === true), true);
+  assert.equal(snapshot.rules.some((rule) => rule.id === "provider-capability-health" && typeof rule.href === "string"), true);
   assert.equal(snapshot.watchlist.length >= 4, true);
 });

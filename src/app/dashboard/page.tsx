@@ -37,6 +37,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const params = (await searchParams) ?? {};
   const includeSystemTraffic = asString(params.include) === "system";
   const dashboardError = asString(params.error);
+  const focus = asString(params.focus);
   const [leads, events, bookingJobs, documentJobs, executionTasks, workflowRuns, providerDispatchRequests, providerExecutions, runtimeConfig] = await Promise.all([
     getLeadRecords(),
     getCanonicalEvents(),
@@ -118,6 +119,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </section>
       ) : null}
 
+      {focus ? (
+        <section className="panel">
+          <p className="eyebrow">Focused view</p>
+          <h2>Jumped here from an observability alert</h2>
+          <p className="muted">
+            This dashboard opened with focus on <strong>{formatPortalLabel(focus)}</strong>. Use the sections below to resolve that condition quickly.
+          </p>
+        </section>
+      ) : null}
+
       <section className="experience-hero">
         <div className="hero-copy">
           <p className="eyebrow">Dispatch command center</p>
@@ -145,6 +156,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </Link>
             <Link href="/dashboard/workflows" className="secondary">
               Workflow runs
+            </Link>
+            <Link href="/dashboard/execution" className="secondary">
+              Execution queue
             </Link>
             <Link href="/dashboard/documents" className="secondary">
               Document jobs
@@ -240,7 +254,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       </section>
 
       <section className="grid two">
-        <article className="panel">
+        <article className="panel" id="dispatch-first">
           <p className="eyebrow">Marketplace finance</p>
           <h2>Profitability guardrails for plumbing growth</h2>
           <ul className="check-list">
@@ -257,7 +271,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </ul>
         </article>
 
-        <article className="panel">
+        <article className="panel" id="provider-requests">
           <p className="eyebrow">Recommended moves</p>
           <h2>Where operators should intervene next</h2>
           {dispatch.finance.recommendations.length === 0 ? (

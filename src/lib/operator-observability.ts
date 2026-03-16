@@ -43,6 +43,19 @@ export interface OperatorIssueInsight {
   severity: Exclude<JourneyItemSeverity, "info">;
   timestamp?: string;
   leadKey?: string;
+  href?: string;
+}
+
+export interface ObservabilityRuleResult {
+  id: string;
+  title: string;
+  severity: Exclude<JourneyItemSeverity, "info">;
+  thresholdLabel: string;
+  currentLabel: string;
+  triggered: boolean;
+  notificationChannel: "dashboard" | "email" | "sms";
+  resolution: string;
+  href: string;
 }
 
 export interface LeadJourneySnapshot {
@@ -64,6 +77,7 @@ export interface LeadJourneySnapshot {
 
 export interface SystemOverviewSnapshot {
   activeAlerts: OperatorIssueInsight[];
+  rules: ObservabilityRuleResult[];
   queuePulse: Array<{
     label: string;
     value: number;
@@ -125,6 +139,17 @@ function inferExecutionResolution(task: ExecutionTaskRecord) {
     default:
       return "Inspect the workflow run history, confirm the provider endpoint and credentials, then rerun the task from the execution queue.";
   }
+}
+
+function queueHref(path: string, params: Record<string, string | undefined> = {}) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) {
+      search.set(key, value);
+    }
+  }
+  const query = search.toString();
+  return query ? `${path}?${query}` : path;
 }
 
 function inferWorkflowResolution(run: WorkflowRunRecord) {
@@ -298,6 +323,7 @@ function buildLeadIssueInsights(
       severity: "danger",
       timestamp: task.updatedAt,
       leadKey: task.leadKey,
+      href: queueHref("/dashboard/execution", { status: "failed", query: task.provider }),
     });
   }
 
@@ -311,6 +337,7 @@ function buildLeadIssueInsights(
       severity: "danger",
       timestamp: run.createdAt,
       leadKey: run.leadKey,
+      href: queueHref("/dashboard/workflows", { result: "failed", query: run.provider }),
     });
   }
 
@@ -324,6 +351,7 @@ function buildLeadIssueInsights(
       severity: execution.mode === "dry-run" ? "warning" : "danger",
       timestamp: execution.createdAt,
       leadKey: execution.leadKey,
+      href: queueHref("/dashboard/leads/" + encodeURIComponent(execution.leadKey ?? ""), {}),
     });
   }
 
@@ -337,6 +365,7 @@ function buildLeadIssueInsights(
       severity: job.status.includes("retry") ? "warning" : "danger",
       timestamp: job.updatedAt,
       leadKey: job.leadKey,
+      href: queueHref("/dashboard/bookings", { status: "failed", query: job.provider }),
     });
   }
 
@@ -350,6 +379,7 @@ function buildLeadIssueInsights(
       severity: "danger",
       timestamp: job.updatedAt,
       leadKey: job.leadKey,
+      href: queueHref("/dashboard/documents", { status: "failed", query: job.provider }),
     });
   }
 
@@ -363,6 +393,7 @@ function buildLeadIssueInsights(
       severity: "warning",
       timestamp: request.respondedAt ?? request.updatedAt,
       leadKey: request.leadKey,
+      href: queueHref("/dashboard", { focus: "provider-requests" }),
     });
   }
 
@@ -465,6 +496,7 @@ function buildSystemIssueInsights(input: {
       reason: `${input.deploymentSummary.generatedOlderThanSevenDays} generated deployments have not advanced in at least seven days.`,
       resolution: "Review rollout ownership, confirm install targets, and either promote or retire stale generated assets.",
       severity: "warning",
+      href: queueHref("/dashboard/deployments", { health: "generated-stale" }),
     });
   }
   if (input.deploymentSummary.liveWithoutPageUrl > 0) {
@@ -475,6 +507,7 @@ function buildSystemIssueInsights(input: {
       reason: `${input.deploymentSummary.liveWithoutPageUrl} deployments are marked live but do not have a verified public URL attached.`,
       resolution: "Attach the actual live page URL so rollout health and drift checks can confirm what is serving in production.",
       severity: "danger",
+      href: queueHref("/dashboard/deployments", { health: "live-missing-url" }),
     });
   }
   if (input.deploymentSummary.staleDeployments > 0) {
@@ -485,10 +518,128 @@ function buildSystemIssueInsights(input: {
       reason: `${input.deploymentSummary.staleDeployments} deployments have not been touched in at least 30 days.`,
       resolution: "Audit stale installs for drift, broken embeds, or pages that should be retired from the marketplace footprint.",
       severity: "warning",
+      href: queueHref("/dashboard/deployments", { health: "stale" }),
     });
   }
 
   return enriched.slice(0, 10);
+}
+
+function buildObservabilityRules(input: {
+  unresolvedCount: number;
+  pendingProviderResponses: number;
+  failedExecutionTasks: number;
+  constrainedCells: number;
+  unprofitableProviders: number;
+  generatedOlderThanSevenDays: number;
+  liveWithoutPageUrl: number;
+  staleDeployments: number;
+  degradedProviders: number;
+  missingProviders: number;
+}) {
+  const rules: ObservabilityRuleResult[] = [
+    {
+      id: "dispatch-backlog",
+      title: "Dispatch backlog threshold",
+      severity: "warning",
+      thresholdLabel: "Trigger when unresolved plumbing leads reach 5",
+      currentLabel: `${input.unresolvedCount} unresolved plumbing leads`,
+      triggered: input.unresolvedCount >= 5,
+      notificationChannel: "dashboard",
+      resolution: "Rebalance operator coverage, auto-escalation, or provider capacity before more urgent leads stack up.",
+      href: queueHref("/dashboard", { focus: "dispatch-first" }),
+    },
+    {
+      id: "provider-response-latency",
+      title: "Provider response latency threshold",
+      severity: "warning",
+      thresholdLabel: "Trigger when pending provider responses reach 3",
+      currentLabel: `${input.pendingProviderResponses} provider responses pending`,
+      triggered: input.pendingProviderResponses >= 3,
+      notificationChannel: "sms",
+      resolution: "Escalate to backup providers or shorten provider response windows before urgent jobs expire.",
+      href: queueHref("/dashboard", { focus: "provider-requests" }),
+    },
+    {
+      id: "execution-failures",
+      title: "Execution failure threshold",
+      severity: "danger",
+      thresholdLabel: "Trigger when any execution task fails",
+      currentLabel: `${input.failedExecutionTasks} failed execution tasks`,
+      triggered: input.failedExecutionTasks >= 1,
+      notificationChannel: "email",
+      resolution: "Inspect failed booking, document, or workflow tasks and rerun them before they silently leak demand.",
+      href: queueHref("/dashboard/execution", { status: "failed" }),
+    },
+    {
+      id: "zip-cell-liquidity",
+      title: "ZIP-cell liquidity threshold",
+      severity: "warning",
+      thresholdLabel: "Trigger when constrained ZIP cells reach 2",
+      currentLabel: `${input.constrainedCells} constrained ZIP cells`,
+      triggered: input.constrainedCells >= 2,
+      notificationChannel: "dashboard",
+      resolution: "Recruit supply or narrow acquisition in cells where demand is outrunning coverage.",
+      href: queueHref("/dashboard/providers", { focus: "zip-liquidity" }),
+    },
+    {
+      id: "provider-profitability",
+      title: "Provider profitability threshold",
+      severity: "warning",
+      thresholdLabel: "Trigger when any provider turns loss-making",
+      currentLabel: `${input.unprofitableProviders} loss-making providers`,
+      triggered: input.unprofitableProviders >= 1,
+      notificationChannel: "email",
+      resolution: "Review payout terms, routing mix, and refund exposure before continuing to scale that provider.",
+      href: queueHref("/dashboard/providers", { focus: "profitability" }),
+    },
+    {
+      id: "generated-rollout-stall",
+      title: "Rollout stall threshold",
+      severity: "warning",
+      thresholdLabel: "Trigger when generated-but-unverified deployments reach 3",
+      currentLabel: `${input.generatedOlderThanSevenDays} stale generated deployments`,
+      triggered: input.generatedOlderThanSevenDays >= 3,
+      notificationChannel: "dashboard",
+      resolution: "Promote, verify, or retire generated rollout assets so the registry reflects real field progress.",
+      href: queueHref("/dashboard/deployments", { health: "generated-stale" }),
+    },
+    {
+      id: "live-missing-url",
+      title: "Live verification threshold",
+      severity: "danger",
+      thresholdLabel: "Trigger when any live deployment lacks a public URL",
+      currentLabel: `${input.liveWithoutPageUrl} live deployments missing URL`,
+      triggered: input.liveWithoutPageUrl >= 1,
+      notificationChannel: "email",
+      resolution: "Attach the verified public URL so live installs can be audited for drift and outage recovery.",
+      href: queueHref("/dashboard/deployments", { health: "live-missing-url" }),
+    },
+    {
+      id: "stale-rollout",
+      title: "Stale rollout threshold",
+      severity: "warning",
+      thresholdLabel: "Trigger when untouched deployments reach 5",
+      currentLabel: `${input.staleDeployments} stale deployments`,
+      triggered: input.staleDeployments >= 5,
+      notificationChannel: "dashboard",
+      resolution: "Review rollout ownership and confirm which installs are still strategically active.",
+      href: queueHref("/dashboard/deployments", { health: "stale" }),
+    },
+    {
+      id: "provider-capability-health",
+      title: "Provider capability health threshold",
+      severity: "warning",
+      thresholdLabel: "Trigger when any provider is degraded or missing",
+      currentLabel: `${input.degradedProviders} degraded / ${input.missingProviders} missing providers`,
+      triggered: input.degradedProviders + input.missingProviders >= 1,
+      notificationChannel: "dashboard",
+      resolution: "Repair degraded adapters and finish missing provider configuration before those channels silently underperform.",
+      href: queueHref("/dashboard/providers", { focus: "capability" }),
+    },
+  ];
+
+  return rules;
 }
 
 export function buildSystemOverviewSnapshot(input: {
@@ -539,6 +690,18 @@ export function buildSystemOverviewSnapshot(input: {
   const executableProviders = providerEntries.filter((provider) => provider.capability === "executable").length;
   const degradedProviders = providerEntries.filter((provider) => provider.capability === "degraded").length;
   const missingProviders = providerEntries.filter((provider) => provider.capability === "missing").length;
+  const rules = buildObservabilityRules({
+    unresolvedCount: input.consoleSnapshot.plumbingDispatch.unresolvedCount,
+    pendingProviderResponses: input.consoleSnapshot.plumbingDispatch.providerRequestQueue.pendingCount,
+    failedExecutionTasks: input.consoleSnapshot.plumbingDispatch.executionQueue.failedCount,
+    constrainedCells: input.consoleSnapshot.plumbingDispatch.finance.constrainedCells,
+    unprofitableProviders: input.consoleSnapshot.plumbingDispatch.finance.unprofitableProviders,
+    generatedOlderThanSevenDays: input.deploymentSummary.generatedOlderThanSevenDays,
+    liveWithoutPageUrl: input.deploymentSummary.liveWithoutPageUrl,
+    staleDeployments: input.deploymentSummary.staleDeployments,
+    degradedProviders,
+    missingProviders,
+  });
   const activeAlerts = buildSystemIssueInsights({
     leads: input.leads,
     workflowRuns: input.workflowRuns,
@@ -548,10 +711,19 @@ export function buildSystemOverviewSnapshot(input: {
     executionTasks: input.executionTasks,
     providerRequests: input.providerRequests,
     deploymentSummary: input.deploymentSummary,
-  });
+  }).concat(rules.filter((rule) => rule.triggered).map((rule) => ({
+    id: `rule:${rule.id}`,
+    source: "notification rule",
+    title: rule.title,
+    reason: `${rule.currentLabel}. ${rule.thresholdLabel}.`,
+    resolution: rule.resolution,
+    severity: rule.severity,
+    href: rule.href,
+  })));
 
   return {
     activeAlerts,
+    rules,
     queuePulse: [
       {
         label: "Visible leads",

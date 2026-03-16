@@ -34,6 +34,7 @@ export default async function WorkflowRunsPage({ searchParams }: WorkflowRunsPag
   const params = (await searchParams) ?? {};
   const includeSystemTraffic = asString(params.include) === "system";
   const query = asString(params.query)?.trim().toLowerCase() ?? "";
+  const resultFilter = asString(params.result)?.trim().toLowerCase() ?? "";
   const page = asPositiveInt(params.page);
   const runs = (await getWorkflowRuns()) as WorkflowRunRecord[];
   const visibleRuns = includeSystemTraffic ? runs : runs.filter((run) => !isSystemWorkflowRun(run));
@@ -46,6 +47,10 @@ export default async function WorkflowRunsPage({ searchParams }: WorkflowRunsPag
     })),
   );
   const runsWithLead = hydratedRuns.filter(({ run, lead }) => {
+    if (resultFilter) {
+      if (resultFilter === "failed" && run.ok) return false;
+      if (resultFilter === "successful" && !run.ok) return false;
+    }
     if (!query) return true;
     const haystack = [
       run.provider,
@@ -122,6 +127,7 @@ export default async function WorkflowRunsPage({ searchParams }: WorkflowRunsPag
         includeSystemTraffic={includeSystemTraffic}
         searchLabel="Search workflow runs"
         searchPlaceholder="Search by lead, provider, workflow event, or failure detail"
+        extraParams={{ result: resultFilter || undefined }}
       />
 
       {hiddenRuns > 0 ? (
@@ -151,7 +157,9 @@ export default async function WorkflowRunsPage({ searchParams }: WorkflowRunsPag
         <p className="muted">
           {query
             ? `Filtered from ${visibleRuns.length} visible runs using "${query}".`
-            : "Use search and system-traffic filters to focus on failures, providers, or lead identities."}
+            : resultFilter
+              ? `Filtered to ${formatPortalLabel(resultFilter)} workflow history.`
+              : "Use search and system-traffic filters to focus on failures, providers, or lead identities."}
         </p>
         <p className="muted">Showing {pagedRuns.length} runs on this page.</p>
       </section>
@@ -162,6 +170,7 @@ export default async function WorkflowRunsPage({ searchParams }: WorkflowRunsPag
         basePath="/dashboard/workflows"
         query={query}
         includeSystemTraffic={includeSystemTraffic}
+        extraParams={{ result: resultFilter || undefined }}
       />
 
       <section className="stack-grid">

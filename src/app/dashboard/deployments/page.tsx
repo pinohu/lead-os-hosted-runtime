@@ -8,9 +8,36 @@ import { tenantConfig } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
-export default async function DeploymentRegistryPage() {
+type DeploymentRegistryPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function asString(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function daysSince(timestamp: string) {
+  const delta = Date.now() - new Date(timestamp).getTime();
+  return Math.floor(delta / (1000 * 60 * 60 * 24));
+}
+
+export default async function DeploymentRegistryPage({ searchParams }: DeploymentRegistryPageProps) {
   await requireOperatorPageSession("/dashboard/deployments");
+  const params = (await searchParams) ?? {};
+  const healthFilter = asString(params.health);
   const snapshot = await getDeploymentRegistrySnapshot();
+  const visibleRecords = snapshot.records.filter((record) => {
+    switch (healthFilter) {
+      case "generated-stale":
+        return record.status === "generated" && daysSince(record.updatedAt) >= 7;
+      case "live-missing-url":
+        return record.status === "live" && !record.pageUrl;
+      case "stale":
+        return daysSince(record.updatedAt) >= 30;
+      default:
+        return true;
+    }
+  });
 
   return (
     <main className="experience-page">
@@ -42,6 +69,21 @@ export default async function DeploymentRegistryPage() {
           </ul>
         </aside>
       </section>
+
+      {healthFilter ? (
+        <section className="panel">
+          <p className="eyebrow">Focused view</p>
+          <h2>Rollout registry filtered from observability</h2>
+          <p className="muted">
+            You are reviewing the <strong>{healthFilter}</strong> slice of the rollout portfolio.
+          </p>
+          <div className="cta-row">
+            <Link href="/dashboard/deployments" className="secondary">
+              Clear filter
+            </Link>
+          </div>
+        </section>
+      ) : null}
 
       <section className="metric-grid">
         <article className="metric-card">
@@ -133,12 +175,12 @@ export default async function DeploymentRegistryPage() {
       </section>
 
       <section className="stack-grid">
-        {snapshot.records.length === 0 ? (
+        {visibleRecords.length === 0 ? (
           <article className="panel">
             <p className="muted">No deployments have been registered yet. Generate one from the deployment blueprint, then register it here.</p>
           </article>
         ) : (
-          snapshot.records.map((record) => (
+          visibleRecords.map((record) => (
             <article key={record.id} className="panel">
               <div className="portal-status-row">
                 <span className="portal-chip">{record.status}</span>

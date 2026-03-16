@@ -29,6 +29,7 @@ export default async function DocumentJobsPage({ searchParams }: DocumentJobsPag
   const params = (await searchParams) ?? {};
   const includeSystemTraffic = asString(params.include) === "system";
   const query = asString(params.query)?.trim().toLowerCase() ?? "";
+  const statusFilter = asString(params.status)?.trim().toLowerCase() ?? "";
   const page = asPositiveInt(params.page);
   const jobs = (await getDocumentJobs()) as DocumentJobRecord[];
   const visibleJobs = includeSystemTraffic ? jobs : jobs.filter((job) => !isSystemDocumentJob(job));
@@ -40,6 +41,10 @@ export default async function DocumentJobsPage({ searchParams }: DocumentJobsPag
     })),
   );
   const jobsWithLead = hydratedJobs.filter(({ job, lead }) => {
+    if (statusFilter) {
+      if (statusFilter === "failed" && job.status !== "failed") return false;
+      if (statusFilter !== "failed" && job.status !== statusFilter) return false;
+    }
     if (!query) return true;
     const haystack = [
       job.provider,
@@ -112,6 +117,7 @@ export default async function DocumentJobsPage({ searchParams }: DocumentJobsPag
         includeSystemTraffic={includeSystemTraffic}
         searchLabel="Search document jobs"
         searchPlaceholder="Search by lead, provider, template state, or detail"
+        extraParams={{ status: statusFilter || undefined }}
       />
 
       {hiddenJobs > 0 ? (
@@ -141,7 +147,9 @@ export default async function DocumentJobsPage({ searchParams }: DocumentJobsPag
         <p className="muted">
           {query
             ? `Filtered from ${visibleJobs.length} visible jobs using "${query}".`
-            : "Use search and system-traffic filters to narrow the queue when document volume grows."}
+            : statusFilter
+              ? `Filtered to ${formatPortalLabel(statusFilter)} document work.`
+              : "Use search and system-traffic filters to narrow the queue when document volume grows."}
         </p>
         <p className="muted">Showing {pagedJobs.length} jobs on this page.</p>
       </section>
@@ -152,6 +160,7 @@ export default async function DocumentJobsPage({ searchParams }: DocumentJobsPag
         basePath="/dashboard/documents"
         query={query}
         includeSystemTraffic={includeSystemTraffic}
+        extraParams={{ status: statusFilter || undefined }}
       />
 
       <section className="stack-grid">

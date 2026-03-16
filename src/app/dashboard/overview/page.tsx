@@ -154,6 +154,13 @@ export default async function OverviewDashboardPage() {
                   <h3>{issue.title}</h3>
                   <p className="muted portal-breakable"><strong>Reason:</strong> {issue.reason}</p>
                   <p className="muted portal-breakable"><strong>Resolution:</strong> {issue.resolution}</p>
+                  {issue.href ? (
+                    <div className="cta-row">
+                      <Link href={issue.href} className="secondary">
+                        Open relevant queue
+                      </Link>
+                    </div>
+                  ) : null}
                 </article>
               ))}
             </div>
@@ -176,6 +183,30 @@ export default async function OverviewDashboardPage() {
       </section>
 
       <section className="grid two">
+        <article className="panel">
+          <p className="eyebrow">Proactive rules</p>
+          <h2>Thresholds that should notify operators early</h2>
+          <div className="stack-grid">
+            {overview.rules.map((rule) => (
+              <article key={rule.id} className={`stack-card tone-${rule.triggered ? rule.severity : "neutral"}`}>
+                <div className="portal-status-row">
+                  <span className="portal-chip">{rule.triggered ? "triggered" : "healthy"}</span>
+                  <span className="portal-chip">{rule.notificationChannel}</span>
+                </div>
+                <h3>{rule.title}</h3>
+                <p className="muted portal-breakable"><strong>Threshold:</strong> {rule.thresholdLabel}</p>
+                <p className="muted portal-breakable"><strong>Current state:</strong> {rule.currentLabel}</p>
+                <p className="muted portal-breakable"><strong>Action:</strong> {rule.resolution}</p>
+                <div className="cta-row">
+                  <Link href={rule.href} className="secondary">
+                    Open drill-through
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        </article>
+
         <article className="panel">
           <p className="eyebrow">Conversion and value watchlist</p>
           <h2>Key signals worth revisiting daily</h2>
@@ -209,6 +240,13 @@ export default async function OverviewDashboardPage() {
               <p className="muted">Review capacity, economics, and readiness by provider before scaling demand.</p>
               <div className="cta-row">
                 <Link href="/dashboard/providers" className="secondary">Provider health</Link>
+              </div>
+            </article>
+            <article className="stack-card">
+              <p className="eyebrow">Execution</p>
+              <p className="muted">Inspect durable booking, document, and workflow tasks when exact-once execution goes sideways.</p>
+              <div className="cta-row">
+                <Link href="/dashboard/execution?status=failed" className="secondary">Execution failures</Link>
               </div>
             </article>
             <article className="stack-card">

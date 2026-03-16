@@ -20,8 +20,18 @@ import { tenantConfig } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProviderHealthPage() {
+type ProviderHealthPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function asString(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function ProviderHealthPage({ searchParams }: ProviderHealthPageProps) {
   await requireOperatorPageSession("/dashboard/providers");
+  const params = (await searchParams) ?? {};
+  const focus = asString(params.focus);
   const [health, leads, events, bookingJobs, executionTasks, providerDispatchRequests, providerExecutions, workflowRuns, runtimeConfig] = await Promise.all([
     Promise.resolve(getAutomationHealth()),
     getLeadRecords(),
@@ -110,8 +120,18 @@ export default async function ProviderHealthPage() {
         </aside>
       </section>
 
-      {providerScores.length > 0 ? (
+      {focus ? (
         <section className="panel">
+          <p className="eyebrow">Focused view</p>
+          <h2>Jumped here from an observability alert</h2>
+          <p className="muted">
+            This page opened with focus on <strong>{formatPortalLabel(focus)}</strong>. Review the matching section below before changing routing or provider settings.
+          </p>
+        </section>
+      ) : null}
+
+      {providerScores.length > 0 ? (
+        <section className="panel" id="provider-scorecards">
           <p className="eyebrow">Routing confidence</p>
           <h2>Provider reliability for live plumbing demand</h2>
           <p className="muted">
@@ -190,7 +210,7 @@ export default async function ProviderHealthPage() {
       ) : null}
 
       {consoleSnapshot.plumbingDispatch.zipCellLiquidity.topCells.length > 0 ? (
-        <section className="panel">
+        <section className="panel" id="zip-liquidity">
           <p className="eyebrow">ZIP-cell liquidity</p>
           <h2>Where to recruit supply versus where to add demand</h2>
           <div className="stack-grid">
@@ -240,7 +260,7 @@ export default async function ProviderHealthPage() {
         </section>
       ) : null}
 
-      <section className="stack-grid">
+      <section className="stack-grid" id="capability">
         {providerEntries.map(([provider, status]) => (
           <article key={provider} className="stack-card">
             <p className="eyebrow">{formatPortalLabel(provider)}</p>

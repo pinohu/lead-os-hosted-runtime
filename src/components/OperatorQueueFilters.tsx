@@ -3,6 +3,7 @@ type OperatorQueueFiltersProps = {
   includeSystemTraffic?: boolean;
   searchLabel: string;
   searchPlaceholder: string;
+  extraParams?: Record<string, string | undefined>;
 };
 
 export function OperatorQueueFilters({
@@ -10,10 +11,14 @@ export function OperatorQueueFilters({
   includeSystemTraffic = false,
   searchLabel,
   searchPlaceholder,
+  extraParams,
 }: OperatorQueueFiltersProps) {
   return (
     <form method="GET" className="panel">
       <p className="eyebrow">Find the next item fast</p>
+      {Object.entries(extraParams ?? {}).map(([key, value]) => (
+        value ? <input key={key} type="hidden" name={key} value={value} /> : null
+      ))}
       <div className="form-grid">
         <label>
           {searchLabel}
