@@ -26,6 +26,10 @@ type ExperienceScaffoldProps = {
   railEyebrow?: string;
   railTitle?: string;
   railSummary?: string;
+  railHighlights?: Array<{
+    label: string;
+    detail: string;
+  }>;
 };
 
 export function ExperienceScaffold({
@@ -46,6 +50,7 @@ export function ExperienceScaffold({
   railEyebrow,
   railTitle,
   railSummary,
+  railHighlights = [],
 }: ExperienceScaffoldProps) {
   return (
     <main className={`experience-page${className ? ` ${className}` : ""}`}>
@@ -89,6 +94,16 @@ export function ExperienceScaffold({
               </li>
             ))}
           </ul>
+          {railHighlights.length > 0 ? (
+            <div className="hero-rail-highlight-grid">
+              {railHighlights.map((item) => (
+                <article key={item.label} className="hero-rail-highlight-card">
+                  <strong>{item.label}</strong>
+                  <span>{item.detail}</span>
+                </article>
+              ))}
+            </div>
+          ) : null}
         </aside>
       </section>
 

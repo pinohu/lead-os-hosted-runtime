@@ -212,6 +212,101 @@ function getRailContent(entry: PlumbingEntrypointDefinition) {
   }
 }
 
+function getRailHighlights(entry: PlumbingEntrypointDefinition) {
+  switch (entry.kind) {
+    case "emergency":
+      return [
+        {
+          label: "Best for",
+          detail: "Leaks, backups, no hot water, and fast-moving household disruption.",
+        },
+        {
+          label: "Primary need",
+          detail: "One obvious next step with a believable human fallback.",
+        },
+        {
+          label: "Page goal",
+          detail: "Reduce panic, shorten the path, and keep the visitor moving.",
+        },
+      ];
+    case "estimate":
+      return [
+        {
+          label: "Best for",
+          detail: "Repairs, replacements, installs, and comparison-minded buyers.",
+        },
+        {
+          label: "Primary need",
+          detail: "A realistic quote path without a giant intake burden.",
+        },
+        {
+          label: "Page goal",
+          detail: "Keep evaluation mode open while still creating momentum.",
+        },
+      ];
+    case "commercial":
+      return [
+        {
+          label: "Best for",
+          detail: "Facilities, multi-unit properties, and repeat-work conversations.",
+        },
+        {
+          label: "Primary need",
+          detail: "Structured intake that respects site and portfolio complexity.",
+        },
+        {
+          label: "Page goal",
+          detail: "Signal competence, coordination, and operational seriousness.",
+        },
+      ];
+    case "provider":
+      return [
+        {
+          label: "Best for",
+          detail: "Plumbers with clear territory, specialties, and response readiness.",
+        },
+        {
+          label: "Primary need",
+          detail: "Proof the opportunity is selective and fit-based.",
+        },
+        {
+          label: "Page goal",
+          detail: "Attract strong operators, not casual low-intent signups.",
+        },
+      ];
+    case "local":
+      return [
+        {
+          label: "Best for",
+          detail: "ZIP and city search traffic that needs fast relevance cues.",
+        },
+        {
+          label: "Primary need",
+          detail: "Local confidence before the visitor gives up or goes back to search.",
+        },
+        {
+          label: "Page goal",
+          detail: "Feel nearby, useful, and worth acting on right away.",
+        },
+      ];
+    default:
+      return [
+        {
+          label: "Best for",
+          detail: "Visitors who need the right lane before choosing a longer flow.",
+        },
+        {
+          label: "Primary need",
+          detail: "Quick self-selection without confusion.",
+        },
+        {
+          label: "Page goal",
+          detail: "Get the right person into the right funnel quickly.",
+        },
+      ];
+  }
+}
+
 function renderSignatureSection(entry: PlumbingEntrypointDefinition) {
   switch (entry.kind) {
     case "marketplace-home":
@@ -642,6 +737,105 @@ function renderPremiumModules(entry: PlumbingEntrypointDefinition) {
   }
 }
 
+function renderPremiumProofMosaic(entry: PlumbingEntrypointDefinition) {
+  switch (entry.kind) {
+    case "emergency":
+      return (
+        <section className="premium-proof-mosaic premium-proof-mosaic--emergency">
+          <article className="premium-proof-card premium-proof-card--wide">
+            <p className="eyebrow">Five-star emergency experience</p>
+            <h2>People under stress trust pages that feel calm, local, and obvious</h2>
+            <p className="muted">
+              The strongest emergency pages do not overload. They reassure, triage, and
+              keep the best next move visible at every moment.
+            </p>
+          </article>
+          <article className="premium-proof-card">
+            <p className="eyebrow">Trust cue</p>
+            <h3>Clear next-step certainty</h3>
+            <p className="muted">Tell the visitor what happens after the submit before they wonder whether this is just another dead-end form.</p>
+          </article>
+          <article className="premium-proof-card">
+            <p className="eyebrow">Buyer behavior</p>
+            <h3>Stress reduces patience</h3>
+            <p className="muted">Urgent visitors scan, not read. The page should win in seconds, not paragraphs.</p>
+          </article>
+        </section>
+      );
+    case "estimate":
+      return (
+        <section className="premium-proof-mosaic premium-proof-mosaic--estimate">
+          <article className="premium-proof-card premium-proof-card--wide">
+            <p className="eyebrow">Five-star estimate experience</p>
+            <h2>Estimate shoppers stay when the page feels helpful instead of pushy</h2>
+            <p className="muted">
+              The quote path should support evaluation, reduce uncertainty, and make the
+              next step feel useful even before a buyer is fully decided.
+            </p>
+          </article>
+          <article className="premium-proof-card">
+            <p className="eyebrow">Trust cue</p>
+            <h3>Realistic expectations</h3>
+            <p className="muted">People trust a page more when it explains what the quote process actually needs instead of pretending every job is instant-ready.</p>
+          </article>
+          <article className="premium-proof-card">
+            <p className="eyebrow">Buyer behavior</p>
+            <h3>Comparison mode stays open</h3>
+            <p className="muted">Planned-work visitors often compare before acting, so the page should support progress without false urgency.</p>
+          </article>
+        </section>
+      );
+    case "commercial":
+      return (
+        <section className="premium-proof-mosaic premium-proof-mosaic--commercial">
+          <article className="premium-proof-card premium-proof-card--wide">
+            <p className="eyebrow">Five-star commercial experience</p>
+            <h2>Commercial buyers stay when the page feels organized and accountable</h2>
+            <p className="muted">
+              Property teams are looking for competence signals, not consumer-style
+              persuasion. The page should feel like a capable front door to real service.
+            </p>
+          </article>
+          <article className="premium-proof-card">
+            <p className="eyebrow">Trust cue</p>
+            <h3>Structured service language</h3>
+            <p className="muted">The request path should respect buildings, facilities, and repeat-work context from the first screen.</p>
+          </article>
+          <article className="premium-proof-card">
+            <p className="eyebrow">Buyer behavior</p>
+            <h3>Risk drives the decision</h3>
+            <p className="muted">Commercial visitors buy confidence that the next step will be handled correctly and seriously.</p>
+          </article>
+        </section>
+      );
+    case "provider":
+      return (
+        <section className="premium-proof-mosaic premium-proof-mosaic--provider">
+          <article className="premium-proof-card premium-proof-card--wide">
+            <p className="eyebrow">Five-star provider recruiting</p>
+            <h2>Good plumbers respond when the page makes the opportunity feel selective</h2>
+            <p className="muted">
+              Better providers are not looking for generic lead volume. They want fit,
+              territory clarity, and signs that quality matters.
+            </p>
+          </article>
+          <article className="premium-proof-card">
+            <p className="eyebrow">Trust cue</p>
+            <h3>Territory and fit first</h3>
+            <p className="muted">Lead with job fit, service area, and response standards instead of vague “join us” language.</p>
+          </article>
+          <article className="premium-proof-card">
+            <p className="eyebrow">Provider behavior</p>
+            <h3>Strong operators filter quickly</h3>
+            <p className="muted">The page should help a serious provider decide fast whether this is a quality opportunity worth their time.</p>
+          </article>
+        </section>
+      );
+    default:
+      return null;
+  }
+}
+
 function renderClosingSection(entry: PlumbingEntrypointDefinition) {
   if (entry.audience === "provider") {
     return (
@@ -734,6 +928,7 @@ export async function PlumbingEntryPage({
     asBoolean(searchParams.blueprint) || asString(searchParams.view) === "blueprint";
   const metrics = buildPublicMetrics(entry);
   const railContent = getRailContent(entry);
+  const railHighlights = getRailHighlights(entry);
 
   const splitLink =
     entry.audience === "provider"
@@ -766,6 +961,7 @@ export async function PlumbingEntryPage({
       railEyebrow={railContent.eyebrow}
       railTitle={railContent.title}
       railSummary={railContent.summary}
+      railHighlights={railHighlights}
       primaryActionLabel={entry.kind === "emergency" ? "Get emergency help now" : undefined}
       secondaryActionLabel={entry.kind === "provider" ? "Talk to network ops" : undefined}
     >
@@ -893,6 +1089,7 @@ export async function PlumbingEntryPage({
       </section>
 
       {renderPremiumModules(entry)}
+      {renderPremiumProofMosaic(entry)}
 
       <AdaptiveLeadCaptureForm
         source="manual"
