@@ -423,9 +423,93 @@ button[disabled] {
   color: rgba(247, 243, 234, 0.76);
 }
 
+.experience-page--emergency .hero-copy {
+  background:
+    linear-gradient(180deg, rgba(255, 247, 244, 0.96), rgba(255, 250, 243, 0.84)),
+    radial-gradient(circle at top left, rgba(161, 39, 47, 0.18), transparent 18rem);
+}
+
+.experience-page--estimate .hero-copy {
+  background:
+    linear-gradient(180deg, rgba(252, 249, 244, 0.96), rgba(255, 250, 243, 0.82)),
+    radial-gradient(circle at top left, rgba(34, 95, 84, 0.14), transparent 18rem);
+}
+
+.experience-page--commercial .hero-copy {
+  background:
+    linear-gradient(180deg, rgba(244, 248, 246, 0.96), rgba(255, 250, 243, 0.82)),
+    radial-gradient(circle at top left, rgba(24, 33, 29, 0.16), transparent 20rem);
+}
+
+.experience-page--provider .hero-copy {
+  background:
+    linear-gradient(180deg, rgba(248, 246, 241, 0.96), rgba(255, 250, 243, 0.82)),
+    radial-gradient(circle at top left, rgba(34, 95, 84, 0.18), transparent 18rem);
+}
+
+.experience-page--local .hero-copy {
+  background:
+    linear-gradient(180deg, rgba(255, 250, 243, 0.96), rgba(248, 246, 238, 0.84)),
+    radial-gradient(circle at top left, rgba(196, 99, 45, 0.14), transparent 18rem),
+    radial-gradient(circle at bottom right, rgba(34, 95, 84, 0.12), transparent 18rem);
+}
+
 .proof-ribbon,
 .metric-grid {
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.funnel-spotlight,
+.closing-band {
+  display: grid;
+  gap: 18px;
+}
+
+.spotlight-lead,
+.closing-lead {
+  min-width: 0;
+}
+
+.spotlight-grid,
+.closing-checks {
+  display: grid;
+  gap: 14px;
+}
+
+.spotlight-card,
+.closing-card {
+  display: grid;
+  gap: 8px;
+  padding: 22px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(20, 33, 29, 0.1);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: var(--shadow-card);
+}
+
+.danger-card {
+  background: linear-gradient(180deg, rgba(255, 243, 242, 0.94), rgba(255, 255, 255, 0.82));
+  border-color: rgba(161, 39, 47, 0.14);
+}
+
+.funnel-spotlight--commercial .spotlight-card {
+  background: linear-gradient(180deg, rgba(244, 248, 246, 0.96), rgba(255, 255, 255, 0.84));
+}
+
+.funnel-spotlight--provider .spotlight-card {
+  background: linear-gradient(180deg, rgba(241, 247, 245, 0.96), rgba(255, 255, 255, 0.84));
+}
+
+.funnel-spotlight--local .spotlight-card {
+  background: linear-gradient(180deg, rgba(255, 249, 242, 0.96), rgba(255, 255, 255, 0.84));
+}
+
+.closing-band {
+  align-items: start;
+}
+
+.closing-band--provider .closing-card {
+  background: linear-gradient(180deg, rgba(241, 247, 245, 0.96), rgba(255, 255, 255, 0.84));
 }
 
 .value-card-grid,
@@ -1028,6 +1112,21 @@ button[disabled] {
 @media (min-width: 720px) {
   .experience-hero {
     grid-template-columns: 1.28fr 0.92fr;
+  }
+
+  .funnel-spotlight,
+  .closing-band {
+    grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+    align-items: start;
+  }
+
+  .spotlight-grid,
+  .closing-checks {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .closing-checks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .capture-header {

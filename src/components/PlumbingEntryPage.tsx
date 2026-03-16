@@ -146,6 +146,292 @@ function buildPublicMetrics(entry: PlumbingEntrypointDefinition) {
   ];
 }
 
+function getExperiencePageClassName(entry: PlumbingEntrypointDefinition) {
+  return `experience-page--${entry.kind}`;
+}
+
+function getRailContent(entry: PlumbingEntrypointDefinition) {
+  switch (entry.kind) {
+    case "emergency":
+      return {
+        eyebrow: "Right now matters most",
+        title: "This page is built to shorten the distance between stress and a credible next step",
+        summary:
+          "Urgent visitors need speed, certainty, and a human fallback. The page should feel direct, calm, and local within seconds.",
+      };
+    case "estimate":
+      return {
+        eyebrow: "Built for comparison mode",
+        title: "This page is built for people who want clarity before they commit",
+        summary:
+          "Planned work needs calmer expectations, lighter friction, and enough detail to keep the quote path useful without feeling like homework.",
+      };
+    case "commercial":
+      return {
+        eyebrow: "Commercial desk mindset",
+        title: "This page is built to feel structured, capable, and property-aware",
+        summary:
+          "Property teams should see site-aware intake, repeat-work readiness, and a service conversation that feels more serious than a homeowner form.",
+      };
+    case "provider":
+      return {
+        eyebrow: "Worth a provider's time",
+        title: "This page is built to attract better-fit plumbers, not curiosity clicks",
+        summary:
+          "The strongest provider pages lead with territory, specialties, and opportunity quality so serious teams can quickly decide whether to apply.",
+      };
+    case "local":
+      return {
+        eyebrow: "Local trust matters first",
+        title: "This page is built to feel nearby, relevant, and useful before the first field",
+        summary:
+          "ZIP-level traffic decides fast whether a page feels local enough to trust, so the page should prove area fit and next-step clarity immediately.",
+      };
+    case "help-home":
+      return {
+        eyebrow: "Choose the right lane quickly",
+        title: "This page is built to help people self-select before friction appears",
+        summary:
+          "When a visitor is not sure whether they need urgent help, an estimate, or commercial service, the first job is to remove confusion fast.",
+      };
+    default:
+      return {
+        eyebrow: "Start in the right place",
+        title: "This page is built to help visitors recognize the best path without overthinking it",
+        summary:
+          "The homepage should work like a calm traffic director: clear choices, low friction, and no wasted clicks into the wrong funnel.",
+      };
+  }
+}
+
+function renderSignatureSection(entry: PlumbingEntrypointDefinition) {
+  switch (entry.kind) {
+    case "marketplace-home":
+    case "help-home":
+      return (
+        <section className="funnel-spotlight funnel-spotlight--chooser">
+          <article className="panel spotlight-lead">
+            <p className="eyebrow">Choose your lane</p>
+            <h2>Three very different situations should not start in the same form</h2>
+            <p className="muted">
+              The fastest path for an emergency is not the best path for a quote shopper, and neither of those should feel like a commercial desk.
+            </p>
+          </article>
+          <div className="spotlight-grid">
+            <article className="spotlight-card">
+              <p className="eyebrow">Urgent</p>
+              <h3>Get help now</h3>
+              <p className="muted">For active leaks, backups, no hot water, and other problems where speed matters more than comparison.</p>
+            </article>
+            <article className="spotlight-card">
+              <p className="eyebrow">Planned</p>
+              <h3>Book an estimate</h3>
+              <p className="muted">For repairs, installs, replacements, and lower-pressure quote decisions.</p>
+            </article>
+            <article className="spotlight-card">
+              <p className="eyebrow">Commercial</p>
+              <h3>Request service</h3>
+              <p className="muted">For properties, buildings, facilities, and repeat-work coordination.</p>
+            </article>
+          </div>
+        </section>
+      );
+    case "emergency":
+      return (
+        <section className="funnel-spotlight funnel-spotlight--emergency">
+          <article className="panel spotlight-lead">
+            <p className="eyebrow">What emergency visitors need first</p>
+            <h2>Speed, clarity, and a fallback that still feels human</h2>
+            <p className="muted">
+              When someone is dealing with water, damage, or a disruption at home, the page has to reduce uncertainty before it asks for effort.
+            </p>
+          </article>
+          <div className="spotlight-grid">
+            <article className="spotlight-card danger-card">
+              <p className="eyebrow">Fast recognition</p>
+              <h3>“Yes, this page is for my problem”</h3>
+              <p className="muted">Burst pipes, active leaks, sewer backups, and no-hot-water issues should be visible immediately.</p>
+            </article>
+            <article className="spotlight-card">
+              <p className="eyebrow">Clear action</p>
+              <h3>One main CTA beats a wall of choices</h3>
+              <p className="muted">Visitors under pressure need one obvious next step and one safe fallback if the job is unusual.</p>
+            </article>
+            <article className="spotlight-card">
+              <p className="eyebrow">Mobile reality</p>
+              <h3>Short, thumb-friendly, and phone-first</h3>
+              <p className="muted">Emergency pages perform best when they feel easy to complete one-handed in under a minute.</p>
+            </article>
+          </div>
+        </section>
+      );
+    case "estimate":
+      return (
+        <section className="funnel-spotlight funnel-spotlight--estimate">
+          <article className="panel spotlight-lead">
+            <p className="eyebrow">What estimate shoppers need first</p>
+            <h2>Calm expectations and a quote path that does not feel heavy</h2>
+            <p className="muted">
+              Planned-work visitors want proof they are in the right place without being pushed into emergency-style pressure or bloated intake.
+            </p>
+          </article>
+          <div className="spotlight-grid">
+            <article className="spotlight-card">
+              <p className="eyebrow">Repair</p>
+              <h3>Fix something specific</h3>
+              <p className="muted">Leak repair, drain issues, fixture problems, and other scoped jobs need a straightforward quote path.</p>
+            </article>
+            <article className="spotlight-card">
+              <p className="eyebrow">Replace</p>
+              <h3>Price a bigger project</h3>
+              <p className="muted">Water heaters, repiping, and upgrades need room for context without turning into a giant form.</p>
+            </article>
+            <article className="spotlight-card">
+              <p className="eyebrow">Compare</p>
+              <h3>Understand the next step clearly</h3>
+              <p className="muted">This page should feel useful to people who are still evaluating, not only to people already ready to book.</p>
+            </article>
+          </div>
+        </section>
+      );
+    case "commercial":
+      return (
+        <section className="funnel-spotlight funnel-spotlight--commercial">
+          <article className="panel spotlight-lead">
+            <p className="eyebrow">What commercial buyers need first</p>
+            <h2>A service desk feel, not a homeowner page with business words added</h2>
+            <p className="muted">
+              Facilities teams and property managers are scanning for competence, structure, and whether the request path respects building complexity.
+            </p>
+          </article>
+          <div className="spotlight-grid">
+            <article className="spotlight-card">
+              <p className="eyebrow">Properties</p>
+              <h3>Site-aware intake</h3>
+              <p className="muted">The page should acknowledge buildings, units, and recurring service needs as part of the first conversation.</p>
+            </article>
+            <article className="spotlight-card">
+              <p className="eyebrow">Teams</p>
+              <h3>Coordination-ready language</h3>
+              <p className="muted">Commercial buyers want to know whether they are requesting service, discussing coverage, or setting up repeat work.</p>
+            </article>
+            <article className="spotlight-card">
+              <p className="eyebrow">Continuity</p>
+              <h3>Clear next-step expectations</h3>
+              <p className="muted">The page should show that the next step is organized, documented, and not dependent on homeowner assumptions.</p>
+            </article>
+          </div>
+        </section>
+      );
+    case "provider":
+      return (
+        <section className="funnel-spotlight funnel-spotlight--provider">
+          <article className="panel spotlight-lead">
+            <p className="eyebrow">What serious providers need first</p>
+            <h2>Proof that this could lead to better-fit local work</h2>
+            <p className="muted">
+              Recruitment pages convert stronger when plumbers feel the opportunity is selective, operationally relevant, and based on real service fit.
+            </p>
+          </article>
+          <div className="spotlight-grid">
+            <article className="spotlight-card">
+              <p className="eyebrow">Territory</p>
+              <h3>Where you actually want jobs</h3>
+              <p className="muted">Service area matters early because good providers do not want random work outside their preferred radius.</p>
+            </article>
+            <article className="spotlight-card">
+              <p className="eyebrow">Specialties</p>
+              <h3>The work you want more of</h3>
+              <p className="muted">The page should focus on fit, emergency coverage, and readiness instead of generic company-profile trivia.</p>
+            </article>
+            <article className="spotlight-card">
+              <p className="eyebrow">Standards</p>
+              <h3>Why strong operators finish the form</h3>
+              <p className="muted">Better pages make it obvious that speed, coverage, and response quality increase the value of the opportunity.</p>
+            </article>
+          </div>
+        </section>
+      );
+    case "local":
+      return (
+        <section className="funnel-spotlight funnel-spotlight--local">
+          <article className="panel spotlight-lead">
+            <p className="eyebrow">What local search visitors need first</p>
+            <h2>Proof this page is relevant to this ZIP, not just another generic directory</h2>
+            <p className="muted">
+              Local pages win when they feel nearby, specific, and immediately useful to both urgent visitors and comparison-minded shoppers.
+            </p>
+          </article>
+          <div className="spotlight-grid">
+            <article className="spotlight-card">
+              <p className="eyebrow">Nearby</p>
+              <h3>Keep the ZIP visible</h3>
+              <p className="muted">Area-specific language helps search visitors trust the page before they commit to the first action.</p>
+            </article>
+            <article className="spotlight-card">
+              <p className="eyebrow">Useful</p>
+              <h3>Split urgent and planned intent fast</h3>
+              <p className="muted">Some visitors need a plumber now and others are comparing. The page should support both without confusion.</p>
+            </article>
+            <article className="spotlight-card">
+              <p className="eyebrow">Credible</p>
+              <h3>Show the next step clearly</h3>
+              <p className="muted">Local pages convert better when they feel like a real service page, not an SEO detour into a giant funnel.</p>
+            </article>
+          </div>
+        </section>
+      );
+  }
+}
+
+function renderClosingSection(entry: PlumbingEntrypointDefinition) {
+  if (entry.audience === "provider") {
+    return (
+      <section className="closing-band closing-band--provider">
+        <article className="panel closing-lead">
+          <p className="eyebrow">Before a provider applies</p>
+          <h2>The opportunity should feel selective, practical, and worth the time</h2>
+          <p className="muted">
+            Strong provider pages do not oversell. They make the fit criteria visible and let serious teams decide quickly whether they want in.
+          </p>
+        </article>
+        <div className="closing-checks">
+          <article className="closing-card">
+            <h3>Best for</h3>
+            <p className="muted">Providers with real coverage, clear specialties, and genuine dispatch capacity.</p>
+          </article>
+          <article className="closing-card">
+            <h3>Worth finishing when</h3>
+            <p className="muted">You want better-fit local work rather than another public-listing profile that attracts low-intent noise.</p>
+          </article>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="closing-band">
+      <article className="panel closing-lead">
+        <p className="eyebrow">What good plumbing pages do well</p>
+        <h2>They reduce uncertainty before they ask for commitment</h2>
+        <p className="muted">
+          The strongest service pages do not just collect leads. They make the visitor feel like the next step is obvious, local, and worth taking.
+        </p>
+      </article>
+      <div className="closing-checks">
+        <article className="closing-card">
+          <h3>Clear promise</h3>
+          <p className="muted">What happens next should be visible before the first form field creates friction.</p>
+        </article>
+        <article className="closing-card">
+          <h3>Safe fallback</h3>
+          <p className="muted">If the job is unusual, the visitor should never feel trapped in the wrong path.</p>
+        </article>
+      </div>
+    </section>
+  );
+}
+
 export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEntryPageProps) {
   const niche = getNiche("plumbing");
   const headerStore = await headers();
@@ -171,6 +457,7 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
   const integrations = buildPlumbingIntegrationBundle(entry, tenantConfig.siteUrl);
   const showBlueprint = asBoolean(searchParams.blueprint) || asString(searchParams.view) === "blueprint";
   const metrics = buildPublicMetrics(entry);
+  const railContent = getRailContent(entry);
 
   const splitLink =
     entry.audience === "provider"
@@ -191,6 +478,7 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
 
   return (
     <ExperienceScaffold
+      className={getExperiencePageClassName(entry)}
       eyebrow={entry.eyebrow}
       title={entry.title}
       summary={entry.summary}
@@ -199,7 +487,12 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
       heroSignals={entry.heroHighlights}
       audienceLabel={entry.audienceLabel}
       commitmentNote={entry.commitmentNote}
+      railEyebrow={railContent.eyebrow}
+      railTitle={railContent.title}
+      railSummary={railContent.summary}
     >
+      {renderSignatureSection(entry)}
+
       <section className="grid two">
         <article className="panel">
           <p className="eyebrow">{entry.chipsLabel}</p>
@@ -306,6 +599,8 @@ export async function PlumbingEntryPage({ entry, searchParams = {} }: PlumbingEn
         returning={asBoolean(searchParams.returning)}
         profile={profile}
       />
+
+      {renderClosingSection(entry)}
 
       {showBlueprint ? (
         <section className="grid two">

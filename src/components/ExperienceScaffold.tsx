@@ -9,6 +9,7 @@ type ExperienceMetric = {
 };
 
 type ExperienceScaffoldProps = {
+  className?: string;
   eyebrow: string;
   title: string;
   summary: string;
@@ -22,9 +23,13 @@ type ExperienceScaffoldProps = {
   primaryActionLabel?: string;
   secondaryActionHref?: string;
   secondaryActionLabel?: string;
+  railEyebrow?: string;
+  railTitle?: string;
+  railSummary?: string;
 };
 
 export function ExperienceScaffold({
+  className,
   eyebrow,
   title,
   summary,
@@ -38,9 +43,12 @@ export function ExperienceScaffold({
   primaryActionLabel,
   secondaryActionHref,
   secondaryActionLabel,
+  railEyebrow,
+  railTitle,
+  railSummary,
 }: ExperienceScaffoldProps) {
   return (
-    <main className="experience-page">
+    <main className={`experience-page${className ? ` ${className}` : ""}`}>
       <section className="experience-hero">
         <div className="hero-copy">
           <p className="eyebrow">{eyebrow}</p>
@@ -68,9 +76,9 @@ export function ExperienceScaffold({
         </div>
 
         <aside className="hero-rail" aria-label="Experience summary">
-          <p className="eyebrow">What this page is designed to do</p>
-          <h2>{profile.heroTitle}</h2>
-          <p className="muted">{profile.heroSummary}</p>
+          <p className="eyebrow">{railEyebrow ?? "What this page is designed to do"}</p>
+          <h2>{railTitle ?? profile.heroTitle}</h2>
+          <p className="muted">{railSummary ?? profile.heroSummary}</p>
           {commitmentNote ? <p className="trust-copy">{commitmentNote}</p> : null}
           <p className="trust-copy">{profile.progressLabel}</p>
           <ul className="journey-rail">
