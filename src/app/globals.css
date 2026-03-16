@@ -1182,6 +1182,82 @@ button[disabled] {
   margin-top: 0;
 }
 
+.manual-page {
+  display: grid;
+  gap: 24px;
+}
+
+.manual-hero .hero-copy,
+.manual-hero .hero-rail,
+.manual-section-card,
+.manual-link-card,
+.manual-surface-card,
+.manual-sop-panel,
+.manual-footer-panel {
+  min-width: 0;
+}
+
+.manual-anchor-grid,
+.manual-section-grid,
+.manual-link-grid,
+.manual-sop-grid,
+.manual-surface-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.manual-anchor-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.manual-link-grid,
+.manual-surface-grid,
+.manual-sop-grid {
+  grid-template-columns: 1fr;
+}
+
+.manual-link-path {
+  margin-top: -0.1rem;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(20, 33, 29, 0.08);
+  color: var(--secondary);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (min-width: 720px) {
+  .manual-link-grid,
+  .manual-surface-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .manual-sop-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .manual-sop-grid > :last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 719px) {
+  .manual-anchor-grid,
+  .manual-link-grid,
+  .manual-sop-grid,
+  .manual-surface-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-link-path {
+    font-size: 0.82rem;
+  }
+}
+
 .portal-form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
