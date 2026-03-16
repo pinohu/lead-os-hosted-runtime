@@ -90,6 +90,9 @@ export default async function DeploymentBlueprintPage({ searchParams }: Deployme
           <Link href="/dashboard/deployments" className="secondary">
             Open rollout registry
           </Link>
+          <Link href="/showroom/plumbing" className="secondary">
+            Open public showroom
+          </Link>
         </div>
       </section>
 
