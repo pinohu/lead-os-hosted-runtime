@@ -13,6 +13,18 @@ export type OperatorManualSection = {
   links: OperatorManualLink[];
 };
 
+export type OperatorSop = {
+  id: string;
+  eyebrow: string;
+  title: string;
+  owner: string;
+  frequency: string;
+  summary: string;
+  steps: string[];
+  surfaces: OperatorManualLink[];
+  successChecks: string[];
+};
+
 export const operatorManualSections: OperatorManualSection[] = [
   {
     id: "customer-entry",
@@ -150,7 +162,7 @@ export const operatorManualSections: OperatorManualSection[] = [
         label: "System overview",
         href: "/dashboard/overview",
         audience: "Operator",
-        purpose: "Compact bird’s-eye view of queue pressure, rollout state, provider health, and active alerts.",
+        purpose: "Compact bird's-eye view of queue pressure, rollout state, provider health, and active alerts.",
       },
       {
         label: "Alert operations",
@@ -186,5 +198,141 @@ export const operatorManualPlaybook = [
   "Use Provider health before scaling demand into a ZIP cell or metro where supply may be thin.",
   "Use Deployment registry before assuming a rollout is live; generated does not mean installed.",
   "Use Experiments only when enough economic data exists to justify promoting a winner into the live default.",
+];
+
+export const operatorSops: OperatorSop[] = [
+  {
+    id: "daily-ops",
+    eyebrow: "Daily ops",
+    title: "Daily marketplace operating rhythm",
+    owner: "Operator",
+    frequency: "Every shift",
+    summary: "This is the default sequence for starting a shift, finding pressure quickly, and keeping the plumbing marketplace moving without noise.",
+    steps: [
+      "Open System overview first and scan queue pulse, rollout pulse, and active alerts before touching any queue.",
+      "Move into Dispatch desk and work emergency and escalation-ready plumbing demand first.",
+      "Check Alerts for failed notifications, execution trouble, or recurring threshold breaches that need ownership.",
+      "Review Provider health before pushing more demand into ZIP cells with thin coverage or weak contribution margin.",
+      "End the shift by checking Deployment registry for stale, drifted, or unverified installs that can silently hurt volume.",
+    ],
+    surfaces: [
+      { label: "System overview", href: "/dashboard/overview", audience: "Operator", purpose: "Start-of-shift pulse check." },
+      { label: "Dispatch desk", href: "/dashboard", audience: "Operator", purpose: "Primary intervention queue." },
+      { label: "Alert operations", href: "/dashboard/alerts", audience: "Operator", purpose: "Notification and threshold review." },
+      { label: "Provider health", href: "/dashboard/providers", audience: "Operator", purpose: "Supply-side risk review." },
+      { label: "Deployment registry", href: "/dashboard/deployments", audience: "Operator", purpose: "Rollout verification and drift review." },
+    ],
+    successChecks: [
+      "No emergency lead sits unworked past the SLA window.",
+      "No critical alert remains unowned.",
+      "No constrained ZIP cell is scaled blindly.",
+    ],
+  },
+  {
+    id: "incident-response",
+    eyebrow: "Incident response",
+    title: "Respond to failures and urgent system degradation",
+    owner: "Operator or admin",
+    frequency: "When alerts trigger",
+    summary: "Use this when something is breaking: failed workflows, alert paging issues, booking problems, or rollout drift.",
+    steps: [
+      "Open Alert operations and identify the active critical rule, failure reason, and recommended resolution.",
+      "Use the drill-through link to jump into the exact queue rather than hunting manually.",
+      "If the issue affects a specific lead, open the lead journey and follow the explanation and recovery guidance there.",
+      "If the issue is system-wide, inspect Execution, Workflows, or Deployments based on the alert source and contain the blast radius quickly.",
+      "Acknowledge the alert once ownership is clear so the rest of the team knows the incident is being worked.",
+    ],
+    surfaces: [
+      { label: "Alert operations", href: "/dashboard/alerts", audience: "Operator", purpose: "Where alerts, failures, suppressions, and acknowledgements live." },
+      { label: "Execution queue", href: "/dashboard/execution?status=failed", audience: "Operator", purpose: "Exact-once queue failures and retries." },
+      { label: "Workflow runs", href: "/dashboard/workflows?status=failed", audience: "Operator", purpose: "Workflow-specific failures." },
+      { label: "Booking jobs", href: "/dashboard/bookings?status=failed", audience: "Operator", purpose: "Booking and scheduling failures." },
+      { label: "Deployment registry", href: "/dashboard/deployments?health=verification-danger", audience: "Operator", purpose: "Rollout drift and broken installs." },
+    ],
+    successChecks: [
+      "Critical alerts are acknowledged and owned quickly.",
+      "Root-cause queue is identified within one click from the alert.",
+      "Lead-level issues are recovered or clearly escalated.",
+    ],
+  },
+  {
+    id: "provider-onboarding",
+    eyebrow: "Provider onboarding",
+    title: "Bring new providers into live routing safely",
+    owner: "Admin or operator",
+    frequency: "Whenever adding supply",
+    summary: "Use this sequence to recruit, verify, and activate providers without flooding low-quality or under-configured supply into the marketplace.",
+    steps: [
+      "Send supply-side traffic to Join provider network so plumbers enter through the correct recruiting path.",
+      "Review onboarding submissions and provider profile details before treating the provider as dispatch-ready.",
+      "Confirm service area, issue fit, emergency coverage, and capacity through Provider health and provider portal data.",
+      "Only scale ZIP-cell demand into providers who are executable and operationally ready, not merely configured.",
+      "Re-check contribution margin and response quality after the first real jobs before increasing routing share.",
+    ],
+    surfaces: [
+      { label: "Join provider network", href: "/join-provider-network", audience: "Public", purpose: "Supply acquisition entry point." },
+      { label: "Provider portal", href: "/provider-portal", audience: "Provider", purpose: "Provider-side acceptance and completion reporting." },
+      { label: "Provider health", href: "/dashboard/providers", audience: "Operator", purpose: "Readiness, routing confidence, and economics." },
+      { label: "Runtime settings", href: "/dashboard/settings", audience: "Admin", purpose: "Dispatch mappings and runtime controls." },
+    ],
+    successChecks: [
+      "Provider is executable, not just configured.",
+      "Coverage and capacity are visible before routing live jobs.",
+      "Early jobs close with acceptable margin and complaint profile.",
+    ],
+  },
+  {
+    id: "zip-rollout",
+    eyebrow: "ZIP rollout",
+    title: "Launch and verify local-market deployment waves",
+    owner: "Admin or implementation lead",
+    frequency: "Per metro or ZIP wave",
+    summary: "Use this SOP when expanding to new local pages, provider domains, or WordPress installs across many ZIPs.",
+    steps: [
+      "Start in Deployment blueprint to choose the correct recipe and generate the right embed or hosted package.",
+      "Use the bulk generator for ZIP waves instead of copying one-off snippets manually.",
+      "Register installs in Deployment registry so generated does not get confused with truly live.",
+      "Run or review deployment verification so unreachable pages, missing embeds, and drifted installs are caught fast.",
+      "Check constrained ZIP cells in the dispatch desk before spending more traffic into a newly rolled-out market.",
+    ],
+    surfaces: [
+      { label: "Deployment blueprint", href: "/deployments/plumbing", audience: "Operator", purpose: "Source of truth for snippets and packages." },
+      { label: "Deployment registry", href: "/dashboard/deployments", audience: "Operator", purpose: "Registry, cohort tracking, and verification." },
+      { label: "Bulk generator API", href: "/api/embed/generate-bulk", audience: "Integration", purpose: "ZIP-wave generation for automation and agency tools." },
+      { label: "Widget boot", href: "/api/widgets/boot", audience: "Integration", purpose: "Live widget configuration endpoint." },
+      { label: "Dispatch desk", href: "/dashboard", audience: "Operator", purpose: "ZIP-cell liquidity and post-rollout pressure check." },
+    ],
+    successChecks: [
+      "Every rollout wave is registered, not just generated.",
+      "Live pages are reachable and embed markers verify cleanly.",
+      "Demand is not pushed into under-supplied ZIP cells.",
+    ],
+  },
+  {
+    id: "experiment-promotion",
+    eyebrow: "Experiment promotion",
+    title: "Promote a winner into the live runtime default",
+    owner: "Admin",
+    frequency: "After enough economic evidence exists",
+    summary: "Use this SOP to move from randomized experimentation into a promoted live default without code changes.",
+    steps: [
+      "Open Experiments and review completed revenue, contribution margin, refunds, complaints, and review signals, not just conversion.",
+      "Confirm the leading non-holdout variant is actually promotable and not merely ahead on top-funnel movement.",
+      "Promote the winner from the experiment dashboard so the runtime stores it in live config.",
+      "Verify the promoted winner is now the default across hosted pages, widget boot, deployment generation, and WordPress plugin output.",
+      "Keep monitoring post-promotion economics to make sure the live default remains healthy in real traffic.",
+    ],
+    surfaces: [
+      { label: "Experiments", href: "/dashboard/experiments", audience: "Admin", purpose: "Review economics and promote winners." },
+      { label: "Widget boot", href: "/api/widgets/boot", audience: "Integration", purpose: "Confirms promoted winners flow into live widget resolution." },
+      { label: "Embed manifest", href: "/api/embed/manifest", audience: "Integration", purpose: "Confirms promoted defaults flow into integration catalog output." },
+      { label: "Deployment blueprint", href: "/deployments/plumbing", audience: "Operator", purpose: "Confirms generators and WordPress outputs reflect the promotion." },
+    ],
+    successChecks: [
+      "Winner is chosen on economics and quality, not vanity metrics.",
+      "Promoted variant becomes the synchronous live default everywhere.",
+      "Post-promotion health remains stronger than the randomized baseline.",
+    ],
+  },
 ];
 

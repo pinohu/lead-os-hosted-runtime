@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireOperatorPageSession } from "@/lib/operator-auth";
-import { operatorManualPlaybook, operatorManualSections } from "@/lib/operator-manual";
+import { operatorManualPlaybook, operatorManualSections, operatorSops } from "@/lib/operator-manual";
 import { tenantConfig } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +64,61 @@ export default async function OperatorManualPage() {
                   </div>
                 </article>
               ))}
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <section className="grid two">
+        {operatorSops.map((sop) => (
+          <article key={sop.id} className="panel">
+            <p className="eyebrow">{sop.eyebrow}</p>
+            <h2>{sop.title}</h2>
+            <div className="portal-status-row">
+              <span className="portal-chip">{sop.owner}</span>
+              <span className="portal-chip">{sop.frequency}</span>
+            </div>
+            <p className="muted">{sop.summary}</p>
+
+            <div className="stack-grid">
+              <article className="stack-card">
+                <p className="eyebrow">Steps</p>
+                <ol className="check-list">
+                  {sop.steps.map((step) => (
+                    <li key={step} className="portal-breakable">{step}</li>
+                  ))}
+                </ol>
+              </article>
+
+              <article className="stack-card">
+                <p className="eyebrow">Key surfaces</p>
+                <div className="stack-grid">
+                  {sop.surfaces.map((item) => (
+                    <article key={`${sop.id}:${item.href}`} className="stack-card">
+                      <div className="portal-status-row">
+                        <span className="portal-chip">{item.audience}</span>
+                        <span className="portal-chip portal-breakable">{item.href}</span>
+                      </div>
+                      <h3>{item.label}</h3>
+                      <p className="muted portal-breakable">{item.purpose}</p>
+                      <div className="cta-row">
+                        <Link href={item.href} className="secondary">
+                          Open surface
+                        </Link>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </article>
+
+              <article className="stack-card">
+                <p className="eyebrow">Success checks</p>
+                <ul className="check-list">
+                  {sop.successChecks.map((line) => (
+                    <li key={line} className="portal-breakable">{line}</li>
+                  ))}
+                </ul>
+              </article>
             </div>
           </article>
         ))}
