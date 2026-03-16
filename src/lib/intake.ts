@@ -3,12 +3,9 @@ import { decideNextStep } from "./orchestrator.ts";
 import { recommendDispatchProviders } from "./dispatch-routing.ts";
 import { classifyPlumbingLead, isPlumbingLead } from "./plumbing-os.ts";
 import {
+  getAutomationHealth,
   logEventsToLedger,
   type ProviderResult,
-  sendAlertAction,
-  sendEmailAction,
-  sendSmsAction,
-  sendWhatsAppAction,
   syncLeadToCrm,
 } from "./providers.ts";
 import type { LeadStage, PlumbingLeadContext } from "./runtime-schema.ts";
@@ -20,7 +17,6 @@ import {
   getBookingJobs,
   getDocumentJobs,
   getLeadRecord,
-  markNurtureStageSent,
   recordProviderExecution,
   type StoredLeadRecord,
   upsertBookingJob,
@@ -97,13 +93,13 @@ export interface IntakeResult {
   hot: boolean;
   crm: Awaited<ReturnType<typeof syncLeadToCrm>>;
   logging: Awaited<ReturnType<typeof logEventsToLedger>>;
-  alerts: Awaited<ReturnType<typeof sendAlertAction>> | null;
+  alerts: ProviderResult | null;
   workflow: ProviderResult;
   workflowTriggers: Array<ProviderResult>;
   followup: {
-    email: Awaited<ReturnType<typeof sendEmailAction>> | null;
-    whatsapp: Awaited<ReturnType<typeof sendWhatsAppAction>> | null;
-    sms: Awaited<ReturnType<typeof sendSmsAction>> | null;
+    email: ProviderResult | null;
+    whatsapp: ProviderResult | null;
+    sms: ProviderResult | null;
   };
   jobs: {
     booking: Awaited<ReturnType<typeof getBookingJobs>>[number] | null;
@@ -388,6 +384,15 @@ function skippedProviderResult(detail: string): ProviderResult {
     ok: true,
     provider: "LeadOS",
     mode: "prepared",
+    detail,
+  };
+}
+
+function dryRunProviderResult(provider: string, detail: string): ProviderResult {
+  return {
+    ok: true,
+    provider,
+    mode: "dry-run",
     detail,
   };
 }
@@ -796,80 +801,97 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     phone: normalizedPhone,
     family: decision.family,
   });
+  const liveSendsEnabled = process.env.LEAD_OS_ENABLE_LIVE_SENDS !== "false";
 
-  const [emailResult, whatsappResult, smsResult, alertResult] = await Promise.all([
-    !payload.dryRun && immediatePlan.sendEmail && normalizedEmail
-      ? safelyRunProviderAction(
-          "Emailit",
-          () => sendEmailAction({
-            to: normalizedEmail,
-            subject: `${tenantConfig.brandName}: your next step`,
-            html: `<p>Hi ${firstName},</p><p>We received your ${payload.source.replace(/_/g, " ")} submission and mapped your next best step to the <strong>${decision.family}</strong> funnel.</p><p><a href="${tenantConfig.siteUrl}${decision.destination}">${decision.ctaLabel}</a></p>`,
-            trace,
-          }),
-          {
-            to: normalizedEmail,
-            leadKey,
-          },
-        )
-      : Promise.resolve(null),
-    !payload.dryRun && immediatePlan.sendWhatsApp && normalizedPhone
-      ? safelyRunProviderAction(
-          "WbizTool",
-          () => sendWhatsAppAction({
-            phone: normalizedPhone,
-            body: `Hi ${firstName}, ${tenantConfig.brandName} received your request. Next step: ${tenantConfig.siteUrl}${decision.destination}`,
-          }),
-          {
-            to: normalizedPhone,
-            leadKey,
-          },
-        )
-      : Promise.resolve(null),
-    !payload.dryRun && immediatePlan.sendSms && normalizedPhone
-      ? safelyRunProviderAction(
-          "Easy Text Marketing",
-          () => sendSmsAction({
-            phone: normalizedPhone,
-            body: `${tenantConfig.brandName}: continue here ${tenantConfig.siteUrl}${decision.destination}`,
-          }),
-          {
-            to: normalizedPhone,
-            leadKey,
-          },
-        )
-      : Promise.resolve(null),
-    !payload.dryRun && immediatePlan.alertOps
-      ? safelyRunProviderAction(
-          "Ops Alert",
-          () => sendAlertAction({
-            title: "Hot Lead Captured",
-            body: `${firstName} ${lastName}`.trim() || leadKey,
-            trace,
-          }),
-          {
-            leadKey,
-          },
-        )
-      : Promise.resolve(null),
-  ]);
-
-  if (emailResult) {
-    await appendEvents([createCanonicalEvent(trace, "followup_email_sent", "email", emailResult.ok ? "SENT" : "FAILED")]);
-    await markNurtureStageSent(leadKey, "day-0");
-  }
-  if (whatsappResult) {
-    await appendEvents([createCanonicalEvent(trace, "followup_whatsapp_sent", "whatsapp", whatsappResult.ok ? "SENT" : "FAILED")]);
-  }
-  if (smsResult) {
-    await appendEvents([createCanonicalEvent(trace, "followup_sms_sent", "sms", smsResult.ok ? "SENT" : "FAILED")]);
-  }
+  const [emailTask, whatsappTask, smsTask, alertTask] = !payload.dryRun
+    ? await Promise.all([
+        immediatePlan.sendEmail && normalizedEmail
+          ? enqueueExecutionTask({
+              leadKey,
+              kind: "email",
+              provider: "Emailit",
+              dedupeKey: `followup:email:${leadKey}:${decision.family}`,
+              payload: {
+                emailPayload: {
+                  to: normalizedEmail,
+                  subject: `${tenantConfig.brandName}: your next step`,
+                  html: `<p>Hi ${firstName},</p><p>We received your ${payload.source.replace(/_/g, " ")} submission and mapped your next best step to the <strong>${decision.family}</strong> funnel.</p><p><a href="${tenantConfig.siteUrl}${decision.destination}">${decision.ctaLabel}</a></p>`,
+                  trace,
+                  nurtureStageId: "day-0",
+                },
+              },
+            })
+          : Promise.resolve(null),
+        immediatePlan.sendWhatsApp && normalizedPhone
+          ? enqueueExecutionTask({
+              leadKey,
+              kind: "whatsapp",
+              provider: "WbizTool",
+              dedupeKey: `followup:whatsapp:${leadKey}:${decision.family}`,
+              payload: {
+                whatsappPayload: {
+                  phone: normalizedPhone,
+                  body: `Hi ${firstName}, ${tenantConfig.brandName} received your request. Next step: ${tenantConfig.siteUrl}${decision.destination}`,
+                  trace,
+                },
+              },
+            })
+          : Promise.resolve(null),
+        immediatePlan.sendSms && normalizedPhone
+          ? enqueueExecutionTask({
+              leadKey,
+              kind: "sms",
+              provider: "Easy Text Marketing",
+              dedupeKey: `followup:sms:${leadKey}:${decision.family}`,
+              payload: {
+                smsPayload: {
+                  phone: normalizedPhone,
+                  body: `${tenantConfig.brandName}: continue here ${tenantConfig.siteUrl}${decision.destination}`,
+                  trace,
+                },
+              },
+            })
+          : Promise.resolve(null),
+        immediatePlan.alertOps
+          ? enqueueExecutionTask({
+              leadKey,
+              kind: "alert",
+              provider: "Ops Alert",
+              dedupeKey: `followup:alert:${leadKey}:${decision.family}`,
+              payload: {
+                alertPayload: {
+                  title: "Hot Lead Captured",
+                  body: `${firstName} ${lastName}`.trim() || leadKey,
+                  trace,
+                },
+              },
+            })
+          : Promise.resolve(null),
+      ])
+    : [null, null, null, null];
 
   const plumbingDecision = decision.plumbing;
   const providerDispatchRequests = plumbingDecision && decision.operatingModel === "plumbing-dispatch" &&
       payload.marketplaceAudience !== "provider" && !payload.dryRun
     ? await (async () => {
         const runtimeConfig = await getOperationalRuntimeConfig();
+        const automationHealth = getAutomationHealth();
+        const executableMessaging =
+          automationHealth.providers.emailit.capability === "executable" ||
+          automationHealth.providers.easyTextMarketing.capability === "executable" ||
+          automationHealth.providers.wbiztool.capability === "executable";
+        const executableBooking = automationHealth.providers.trafft.capability === "executable";
+        if (automationHealth.liveMode && (!executableMessaging || !executableBooking)) {
+          await appendEvents([
+            createCanonicalEvent(trace, "dispatch_path_selected", "internal", "DEFERRED", {
+              reason: !executableBooking
+                ? "Booking provider is not executable."
+                : "No executable outbound messaging channel is available.",
+            }),
+          ]);
+          return [];
+        }
+
         const recommendations = recommendDispatchProviders(plumbingDecision, runtimeConfig.dispatch.providers).slice(0, 3);
         const requests = await Promise.all(
           recommendations.map((provider) =>
@@ -1042,50 +1064,6 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
       detail: logging.detail,
       payload: logging.payload,
     }),
-    ...(alertResult ? [
-      recordProviderExecution({
-        leadKey,
-        provider: alertResult.provider,
-        kind: "alert",
-        ok: alertResult.ok,
-        mode: alertResult.mode,
-        detail: alertResult.detail,
-        payload: alertResult.payload,
-      }),
-    ] : []),
-    ...(emailResult ? [
-      recordProviderExecution({
-        leadKey,
-        provider: emailResult.provider,
-        kind: "email",
-        ok: emailResult.ok,
-        mode: emailResult.mode,
-        detail: emailResult.detail,
-        payload: emailResult.payload,
-      }),
-    ] : []),
-    ...(whatsappResult ? [
-      recordProviderExecution({
-        leadKey,
-        provider: whatsappResult.provider,
-        kind: "whatsapp",
-        ok: whatsappResult.ok,
-        mode: whatsappResult.mode,
-        detail: whatsappResult.detail,
-        payload: whatsappResult.payload,
-      }),
-    ] : []),
-    ...(smsResult ? [
-      recordProviderExecution({
-        leadKey,
-        provider: smsResult.provider,
-        kind: "sms",
-        ok: smsResult.ok,
-        mode: smsResult.mode,
-        detail: smsResult.detail,
-        payload: smsResult.payload,
-      }),
-    ] : []),
   ]);
 
   return {
@@ -1100,13 +1078,37 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
     hot,
     crm,
     logging,
-    alerts: alertResult,
+    alerts: payload.dryRun && immediatePlan.alertOps
+      ? dryRunProviderResult("Ops Alert", "Dry run: operator hot-lead alert prepared.")
+      : !liveSendsEnabled && alertTask
+      ? dryRunProviderResult("Ops Alert", "Alert queued in dry-run mode because live sends are disabled.")
+      : alertTask
+      ? queuedProviderResult("Ops Alert", "Queued operator hot-lead alert.", { taskId: alertTask.id })
+      : null,
     workflow,
     workflowTriggers: workflowTriggers.map(({ result }) => result),
     followup: {
-      email: emailResult,
-      whatsapp: whatsappResult,
-      sms: smsResult,
+      email: payload.dryRun && immediatePlan.sendEmail && normalizedEmail
+        ? dryRunProviderResult("Emailit", "Dry run: immediate follow-up email prepared.")
+        : !liveSendsEnabled && emailTask
+        ? dryRunProviderResult("Emailit", "Follow-up email queued in dry-run mode because live sends are disabled.")
+        : emailTask
+        ? queuedProviderResult("Emailit", "Queued immediate follow-up email.", { taskId: emailTask.id })
+        : null,
+      whatsapp: payload.dryRun && immediatePlan.sendWhatsApp && normalizedPhone
+        ? dryRunProviderResult("WbizTool", "Dry run: immediate follow-up WhatsApp prepared.")
+        : !liveSendsEnabled && whatsappTask
+        ? dryRunProviderResult("WbizTool", "Follow-up WhatsApp queued in dry-run mode because live sends are disabled.")
+        : whatsappTask
+        ? queuedProviderResult("WbizTool", "Queued immediate follow-up WhatsApp message.", { taskId: whatsappTask.id })
+        : null,
+      sms: payload.dryRun && immediatePlan.sendSms && normalizedPhone
+        ? dryRunProviderResult("Easy Text Marketing", "Dry run: immediate follow-up SMS prepared.")
+        : !liveSendsEnabled && smsTask
+        ? dryRunProviderResult("Easy Text Marketing", "Follow-up SMS queued in dry-run mode because live sends are disabled.")
+        : smsTask
+        ? queuedProviderResult("Easy Text Marketing", "Queued immediate follow-up SMS.", { taskId: smsTask.id })
+        : null,
     },
     jobs: {
       booking: bookingJob,

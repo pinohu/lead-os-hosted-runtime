@@ -116,6 +116,74 @@ export async function registerDeploymentBatch(input: RegisterDeploymentBatchInpu
   return records;
 }
 
+async function safeFetchText(url: string) {
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    const text = await response.text();
+    return { ok: response.ok, status: response.status, text };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      text: error instanceof Error ? error.message : "Unable to reach deployment target",
+    };
+  }
+}
+
+export async function verifyDeploymentRecord(record: DeploymentRegistryRecord) {
+  const targetUrl = record.pageUrl ?? record.hostedUrl;
+  const target = await safeFetchText(targetUrl);
+  const boot = await safeFetchText(record.bootEndpoint);
+  const issues: string[] = [];
+  const reachable = target.ok;
+  const embedDetected = !record.pageUrl
+    ? target.ok
+    : target.text.includes("/embed/lead-os-embed.js")
+      || target.text.includes("LeadOSConfig")
+      || target.text.includes(record.hostedUrl);
+  const presetMatched = boot.ok;
+
+  if (!reachable) {
+    issues.push(`Target page could not be reached (${target.status || "network error"}).`);
+  }
+  if (record.pageUrl && !embedDetected) {
+    issues.push("The public page does not appear to include the expected LeadOS embed markers.");
+  }
+  if (!presetMatched) {
+    issues.push(`Widget boot endpoint is not healthy (${boot.status || "network error"}).`);
+  }
+  if (record.status === "live" && !record.pageUrl) {
+    issues.push("Deployment is marked live but no public page URL is attached.");
+  }
+
+  const verification = {
+    status: issues.length === 0 ? "healthy" : !reachable || !presetMatched ? "danger" : "warning",
+    summary: issues.length === 0
+      ? "Deployment matches its expected runtime footprint."
+      : issues[0]!,
+    reachable,
+    embedDetected,
+    presetMatched,
+    checkedAt: new Date().toISOString(),
+    issues,
+  } satisfies NonNullable<DeploymentRegistryRecord["verification"]>;
+
+  return upsertDeploymentRegistryRecord({
+    ...record,
+    verification,
+  });
+}
+
+export async function verifyDeploymentRegistry(limit = 25) {
+  const records = await getDeploymentRegistryRecords();
+  const candidates = records.filter((record) => record.status === "live" || record.status === "generated").slice(0, limit);
+  const verified: DeploymentRegistryRecord[] = [];
+  for (const record of candidates) {
+    verified.push(await verifyDeploymentRecord(record));
+  }
+  return verified;
+}
+
 export function summarizeDeploymentRegistry(records: DeploymentRegistryRecord[]) {
   const countByStatus = (status: DeploymentStatus) => records.filter((record) => record.status === status).length;
   const countByInstallType = (installType: DeploymentInstallType) => records.filter((record) => record.installType === installType).length;
@@ -124,6 +192,9 @@ export function summarizeDeploymentRegistry(records: DeploymentRegistryRecord[])
   const generatedOlderThanSevenDays = records.filter((record) => record.status === "generated" && daysSince(record.updatedAt) >= 7).length;
   const liveWithoutPageUrl = records.filter((record) => record.status === "live" && !record.pageUrl).length;
   const staleDeployments = records.filter((record) => daysSince(record.updatedAt) >= 30).length;
+  const unhealthyVerifications = records.filter((record) => record.verification?.status === "danger").length;
+  const warningVerifications = records.filter((record) => record.verification?.status === "warning").length;
+  const pendingVerification = records.filter((record) => !record.verification || record.verification.status === "pending").length;
   const byCity = Object.entries(records.reduce<Record<string, number>>((acc, record) => {
     if (!record.city) return acc;
     const key = record.city.toLowerCase();
@@ -158,6 +229,9 @@ export function summarizeDeploymentRegistry(records: DeploymentRegistryRecord[])
     generatedOlderThanSevenDays,
     liveWithoutPageUrl,
     staleDeployments,
+    unhealthyVerifications,
+    warningVerifications,
+    pendingVerification,
     topDomains: Object.entries(records.reduce<Record<string, number>>((acc, record) => {
       if (!record.domain) return acc;
       acc[record.domain] = (acc[record.domain] ?? 0) + 1;

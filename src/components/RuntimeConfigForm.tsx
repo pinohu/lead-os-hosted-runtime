@@ -2,6 +2,7 @@
 
 import { useDeferredValue, useState, useTransition, type FormEvent } from "react";
 import type { TrafftServiceOption } from "@/lib/provider-discovery";
+import { OBSERVABILITY_RULE_IDS, OBSERVABILITY_RULE_OPTIONS } from "@/lib/observability-rules";
 import type { OperationalRuntimeConfig } from "@/lib/runtime-config";
 
 type ServiceMapRow = {
@@ -58,17 +59,7 @@ type Props = {
   trafftServices: TrafftServiceOption[];
 };
 
-const OBSERVABILITY_RULE_OPTIONS = [
-  { id: "dispatch-backlog", label: "Dispatch backlog" },
-  { id: "provider-response-latency", label: "Provider response latency" },
-  { id: "execution-failures", label: "Execution failures" },
-  { id: "zip-cell-liquidity", label: "ZIP-cell liquidity" },
-  { id: "provider-profitability", label: "Provider profitability" },
-  { id: "generated-rollout-stall", label: "Generated rollout stall" },
-  { id: "live-missing-url", label: "Live deployment missing URL" },
-  { id: "stale-rollout", label: "Stale rollout" },
-  { id: "provider-capability-health", label: "Provider capability health" },
-];
+const OBSERVABILITY_RULE_ID_SET = new Set<string>(OBSERVABILITY_RULE_IDS);
 
 function createServiceMapRow(label = "", serviceId = ""): ServiceMapRow {
   return {
@@ -371,6 +362,12 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
         setError(`Observability recipient "${label}" needs at least one notification channel.`);
         return;
       }
+      const ruleIds = normalizeList(row.ruleIds);
+      const unknownRuleIds = ruleIds.filter((ruleId) => !OBSERVABILITY_RULE_ID_SET.has(ruleId));
+      if (unknownRuleIds.length > 0) {
+        setError(`Observability recipient "${label}" includes unknown rules: ${unknownRuleIds.join(", ")}.`);
+        return;
+      }
 
       parsedNotificationRecipients.push({
         id: row.id,
@@ -379,7 +376,7 @@ export function RuntimeConfigForm({ initialConfig, trafftServices }: Props) {
         phone: phone || undefined,
         active: row.active,
         channels,
-        ruleIds: normalizeList(row.ruleIds),
+        ruleIds,
       });
     }
 

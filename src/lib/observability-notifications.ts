@@ -2,9 +2,11 @@ import type { ObservabilityRuleResult } from "./operator-observability.ts";
 import { sendEmailAction, sendSmsAction, sendWhatsAppAction } from "./providers.ts";
 import type { OperationalRuntimeConfig } from "./runtime-config.ts";
 import {
+  getObservabilityAlertAcknowledgements,
   getObservabilityAlertDeliveries,
   recordObservabilityAlertDelivery,
   type ObservabilityAlertChannel,
+  type ObservabilityAlertAcknowledgementRecord,
   type ObservabilityAlertDeliveryRecord,
 } from "./runtime-store.ts";
 import { tenantConfig } from "./tenant.ts";
@@ -97,6 +99,21 @@ function buildPreferredChannels(
     }
     return Boolean(recipient.phone);
   });
+}
+
+function buildChannelChain(
+  rule: ObservabilityRuleResult,
+  config: OperationalRuntimeConfig,
+  recipient: NotificationRecipient,
+) {
+  const preferred = buildPreferredChannels(rule, config, recipient);
+  if (rule.severity === "danger") {
+    return preferred;
+  }
+  if (rule.severity === "warning") {
+    return preferred.slice(0, 2);
+  }
+  return preferred.slice(0, 1);
 }
 
 function buildNotificationBody(rule: ObservabilityRuleResult) {
@@ -213,10 +230,24 @@ async function sendChannelNotification(
   };
 }
 
+async function getActiveAcknowledgement(
+  ruleId: string,
+  now: Date,
+  getAcknowledgements: () => Promise<ObservabilityAlertAcknowledgementRecord[]>,
+) {
+  const acknowledgements = await getAcknowledgements();
+  const active = acknowledgements
+    .filter((entry) => entry.ruleId === ruleId)
+    .find((entry) => !entry.snoozedUntil || new Date(entry.snoozedUntil).getTime() > now.getTime());
+  return active;
+}
+
 export async function dispatchObservabilityNotifications(
   rules: ObservabilityRuleResult[],
   config: OperationalRuntimeConfig,
-  overrides: Partial<DeliveryDependencies> = {},
+  overrides: Partial<DeliveryDependencies> & {
+    getAcknowledgements?: typeof getObservabilityAlertAcknowledgements;
+  } = {},
 ) {
   const { senders: overrideSenders, ...restOverrides } = overrides;
   const deps: DeliveryDependencies = {
@@ -234,10 +265,47 @@ export async function dispatchObservabilityNotifications(
   const recipients = getObservabilityNotificationRecipients(config);
   const cooldownMinutes = config.observability.notifications.cooldownMinutes;
   const outcomes: ObservabilityNotificationOutcome[] = [];
+  const getAcknowledgements = overrides.getAcknowledgements ?? (() => getObservabilityAlertAcknowledgements());
 
   for (const rule of rules.filter((entry) => entry.triggered)) {
+    const now = deps.now();
+    const acknowledgement = await getActiveAcknowledgement(rule.id, now, getAcknowledgements);
     for (const recipient of recipients.filter((entry) => ruleMatchesRecipient(rule, entry))) {
-      const preferredChannels = buildPreferredChannels(rule, config, recipient);
+      const preferredChannels = buildChannelChain(rule, config, recipient);
+      if (acknowledgement) {
+        const href = buildRuleUrl(rule.href);
+        const detail = acknowledgement.snoozedUntil
+          ? `Acknowledged by ${acknowledgement.acknowledgedBy} until ${acknowledgement.snoozedUntil}.`
+          : `Acknowledged by ${acknowledgement.acknowledgedBy}.`;
+        const channel = preferredChannels[0] ?? config.observability.notifications.defaultChannel;
+        await deps.recordDelivery({
+          ruleId: rule.id,
+          title: rule.title,
+          recipientId: recipient.id,
+          recipientLabel: recipient.label,
+          channel,
+          status: "suppressed",
+          detail,
+          href,
+          payload: {
+            acknowledgementId: acknowledgement.id,
+            acknowledgedBy: acknowledgement.acknowledgedBy,
+            snoozedUntil: acknowledgement.snoozedUntil,
+          },
+          createdAt: now.toISOString(),
+        });
+        outcomes.push({
+          ruleId: rule.id,
+          recipientId: recipient.id,
+          recipientLabel: recipient.label,
+          channel,
+          status: "suppressed",
+          detail,
+          href,
+        });
+        continue;
+      }
+
       if (preferredChannels.length === 0) {
         const href = buildRuleUrl(rule.href);
         await deps.recordDelivery({
@@ -263,11 +331,56 @@ export async function dispatchObservabilityNotifications(
         continue;
       }
 
-      const channel = preferredChannels[0];
-      const now = deps.now();
-      if (await isCoolingDown(rule, recipient, channel, cooldownMinutes, deps.getDeliveries, now)) {
+      const cooledDownChannels: ObservabilityAlertChannel[] = [];
+      let delivered = false;
+      for (const channel of preferredChannels) {
+        if (await isCoolingDown(rule, recipient, channel, cooldownMinutes, deps.getDeliveries, now)) {
+          cooledDownChannels.push(channel);
+          continue;
+        }
+
+        const delivery = await sendChannelNotification(channel, recipient, rule, deps);
+        const status = delivery.ok ? "sent" : "failed";
+        await deps.recordDelivery({
+          ruleId: rule.id,
+          title: rule.title,
+          recipientId: recipient.id,
+          recipientLabel: recipient.label,
+          channel,
+          status,
+          detail: delivery.detail,
+          href: delivery.href,
+          payload: {
+            thresholdLabel: rule.thresholdLabel,
+            currentLabel: rule.currentLabel,
+            resolution: rule.resolution,
+            providerResult: delivery.payload,
+          },
+          createdAt: now.toISOString(),
+        });
+        outcomes.push({
+          ruleId: rule.id,
+          recipientId: recipient.id,
+          recipientLabel: recipient.label,
+          channel,
+          status,
+          detail: delivery.detail,
+          href: delivery.href,
+        });
+        if (delivery.ok) {
+          delivered = true;
+          break;
+        }
+      }
+
+      if (delivered) {
+        continue;
+      }
+
+      if (cooledDownChannels.length === preferredChannels.length) {
         const href = buildRuleUrl(rule.href);
         const detail = `Cooldown active for ${cooldownMinutes} minute${cooldownMinutes === 1 ? "" : "s"}.`;
+        const channel = preferredChannels[0];
         await deps.recordDelivery({
           ruleId: rule.id,
           title: rule.title,
@@ -291,35 +404,6 @@ export async function dispatchObservabilityNotifications(
         });
         continue;
       }
-
-      const delivery = await sendChannelNotification(channel, recipient, rule, deps);
-      const status = delivery.ok ? "sent" : "failed";
-      await deps.recordDelivery({
-        ruleId: rule.id,
-        title: rule.title,
-        recipientId: recipient.id,
-        recipientLabel: recipient.label,
-        channel,
-        status,
-        detail: delivery.detail,
-        href: delivery.href,
-        payload: {
-          thresholdLabel: rule.thresholdLabel,
-          currentLabel: rule.currentLabel,
-          resolution: rule.resolution,
-          providerResult: delivery.payload,
-        },
-        createdAt: now.toISOString(),
-      });
-      outcomes.push({
-        ruleId: rule.id,
-        recipientId: recipient.id,
-        recipientLabel: recipient.label,
-        channel,
-        status,
-        detail: delivery.detail,
-        href: delivery.href,
-      });
     }
   }
 

@@ -2,6 +2,10 @@ import {
   createBookingAction,
   emitWorkflowAction,
   generateDocumentAction,
+  sendAlertAction,
+  sendEmailAction,
+  sendSmsAction,
+  sendWhatsAppAction,
   type ProviderResult,
 } from "./providers.ts";
 import {
@@ -9,6 +13,7 @@ import {
   finalizeExecutionTask,
   getExecutionTasks,
   markExecutionTaskProcessing,
+  markNurtureStageSent,
   recordProviderExecution,
   recordWorkflowRun,
   upsertBookingJob,
@@ -216,6 +221,142 @@ async function processDocumentTask(task: ExecutionTaskRecord) {
   };
 }
 
+async function processEmailTask(task: ExecutionTaskRecord) {
+  const emailPayload =
+    task.payload?.emailPayload && typeof task.payload.emailPayload === "object"
+      ? task.payload.emailPayload as { to?: string; subject?: string; html?: string; trace?: TraceContext; nurtureStageId?: string }
+      : {};
+  const trace = emailPayload.trace;
+  const result = await safelyRunProviderAction("Emailit", () => sendEmailAction({
+    to: String(emailPayload.to ?? ""),
+    subject: String(emailPayload.subject ?? ""),
+    html: String(emailPayload.html ?? ""),
+    trace: trace as TraceContext,
+  }), task.payload ?? undefined);
+
+  await recordProviderExecution({
+    leadKey: task.leadKey,
+    provider: result.provider,
+    kind: "email",
+    ok: result.ok,
+    mode: result.mode,
+    detail: result.detail,
+    payload: result.payload,
+  });
+  if (trace) {
+    await appendEvents([
+      createCanonicalEvent(trace, "followup_email_sent", "email", result.ok ? "SENT" : "FAILED"),
+    ]);
+  }
+  if (result.ok && emailPayload.nurtureStageId) {
+    await markNurtureStageSent(task.leadKey, emailPayload.nurtureStageId);
+  }
+
+  await finalizeExecutionTask(task.id, {
+    status: result.ok ? "completed" : "failed",
+    lastError: result.ok ? undefined : result.detail,
+    payload: { ...(task.payload ?? {}), result },
+  });
+  return { taskId: task.id, kind: task.kind, ok: result.ok, detail: result.detail };
+}
+
+async function processSmsTask(task: ExecutionTaskRecord) {
+  const smsPayload =
+    task.payload?.smsPayload && typeof task.payload.smsPayload === "object"
+      ? task.payload.smsPayload as { phone?: string; body?: string; trace?: TraceContext }
+      : {};
+  const trace = smsPayload.trace;
+  const result = await safelyRunProviderAction("Easy Text Marketing", () => sendSmsAction({
+    phone: String(smsPayload.phone ?? ""),
+    body: String(smsPayload.body ?? ""),
+  }), task.payload ?? undefined);
+
+  await recordProviderExecution({
+    leadKey: task.leadKey,
+    provider: result.provider,
+    kind: "sms",
+    ok: result.ok,
+    mode: result.mode,
+    detail: result.detail,
+    payload: result.payload,
+  });
+  if (trace) {
+    await appendEvents([
+      createCanonicalEvent(trace, "followup_sms_sent", "sms", result.ok ? "SENT" : "FAILED"),
+    ]);
+  }
+
+  await finalizeExecutionTask(task.id, {
+    status: result.ok ? "completed" : "failed",
+    lastError: result.ok ? undefined : result.detail,
+    payload: { ...(task.payload ?? {}), result },
+  });
+  return { taskId: task.id, kind: task.kind, ok: result.ok, detail: result.detail };
+}
+
+async function processWhatsAppTask(task: ExecutionTaskRecord) {
+  const whatsappPayload =
+    task.payload?.whatsappPayload && typeof task.payload.whatsappPayload === "object"
+      ? task.payload.whatsappPayload as { phone?: string; body?: string; trace?: TraceContext }
+      : {};
+  const trace = whatsappPayload.trace;
+  const result = await safelyRunProviderAction("WbizTool", () => sendWhatsAppAction({
+    phone: String(whatsappPayload.phone ?? ""),
+    body: String(whatsappPayload.body ?? ""),
+  }), task.payload ?? undefined);
+
+  await recordProviderExecution({
+    leadKey: task.leadKey,
+    provider: result.provider,
+    kind: "whatsapp",
+    ok: result.ok,
+    mode: result.mode,
+    detail: result.detail,
+    payload: result.payload,
+  });
+  if (trace) {
+    await appendEvents([
+      createCanonicalEvent(trace, "followup_whatsapp_sent", "whatsapp", result.ok ? "SENT" : "FAILED"),
+    ]);
+  }
+
+  await finalizeExecutionTask(task.id, {
+    status: result.ok ? "completed" : "failed",
+    lastError: result.ok ? undefined : result.detail,
+    payload: { ...(task.payload ?? {}), result },
+  });
+  return { taskId: task.id, kind: task.kind, ok: result.ok, detail: result.detail };
+}
+
+async function processAlertTask(task: ExecutionTaskRecord) {
+  const alertPayload =
+    task.payload?.alertPayload && typeof task.payload.alertPayload === "object"
+      ? task.payload.alertPayload as { title?: string; body?: string; trace?: TraceContext }
+      : {};
+  const result = await safelyRunProviderAction("Ops Alert", () => sendAlertAction({
+    title: String(alertPayload.title ?? ""),
+    body: String(alertPayload.body ?? ""),
+    trace: alertPayload.trace as TraceContext,
+  }), task.payload ?? undefined);
+
+  await recordProviderExecution({
+    leadKey: task.leadKey,
+    provider: result.provider,
+    kind: "alert",
+    ok: result.ok,
+    mode: result.mode,
+    detail: result.detail,
+    payload: result.payload,
+  });
+
+  await finalizeExecutionTask(task.id, {
+    status: result.ok ? "completed" : "failed",
+    lastError: result.ok ? undefined : result.detail,
+    payload: { ...(task.payload ?? {}), result },
+  });
+  return { taskId: task.id, kind: task.kind, ok: result.ok, detail: result.detail };
+}
+
 export async function processExecutionTasks(limit = 25) {
   const pending = await getExecutionTasks({ status: "pending" });
   const claimed = [];
@@ -238,6 +379,22 @@ export async function processExecutionTasks(limit = 25) {
     }
     if (task.kind === "document") {
       results.push(await processDocumentTask(task));
+      continue;
+    }
+    if (task.kind === "email") {
+      results.push(await processEmailTask(task));
+      continue;
+    }
+    if (task.kind === "sms") {
+      results.push(await processSmsTask(task));
+      continue;
+    }
+    if (task.kind === "whatsapp") {
+      results.push(await processWhatsAppTask(task));
+      continue;
+    }
+    if (task.kind === "alert") {
+      results.push(await processAlertTask(task));
     }
   }
 

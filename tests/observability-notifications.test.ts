@@ -158,3 +158,97 @@ test("dispatchObservabilityNotifications suppresses alerts during cooldown windo
   assert.equal(result[0]?.status, "suppressed");
   assert.match(result[0]?.detail ?? "", /cooldown/i);
 });
+
+test("dispatchObservabilityNotifications falls back to the next channel for danger alerts", async () => {
+  const config = {
+    ...createConfig(),
+    observability: {
+      notifications: {
+        ...createConfig().observability.notifications,
+        recipients: [
+          {
+            id: "ops",
+            label: "Ops",
+            active: true,
+            email: "ops@example.com",
+            phone: "+15555550123",
+            channels: ["email", "sms", "whatsapp"],
+            ruleIds: ["execution-failures"],
+          },
+        ],
+      },
+    },
+  } satisfies OperationalRuntimeConfig;
+  const attempts: string[] = [];
+
+  const result = await dispatchObservabilityNotifications(
+    [createRule()],
+    config,
+    {
+      senders: {
+        email: async () => {
+          attempts.push("email");
+          return { ok: false, provider: "Emailit", mode: "live", detail: "Email failed" };
+        },
+        sms: async () => {
+          attempts.push("sms");
+          return { ok: true, provider: "Easy Text Marketing", mode: "live", detail: "SMS sent" };
+        },
+        whatsapp: async () => {
+          attempts.push("whatsapp");
+          return { ok: true, provider: "WbizTool", mode: "live", detail: "WhatsApp sent" };
+        },
+      },
+      getDeliveries: async () => [],
+      getAcknowledgements: async () => [],
+      recordDelivery: async (record) => ({
+        id: record.id ?? "delivery-id",
+        createdAt: record.createdAt ?? new Date().toISOString(),
+        ...record,
+      }),
+      now: () => new Date("2026-03-15T13:00:00Z"),
+    },
+  );
+
+  assert.deepEqual(attempts, ["email", "sms"]);
+  assert.equal(result.some((entry) => entry.channel === "sms" && entry.status === "sent"), true);
+});
+
+test("dispatchObservabilityNotifications suppresses acknowledged rules", async () => {
+  const config = createConfig();
+  let sent = 0;
+
+  const result = await dispatchObservabilityNotifications(
+    [createRule()],
+    config,
+    {
+      senders: {
+        email: async () => {
+          sent += 1;
+          return { ok: true, provider: "Emailit", mode: "live", detail: "Email sent" };
+        },
+        sms: async () => ({ ok: true, provider: "Easy Text Marketing", mode: "live", detail: "SMS sent" }),
+        whatsapp: async () => ({ ok: true, provider: "WbizTool", mode: "live", detail: "WhatsApp sent" }),
+      },
+      getDeliveries: async () => [],
+      getAcknowledgements: async () => [{
+        id: "ack-1",
+        ruleId: "execution-failures",
+        title: "Execution failure threshold",
+        acknowledgedBy: "ops@example.com",
+        snoozedUntil: "2026-03-15T14:00:00Z",
+        createdAt: "2026-03-15T13:00:00Z",
+      }],
+      recordDelivery: async (record) => ({
+        id: record.id ?? "suppressed",
+        createdAt: record.createdAt ?? new Date().toISOString(),
+        ...record,
+      }),
+      now: () => new Date("2026-03-15T13:15:00Z"),
+    },
+  );
+
+  assert.equal(sent, 0);
+  assert.equal(result[0]?.status, "suppressed");
+  assert.match(result[0]?.detail ?? "", /acknowledged/i);
+});

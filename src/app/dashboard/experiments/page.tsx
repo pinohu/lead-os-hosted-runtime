@@ -8,6 +8,38 @@ import { tenantConfig } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
+function classifyExperiment(experiment: {
+  entries: number;
+  contributionMargin: number;
+  refunds: number;
+  majorComplaints: number;
+  conversionRate: number;
+  marginRate: number;
+}) {
+  if (experiment.entries < 25) {
+    return {
+      status: "running",
+      summary: "Still gathering enough traffic to trust the economics.",
+    };
+  }
+  if (experiment.contributionMargin > 0 && experiment.refunds === 0 && experiment.majorComplaints === 0 && experiment.marginRate >= 20) {
+    return {
+      status: "promotable",
+      summary: "This variant is economically healthy enough to consider promoting into the default deployment preset.",
+    };
+  }
+  if (experiment.contributionMargin <= 0 || experiment.refunds > 0 || experiment.majorComplaints > 0) {
+    return {
+      status: "at-risk",
+      summary: "This variant is moving traffic, but the downstream economics or service quality signals are not strong enough yet.",
+    };
+  }
+  return {
+    status: "enough-data",
+    summary: "This variant has enough data for operator review, but it is not yet a clear winner.",
+  };
+}
+
 export default async function ExperimentsPage() {
   await requireOperatorPageSession("/dashboard/experiments");
   const [leads, events, runtimeConfig] = await Promise.all([
@@ -71,8 +103,11 @@ export default async function ExperimentsPage() {
           </article>
         ) : (
           snapshot.experimentPerformance.map((experiment) => (
-            <article key={experiment.experimentId} className="stack-card">
-              <p className="eyebrow">{experiment.experimentId}</p>
+            <article key={experiment.experimentId} className={`stack-card tone-${classifyExperiment(experiment).status === "promotable" ? "success" : classifyExperiment(experiment).status === "at-risk" ? "warning" : "neutral"}`}>
+              <div className="portal-status-row">
+                <span className="portal-chip">{experiment.experimentId}</span>
+                <span className="portal-chip">{classifyExperiment(experiment).status}</span>
+              </div>
               <h2>{experiment.entries} entries</h2>
               <p className="muted">
                 Hot rate: {experiment.hotRate}% | M1 to M2: {experiment.m1ToM2}% | M1 to M3: {experiment.m1ToM3}% | Conversion: {experiment.conversionRate}%
@@ -88,6 +123,9 @@ export default async function ExperimentsPage() {
               </p>
               <p className="muted">
                 Positive reviews: {experiment.positiveReviews} | Negative reviews: {experiment.negativeReviews} | Major complaints: {experiment.majorComplaints} | Refunds: {experiment.refunds}
+              </p>
+              <p className="muted portal-breakable">
+                <strong>Lifecycle:</strong> {classifyExperiment(experiment).summary}
               </p>
               <ul className="check-list">
                 {experiment.topVariants.map((variant) => (

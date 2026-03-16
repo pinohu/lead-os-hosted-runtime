@@ -129,7 +129,7 @@ export interface IntakeAttemptRecord {
   payload?: Record<string, unknown>;
 }
 
-export type ExecutionTaskKind = "workflow" | "booking" | "document";
+export type ExecutionTaskKind = "workflow" | "booking" | "document" | "email" | "sms" | "whatsapp" | "alert";
 
 export type ExecutionTaskStatus = "pending" | "processing" | "completed" | "failed";
 
@@ -190,6 +190,15 @@ export interface DeploymentRegistryRecord {
   pluginDownloadPath?: string;
   notes?: string;
   tags: string[];
+  verification?: {
+    status: "pending" | "healthy" | "warning" | "danger";
+    summary: string;
+    reachable?: boolean;
+    embedDetected?: boolean;
+    presetMatched?: boolean;
+    checkedAt: string;
+    issues: string[];
+  };
   createdAt: string;
   updatedAt: string;
   updatedBy?: string;
@@ -212,6 +221,16 @@ export interface ObservabilityAlertDeliveryRecord {
   createdAt: string;
 }
 
+export interface ObservabilityAlertAcknowledgementRecord {
+  id: string;
+  ruleId: string;
+  title: string;
+  acknowledgedBy: string;
+  note?: string;
+  snoozedUntil?: string;
+  createdAt: string;
+}
+
 const leadStore = new Map<string, StoredLeadRecord>();
 const eventStore: CanonicalEvent[] = [];
 const providerExecutionStore: ProviderExecutionRecord[] = [];
@@ -226,6 +245,7 @@ const executionTaskStore = new Map<string, ExecutionTaskRecord>();
 const providerDispatchRequestStore = new Map<string, ProviderDispatchRequestRecord>();
 const deploymentRegistryStore = new Map<string, DeploymentRegistryRecord>();
 const observabilityAlertDeliveryStore = new Map<string, ObservabilityAlertDeliveryRecord>();
+const observabilityAlertAcknowledgementStore = new Map<string, ObservabilityAlertAcknowledgementRecord>();
 
 let pool: Pool | null = null;
 let schemaReady: Promise<void> | null = null;
@@ -247,7 +267,8 @@ type AitableRuntimeKind =
   | "execution-task"
   | "provider-dispatch-request"
   | "deployment-registry"
-  | "observability-alert-delivery";
+  | "observability-alert-delivery"
+  | "observability-alert-acknowledgement";
 
 type AitableRuntimeEntry = {
   kind: AitableRuntimeKind;
@@ -266,7 +287,8 @@ type AitableRuntimeEntry = {
     | ExecutionTaskRecord
     | ProviderDispatchRequestRecord
     | DeploymentRegistryRecord
-    | ObservabilityAlertDeliveryRecord;
+    | ObservabilityAlertDeliveryRecord
+    | ObservabilityAlertAcknowledgementRecord;
 };
 
 function getDatabaseUrl() {
@@ -428,6 +450,13 @@ async function ensureSchema() {
           payload JSONB NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS lead_os_observability_alert_acknowledgements (
+          id TEXT PRIMARY KEY,
+          rule_id TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL,
+          payload JSONB NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS lead_os_events_lead_idx
           ON lead_os_events (lead_key, timestamp DESC);
         CREATE INDEX IF NOT EXISTS lead_os_provider_exec_lead_idx
@@ -447,6 +476,8 @@ async function ensureSchema() {
           ON lead_os_deployment_registry (status, updated_at DESC);
         CREATE INDEX IF NOT EXISTS lead_os_observability_alert_deliveries_rule_idx
           ON lead_os_observability_alert_deliveries (rule_id, recipient_id, channel, created_at DESC);
+        CREATE INDEX IF NOT EXISTS lead_os_observability_alert_acknowledgements_rule_idx
+          ON lead_os_observability_alert_acknowledgements (rule_id, created_at DESC);
       `);
     } catch (error) {
       schemaReady = null;
@@ -1618,6 +1649,96 @@ export async function getObservabilityAlertDeliveries(filters?: {
   return records;
 }
 
+export async function recordObservabilityAlertAcknowledgement(
+  record: Omit<ObservabilityAlertAcknowledgementRecord, "id" | "createdAt"> & {
+    id?: string;
+    createdAt?: string;
+  },
+) {
+  const normalizedRecord: ObservabilityAlertAcknowledgementRecord = {
+    ...record,
+    id: record.id ?? crypto.randomUUID(),
+    createdAt: record.createdAt ?? new Date().toISOString(),
+  };
+  observabilityAlertAcknowledgementStore.set(normalizedRecord.id, normalizedRecord);
+
+  const activePool = getPool();
+  if (!activePool && runtimeMode() === "aitable") {
+    await appendAitableRuntimeEntry("observability-alert-acknowledgement", normalizedRecord.id, normalizedRecord);
+    return normalizedRecord;
+  }
+  if (!activePool) {
+    return normalizedRecord;
+  }
+
+  await ensureSchema();
+  await queryPostgres(
+    `
+      INSERT INTO lead_os_observability_alert_acknowledgements (id, rule_id, created_at, payload)
+      VALUES ($1, $2, $3::timestamptz, $4::jsonb)
+      ON CONFLICT (id) DO UPDATE SET
+        rule_id = EXCLUDED.rule_id,
+        created_at = EXCLUDED.created_at,
+        payload = EXCLUDED.payload
+    `,
+    [
+      normalizedRecord.id,
+      normalizedRecord.ruleId,
+      normalizedRecord.createdAt,
+      JSON.stringify(normalizedRecord),
+    ],
+  );
+  return normalizedRecord;
+}
+
+export async function getObservabilityAlertAcknowledgements(filters?: {
+  ruleId?: string;
+}) {
+  const matches = (record: ObservabilityAlertAcknowledgementRecord) =>
+    (!filters?.ruleId || record.ruleId === filters.ruleId);
+
+  if (!getPool() && runtimeMode() === "aitable") {
+    const entries = await getAitableRuntimeEntries();
+    const latestById = new Map<string, ObservabilityAlertAcknowledgementRecord>();
+    for (const entry of entries) {
+      if (entry.kind !== "observability-alert-acknowledgement") continue;
+      const record = entry.payload as ObservabilityAlertAcknowledgementRecord;
+      const existing = latestById.get(record.id);
+      if (!existing || new Date(record.createdAt).getTime() > new Date(existing.createdAt).getTime()) {
+        latestById.set(record.id, record);
+      }
+    }
+    const values = sortByCreatedAt([...latestById.values()].filter(matches));
+    observabilityAlertAcknowledgementStore.clear();
+    for (const value of values) {
+      observabilityAlertAcknowledgementStore.set(value.id, value);
+    }
+    return values;
+  }
+  if (!getPool()) {
+    return sortByCreatedAt([...observabilityAlertAcknowledgementStore.values()].filter(matches));
+  }
+
+  await ensureSchema();
+  const clauses: string[] = [];
+  const values: unknown[] = [];
+  if (filters?.ruleId) {
+    values.push(filters.ruleId);
+    clauses.push(`rule_id = $${values.length}`);
+  }
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+  const result = await queryPostgres<{ payload: ObservabilityAlertAcknowledgementRecord }>(
+    `SELECT payload FROM lead_os_observability_alert_acknowledgements ${where} ORDER BY created_at DESC`,
+    values,
+  );
+  const records = result.rows.map((row) => row.payload);
+  observabilityAlertAcknowledgementStore.clear();
+  for (const record of records) {
+    observabilityAlertAcknowledgementStore.set(record.id, record);
+  }
+  return records;
+}
+
 export async function upsertRuntimeConfig(
   config: Omit<RuntimeConfigRecord, "updatedAt"> & { updatedAt?: string },
 ) {
@@ -1956,6 +2077,7 @@ export async function resetRuntimeStore() {
   providerDispatchRequestStore.clear();
   deploymentRegistryStore.clear();
   observabilityAlertDeliveryStore.clear();
+  observabilityAlertAcknowledgementStore.clear();
   invalidateAitableCache();
 
   const activePool = getPool();
@@ -1980,6 +2102,7 @@ export async function resetRuntimeStore() {
       lead_os_provider_dispatch_requests,
       lead_os_deployment_registry,
       lead_os_observability_alert_deliveries,
+      lead_os_observability_alert_acknowledgements,
       lead_os_workflow_runs,
       lead_os_provider_executions,
       lead_os_events,

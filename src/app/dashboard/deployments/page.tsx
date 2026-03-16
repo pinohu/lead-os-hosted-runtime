@@ -34,6 +34,10 @@ export default async function DeploymentRegistryPage({ searchParams }: Deploymen
         return record.status === "live" && !record.pageUrl;
       case "stale":
         return daysSince(record.updatedAt) >= 30;
+      case "verification-danger":
+        return record.verification?.status === "danger";
+      case "verification-warning":
+        return record.verification?.status === "warning";
       default:
         return true;
     }
@@ -121,6 +125,16 @@ export default async function DeploymentRegistryPage({ searchParams }: Deploymen
           <h2>{snapshot.summary.staleDeployments}</h2>
           <p className="muted">Deployments not touched recently enough to trust as actively managed.</p>
         </article>
+        <article className="metric-card">
+          <p className="eyebrow">Verification danger</p>
+          <h2>{snapshot.summary.unhealthyVerifications}</h2>
+          <p className="muted">Deployments whose live checks failed or whose boot endpoints are unhealthy.</p>
+        </article>
+        <article className="metric-card">
+          <p className="eyebrow">Verification warning</p>
+          <h2>{snapshot.summary.warningVerifications}</h2>
+          <p className="muted">Deployments that are reachable but drifting from the expected embed footprint.</p>
+        </article>
       </section>
 
       <section className="grid two">
@@ -198,6 +212,25 @@ export default async function DeploymentRegistryPage({ searchParams }: Deploymen
               <p className="muted">
                 Provider: {record.providerLabel ?? record.providerId ?? "Unassigned"} | Updated by: {record.updatedBy ?? "Unknown"}
               </p>
+              {record.verification ? (
+                <div className={`portal-issue-card severity-${record.verification.status === "danger" ? "danger" : record.verification.status === "warning" ? "warning" : "success"}`}>
+                  <div className="portal-status-row">
+                    <span className="portal-chip">verification</span>
+                    <span className="portal-chip">{record.verification.status}</span>
+                    <span className="portal-chip">{record.verification.checkedAt.slice(0, 10)}</span>
+                  </div>
+                  <p className="muted portal-breakable"><strong>Summary:</strong> {record.verification.summary}</p>
+                  {record.verification.issues.length > 0 ? (
+                    <ul className="check-list">
+                      {record.verification.issues.map((issue) => (
+                        <li key={issue}>{issue}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="muted">Latest verification found no drift.</p>
+                  )}
+                </div>
+              ) : null}
               {record.tags.length > 0 ? (
                 <div className="portal-status-row">
                   {record.tags.map((tag) => (

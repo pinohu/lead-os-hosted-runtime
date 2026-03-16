@@ -119,6 +119,14 @@ function inferExecutionReason(task: ExecutionTaskRecord) {
     return lastError;
   }
   switch (task.kind) {
+    case "email":
+      return "The outbound email queue could not deliver the immediate follow-up message.";
+    case "sms":
+      return "The outbound SMS queue could not deliver the immediate text follow-up.";
+    case "whatsapp":
+      return "The outbound WhatsApp queue could not deliver the immediate follow-up message.";
+    case "alert":
+      return "The operator alert queue could not page the operations team.";
     case "booking":
       return "The booking execution queue could not complete the scheduling step.";
     case "document":
@@ -131,6 +139,14 @@ function inferExecutionReason(task: ExecutionTaskRecord) {
 
 function inferExecutionResolution(task: ExecutionTaskRecord) {
   switch (task.kind) {
+    case "email":
+      return "Inspect the email provider status, recipient address, and message payload, then retry the task or route the lead to another contact channel.";
+    case "sms":
+      return "Verify the SMS provider readiness and phone formatting, then retry the message or fall back to WhatsApp or email.";
+    case "whatsapp":
+      return "Verify the WhatsApp provider readiness and phone formatting, then retry the message or fall back to SMS or email.";
+    case "alert":
+      return "Check the operations alert provider configuration and webhook health, then retry the alert or acknowledge the incident manually.";
     case "booking":
       return "Open the booking queue, verify provider availability and booking credentials, then retry or route the lead to manual handoff.";
     case "document":
@@ -468,6 +484,8 @@ function buildSystemIssueInsights(input: {
     generatedOlderThanSevenDays: number;
     liveWithoutPageUrl: number;
     staleDeployments: number;
+    unhealthyVerifications: number;
+    warningVerifications: number;
   };
 }) {
   const leadLookup = new Map(input.leads.map((lead) => [lead.leadKey, lead]));
@@ -521,6 +539,28 @@ function buildSystemIssueInsights(input: {
       href: queueHref("/dashboard/deployments", { health: "stale" }),
     });
   }
+  if (input.deploymentSummary.unhealthyVerifications > 0) {
+    enriched.push({
+      id: "deployment:verification-danger",
+      source: "rollout verification",
+      title: "Some live deployments are failing health checks",
+      reason: `${input.deploymentSummary.unhealthyVerifications} deployments are unreachable or have unhealthy boot verification.`,
+      resolution: "Repair the broken pages or widget boot targets before routing more marketplace traffic into them.",
+      severity: "danger",
+      href: queueHref("/dashboard/deployments", { health: "verification-danger" }),
+    });
+  }
+  if (input.deploymentSummary.warningVerifications > 0) {
+    enriched.push({
+      id: "deployment:verification-warning",
+      source: "rollout verification",
+      title: "Some deployments are drifting from their intended embed footprint",
+      reason: `${input.deploymentSummary.warningVerifications} deployments are reachable but no longer match the expected LeadOS embed contract.`,
+      resolution: "Review the host page and reinstall the generated widget or plugin bundle before the drift grows into downtime.",
+      severity: "warning",
+      href: queueHref("/dashboard/deployments", { health: "verification-warning" }),
+    });
+  }
 
   return enriched.slice(0, 10);
 }
@@ -534,6 +574,8 @@ function buildObservabilityRules(input: {
   generatedOlderThanSevenDays: number;
   liveWithoutPageUrl: number;
   staleDeployments: number;
+  unhealthyVerifications: number;
+  warningVerifications: number;
   degradedProviders: number;
   missingProviders: number;
 }) {
@@ -627,6 +669,17 @@ function buildObservabilityRules(input: {
       href: queueHref("/dashboard/deployments", { health: "stale" }),
     },
     {
+      id: "deployment-verification",
+      title: "Deployment verification threshold",
+      severity: "danger",
+      thresholdLabel: "Trigger when any deployment fails live verification",
+      currentLabel: `${input.unhealthyVerifications} danger / ${input.warningVerifications} warning deployments`,
+      triggered: input.unhealthyVerifications + input.warningVerifications >= 1,
+      notificationChannel: "email",
+      resolution: "Repair unreachable pages and reinstall drifted embeds so the rollout registry matches what is actually serving.",
+      href: queueHref("/dashboard/deployments", { health: input.unhealthyVerifications > 0 ? "verification-danger" : "verification-warning" }),
+    },
+    {
       id: "provider-capability-health",
       title: "Provider capability health threshold",
       severity: "warning",
@@ -683,6 +736,8 @@ export function buildSystemOverviewSnapshot(input: {
     generatedOlderThanSevenDays: number;
     liveWithoutPageUrl: number;
     staleDeployments: number;
+    unhealthyVerifications: number;
+    warningVerifications: number;
   };
 }) {
   const health = getAutomationHealth();
@@ -699,6 +754,8 @@ export function buildSystemOverviewSnapshot(input: {
     generatedOlderThanSevenDays: input.deploymentSummary.generatedOlderThanSevenDays,
     liveWithoutPageUrl: input.deploymentSummary.liveWithoutPageUrl,
     staleDeployments: input.deploymentSummary.staleDeployments,
+    unhealthyVerifications: input.deploymentSummary.unhealthyVerifications,
+    warningVerifications: input.deploymentSummary.warningVerifications,
     degradedProviders,
     missingProviders,
   });

@@ -20,6 +20,8 @@ The hosted runtime owns:
 - capacity-aware plumbing dispatch queues, provider scoring, and geo-cell revenue visibility
 - distinct customer-side and provider-side marketplace entry points
 - multi-ZIP marketplace assumptions for thousands of providers and customers
+- exact-once execution queues for booking, documents, workflow, outbound follow-up, and hot-lead alerts
+- observability dashboards for lead journeys, bird's-eye operations, alert delivery health, and rollout drift
 
 ## Key docs
 
@@ -81,6 +83,8 @@ Recommended flow:
 - `/api/embed/generate?recipe=provider-homepage-emergency-widget&zip=19103`
 - `/api/widgets/boot`
 - `/api/embed/manifest`
+- `/api/cron/observability` with `Authorization: Bearer <CRON_SECRET>`
+- `/api/cron/deployments/verify` with `Authorization: Bearer <CRON_SECRET>`
 
 ## WordPress pairing
 

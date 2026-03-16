@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getDeploymentRegistrySnapshot, registerDeployment, registerDeploymentBatch } from "../src/lib/deployment-registry.ts";
+import { getDeploymentRegistrySnapshot, registerDeployment, registerDeploymentBatch, verifyDeploymentRecord } from "../src/lib/deployment-registry.ts";
 
 test("registerDeployment persists rollout records and computes summaries", async () => {
   const first = await registerDeployment({
@@ -103,4 +103,37 @@ test("registerDeploymentBatch registers ZIP rollout cohorts and cohort summaries
   assert.equal(snapshot.summary.generatedOlderThanSevenDays >= 0, true);
   assert.equal(snapshot.summary.liveWithoutPageUrl >= 0, true);
   assert.equal(snapshot.summary.staleDeployments >= 0, true);
+});
+
+test("verifyDeploymentRecord writes live verification health back into the registry", async () => {
+  const record = await registerDeployment({
+    recipe: "provider-homepage-emergency-widget",
+    niche: "plumbing",
+    city: "Miami",
+    domain: "www.miamiplumber.com",
+    pageUrl: "https://www.miamiplumber.com/emergency",
+    installType: "widget",
+    status: "live",
+    updatedBy: "operator@example.com",
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.includes("/api/widgets/boot")) {
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    }
+    return new Response("<script src=\"/embed/lead-os-embed.js\"></script>", { status: 200 });
+  }) as typeof globalThis.fetch;
+
+  try {
+    const verified = await verifyDeploymentRecord(record);
+    assert.equal(verified.verification?.status, "healthy");
+
+    const snapshot = await getDeploymentRegistrySnapshot();
+    assert.equal(snapshot.summary.unhealthyVerifications >= 0, true);
+    assert.equal(snapshot.summary.pendingVerification >= 0, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

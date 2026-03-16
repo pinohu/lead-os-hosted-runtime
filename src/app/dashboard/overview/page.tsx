@@ -84,6 +84,9 @@ export default async function OverviewDashboardPage() {
             <Link href="/dashboard" className="primary">
               Open dispatch desk
             </Link>
+            <Link href="/dashboard/alerts" className="secondary">
+              Alert operations
+            </Link>
             <Link href="/dashboard/providers" className="secondary">
               Provider health
             </Link>
@@ -240,6 +243,13 @@ export default async function OverviewDashboardPage() {
               <p className="muted">Review capacity, economics, and readiness by provider before scaling demand.</p>
               <div className="cta-row">
                 <Link href="/dashboard/providers" className="secondary">Provider health</Link>
+              </div>
+            </article>
+            <article className="stack-card">
+              <p className="eyebrow">Alerts</p>
+              <p className="muted">Review paging failures, suppressions, and acknowledged rules in one place.</p>
+              <div className="cta-row">
+                <Link href="/dashboard/alerts" className="secondary">Alert operations</Link>
               </div>
             </article>
             <article className="stack-card">

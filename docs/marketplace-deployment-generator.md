@@ -8,6 +8,7 @@ LeadOS now exposes a deployment-grade integration stack for the plumbing marketp
 - `/api/embed/generate-bulk`
 - `/api/embed/wordpress-plugin`
 - `/api/deployments`
+- `/api/cron/deployments/verify`
 - `/deployments/plumbing`
 
 ## Endpoint roles
@@ -111,6 +112,21 @@ It supports:
 
 Add `format=csv` when the output needs to be consumed by spreadsheets, rollout sheets, or external provisioning tools.
 
+### `/api/cron/deployments/verify`
+
+Use this to verify the rollout registry against live reality.
+
+It requires:
+- `Authorization: Bearer <CRON_SECRET>`
+
+It verifies:
+- public page reachability
+- widget boot reachability
+- expected embed marker presence on hosted client pages
+- live deployments that are missing a page URL
+
+The deployment registry now stores verification status directly on each record so operators can filter drift, broken installs, and stale rollout assumptions from the dashboard.
+
 ### `/deployments/plumbing`
 
 Use this as the human-facing operator blueprint page for:
@@ -118,6 +134,7 @@ Use this as the human-facing operator blueprint page for:
 - reviewing deployment recipes
 - copying the correct snippets
 - generating ZIP-aware versions
+- linking generation output into the rollout control plane
 - training operators and implementers
 
 ## Official deployment recipes

@@ -3,6 +3,7 @@ import {
   upsertRuntimeConfig,
   type RuntimeConfigRecord,
 } from "./runtime-store.ts";
+import { OBSERVABILITY_RULE_IDS } from "./observability-rules.ts";
 
 export type OperationalRuntimeConfig = {
   observability: {
@@ -69,6 +70,8 @@ export type OperationalRuntimeConfig = {
     onboardingTemplateId?: string;
   };
 };
+
+const OBSERVABILITY_RULE_ID_SET = new Set<string>(OBSERVABILITY_RULE_IDS);
 
 type RuntimeConfigSectionKey = keyof OperationalRuntimeConfig;
 
@@ -185,7 +188,7 @@ function sanitizeObservabilityRecipients(value: unknown) {
         email,
         phone,
         channels: [...new Set(inferredChannels)],
-        ruleIds: sanitizeStringArray(entry.ruleIds),
+        ruleIds: sanitizeStringArray(entry.ruleIds).filter((ruleId) => OBSERVABILITY_RULE_ID_SET.has(ruleId)),
       };
     });
 }
@@ -352,6 +355,15 @@ export async function updateOperationalRuntimeConfig(
   config: Partial<OperationalRuntimeConfig>,
   updatedBy?: string,
 ) {
+  const invalidRuleIds = (config.observability?.notifications?.recipients ?? [])
+    .flatMap((recipient) => Array.isArray(recipient.ruleIds) ? recipient.ruleIds : [])
+    .filter((ruleId): ruleId is string => typeof ruleId === "string")
+    .map((ruleId) => ruleId.trim().toLowerCase())
+    .filter((ruleId) => ruleId.length > 0 && !OBSERVABILITY_RULE_ID_SET.has(ruleId));
+  if (invalidRuleIds.length > 0) {
+    throw new Error(`Unknown observability rule IDs: ${[...new Set(invalidRuleIds)].join(", ")}`);
+  }
+
   const current = await getOperationalRuntimeConfig();
   const next: OperationalRuntimeConfig = {
     observability: sanitizeObservabilitySection({
