@@ -872,7 +872,7 @@ function renderPremiumProofMosaic(entry: PlumbingEntrypointDefinition) {
           <article className="premium-proof-card">
             <p className="eyebrow">Trust cue</p>
             <h3>Territory and fit first</h3>
-            <p className="muted">Lead with job fit, service area, and response standards instead of vague “join us” language.</p>
+            <p className="muted">Lead with job fit, service area, and response standards instead of vague "join us" language.</p>
           </article>
           <article className="premium-proof-card">
             <p className="eyebrow">Provider behavior</p>
@@ -901,6 +901,218 @@ function renderPremiumProofMosaic(entry: PlumbingEntrypointDefinition) {
             <h3>People judge local fit in seconds</h3>
             <p className="muted">A local visitor wants to know whether the page feels close, relevant, and worth acting on right now.</p>
           </article>
+        </section>
+      );
+    default:
+      return null;
+  }
+}
+
+function renderConfidenceStudio(entry: PlumbingEntrypointDefinition) {
+  switch (entry.kind) {
+    case "emergency":
+      return (
+        <section className="confidence-studio confidence-studio--emergency">
+          <article className="confidence-studio__lead panel">
+            <p className="eyebrow">What fast help should feel like</p>
+            <h2>When something is going wrong at home, the page should lower the temperature immediately</h2>
+            <p className="muted">
+              A strong emergency experience makes the issue recognizable, keeps the best next step visible, and gives the visitor enough confidence to act instead of hesitating.
+            </p>
+          </article>
+          <div className="confidence-studio__scene">
+            <article className="confidence-scene-card confidence-scene-card--urgent">
+              <p className="eyebrow">Seen first</p>
+              <h3>Start with the real issue, not a wall of fields</h3>
+              <div className="confidence-tag-row">
+                <span>Burst pipe</span>
+                <span>Ceiling leak</span>
+                <span>Sewer backup</span>
+                <span>No hot water</span>
+              </div>
+              <p className="muted">
+                The page should make visitors feel understood before it asks them to type.
+              </p>
+            </article>
+            <article className="confidence-story-card">
+              <p className="eyebrow">Before they submit</p>
+              <h3>People want to know who follows up and what happens next</h3>
+              <p className="muted">
+                Clear next-step language and a visible fallback reduce the fear that this is just another dead-end quote request.
+              </p>
+            </article>
+            <article className="confidence-story-card">
+              <p className="eyebrow">While they wait</p>
+              <h3>Keep the main action visible on mobile</h3>
+              <p className="muted">
+                The sticky emergency CTA supports visitors who are multitasking, stressed, or moving between rooms while dealing with the problem.
+              </p>
+            </article>
+          </div>
+        </section>
+      );
+    case "estimate":
+      return (
+        <section className="confidence-studio confidence-studio--estimate">
+          <article className="confidence-studio__lead panel">
+            <p className="eyebrow">How estimate buyers evaluate</p>
+            <h2>Quote pages perform best when they feel useful before they feel salesy</h2>
+            <p className="muted">
+              Planned-work visitors are often comparing, budgeting, and checking whether the next step will actually help them make a decision.
+            </p>
+          </article>
+          <div className="confidence-studio__scene">
+            <article className="confidence-scene-card">
+              <p className="eyebrow">Popular project paths</p>
+              <h3>Show what kind of work this path is good for</h3>
+              <div className="confidence-tag-row">
+                <span>Water heaters</span>
+                <span>Fixture installs</span>
+                <span>Drain repairs</span>
+                <span>Repiping</span>
+              </div>
+              <p className="muted">
+                Project recognition keeps comparison-minded buyers from bouncing while they are still figuring out where they fit.
+              </p>
+            </article>
+            <article className="confidence-story-card">
+              <p className="eyebrow">What reassures buyers</p>
+              <h3>Clear expectations about the quote process</h3>
+              <p className="muted">
+                People trust estimate pages more when they understand what information helps, what can wait until later, and what happens after they reach out.
+              </p>
+            </article>
+            <article className="confidence-story-card">
+              <p className="eyebrow">Why they keep going</p>
+              <h3>Helpful pages win before a buyer is fully decided</h3>
+              <p className="muted">
+                The strongest estimate flows support evaluation without turning every planned job into an emergency-style funnel.
+              </p>
+            </article>
+          </div>
+        </section>
+      );
+    case "commercial":
+      return (
+        <section className="confidence-studio confidence-studio--commercial">
+          <article className="confidence-studio__lead panel">
+            <p className="eyebrow">How commercial trust gets built</p>
+            <h2>Property teams respond to pages that feel structured and coordination-ready</h2>
+            <p className="muted">
+              Commercial buyers want to know that the intake path can handle real buildings, real stakeholders, and the details that usually complicate service work.
+            </p>
+          </article>
+          <div className="confidence-studio__scene">
+            <article className="confidence-scene-card">
+              <p className="eyebrow">Account context</p>
+              <h3>Make room for sites, units, and operating realities</h3>
+              <div className="confidence-tag-row">
+                <span>Facilities</span>
+                <span>Multi-unit</span>
+                <span>Recurring work</span>
+                <span>Service coordination</span>
+              </div>
+              <p className="muted">
+                Commercial visitors stay longer when the first screen already respects the complexity of the request.
+              </p>
+            </article>
+            <article className="confidence-story-card">
+              <p className="eyebrow">What decision-makers scan for</p>
+              <h3>Order, accountability, and a serious next step</h3>
+              <p className="muted">
+                Language, layout, and structure should all suggest that this request will be handled by people who understand property operations.
+              </p>
+            </article>
+            <article className="confidence-story-card">
+              <p className="eyebrow">What keeps momentum</p>
+              <h3>Separate urgent service from longer-term coverage conversations</h3>
+              <p className="muted">
+                Buyers convert more easily when they can tell whether they are requesting immediate service, account support, or broader coverage planning.
+              </p>
+            </article>
+          </div>
+        </section>
+      );
+    case "provider":
+      return (
+        <section className="confidence-studio confidence-studio--provider">
+          <article className="confidence-studio__lead panel">
+            <p className="eyebrow">What better providers care about</p>
+            <h2>The recruiting page should feel like an opportunity filter, not a generic signup ad</h2>
+            <p className="muted">
+              Strong operators scan quickly for territory fit, quality signals, and whether the opportunity respects their standards and response capacity.
+            </p>
+          </article>
+          <div className="confidence-studio__scene">
+            <article className="confidence-scene-card">
+              <p className="eyebrow">Opportunity fit</p>
+              <h3>Lead with the kind of work and territory that matter</h3>
+              <div className="confidence-tag-row">
+                <span>Preferred ZIPs</span>
+                <span>Issue fit</span>
+                <span>After-hours coverage</span>
+                <span>Response standards</span>
+              </div>
+              <p className="muted">
+                Better providers do not want a vague pitch. They want to know whether the opportunity fits how they already operate.
+              </p>
+            </article>
+            <article className="confidence-story-card">
+              <p className="eyebrow">What earns trust</p>
+              <h3>Selective standards are a positive signal</h3>
+              <p className="muted">
+                Pages that describe expectations clearly tend to attract stronger applicants than pages that sound open-ended and generic.
+              </p>
+            </article>
+            <article className="confidence-story-card">
+              <p className="eyebrow">What keeps them applying</p>
+              <h3>Show why quality, readiness, and fit are rewarded</h3>
+              <p className="muted">
+                Providers want confidence that better performance leads to better opportunities, not just more noise.
+              </p>
+            </article>
+          </div>
+        </section>
+      );
+    case "local":
+      return (
+        <section className="confidence-studio confidence-studio--local">
+          <article className="confidence-studio__lead panel">
+            <p className="eyebrow">How local pages feel premium</p>
+            <h2>Local search visitors stay when the page feels nearby before it feels promotional</h2>
+            <p className="muted">
+              The fastest way to lose local intent is to sound generic. The strongest local pages feel specific, relevant, and easy to act on almost immediately.
+            </p>
+          </article>
+          <div className="confidence-studio__scene">
+            <article className="confidence-scene-card">
+              <p className="eyebrow">Area cues</p>
+              <h3>Make the ZIP and the service context visible together</h3>
+              <div className="confidence-tag-row">
+                <span>ZIP-specific</span>
+                <span>Nearby service</span>
+                <span>Urgent or planned</span>
+                <span>Clear next step</span>
+              </div>
+              <p className="muted">
+                Local confidence comes from specificity, not a generic promise pasted onto a page with a city name.
+              </p>
+            </article>
+            <article className="confidence-story-card">
+              <p className="eyebrow">What search visitors judge first</p>
+              <h3>Does this page feel close and useful?</h3>
+              <p className="muted">
+                The visitor wants to know whether this is a credible local destination before they invest more attention.
+              </p>
+            </article>
+            <article className="confidence-story-card">
+              <p className="eyebrow">What keeps them moving</p>
+              <h3>Fast relevance plus a simple action</h3>
+              <p className="muted">
+                Local pages convert best when they connect area relevance to a clear next move instead of making the visitor decode the page.
+              </p>
+            </article>
+          </div>
         </section>
       );
     default:
@@ -1162,6 +1374,7 @@ export async function PlumbingEntryPage({
 
       {renderPremiumModules(entry)}
       {renderPremiumProofMosaic(entry)}
+      {renderConfidenceStudio(entry)}
 
       <AdaptiveLeadCaptureForm
         source="manual"

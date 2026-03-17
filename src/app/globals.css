@@ -497,15 +497,22 @@ button[disabled] {
   gap: 14px;
 }
 
+.confidence-studio {
+  display: grid;
+  gap: 18px;
+}
+
 .spotlight-lead,
 .closing-lead,
-.premium-module__lead {
+.premium-module__lead,
+.confidence-studio__lead {
   min-width: 0;
 }
 
 .spotlight-grid,
 .closing-checks,
-.premium-split {
+.premium-split,
+.confidence-studio__scene {
   display: grid;
   gap: 14px;
 }
@@ -565,6 +572,50 @@ button[disabled] {
   box-shadow: var(--shadow-card);
 }
 
+.confidence-scene-card,
+.confidence-story-card {
+  display: grid;
+  gap: 10px;
+  padding: 24px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(20, 33, 29, 0.1);
+  box-shadow: var(--shadow-card);
+}
+
+.confidence-scene-card {
+  background:
+    linear-gradient(180deg, rgba(255, 250, 243, 0.95), rgba(255, 255, 255, 0.82)),
+    radial-gradient(circle at top left, rgba(196, 99, 45, 0.16), transparent 18rem);
+}
+
+.confidence-scene-card--urgent {
+  background:
+    linear-gradient(180deg, rgba(255, 243, 242, 0.95), rgba(255, 255, 255, 0.82)),
+    radial-gradient(circle at top left, rgba(161, 39, 47, 0.18), transparent 18rem);
+  border-color: rgba(161, 39, 47, 0.14);
+}
+
+.confidence-story-card {
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.confidence-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.confidence-tag-row span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(20, 33, 29, 0.08);
+  color: #184137;
+  font-weight: 700;
+}
+
 .premium-proof-card--wide {
   background:
     linear-gradient(180deg, rgba(255, 250, 243, 0.95), rgba(255, 255, 255, 0.86)),
@@ -590,6 +641,26 @@ button[disabled] {
 .premium-proof-mosaic--estimate .premium-proof-card,
 .premium-proof-mosaic--estimate .premium-proof-card--wide {
   background: linear-gradient(180deg, rgba(255, 251, 245, 0.96), rgba(255, 255, 255, 0.84));
+}
+
+.confidence-studio--estimate .confidence-scene-card,
+.confidence-studio--estimate .confidence-story-card {
+  background: linear-gradient(180deg, rgba(255, 251, 245, 0.96), rgba(255, 255, 255, 0.84));
+}
+
+.confidence-studio--commercial .confidence-scene-card,
+.confidence-studio--commercial .confidence-story-card {
+  background: linear-gradient(180deg, rgba(244, 248, 246, 0.96), rgba(255, 255, 255, 0.84));
+}
+
+.confidence-studio--provider .confidence-scene-card,
+.confidence-studio--provider .confidence-story-card {
+  background: linear-gradient(180deg, rgba(241, 247, 245, 0.96), rgba(255, 255, 255, 0.84));
+}
+
+.confidence-studio--local .confidence-scene-card,
+.confidence-studio--local .confidence-story-card {
+  background: linear-gradient(180deg, rgba(255, 249, 242, 0.96), rgba(255, 255, 255, 0.84));
 }
 
 .funnel-spotlight--commercial .spotlight-card {
@@ -1231,6 +1302,7 @@ button[disabled] {
 
   .funnel-spotlight,
   .premium-module,
+  .confidence-studio,
   .closing-band {
     grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
     align-items: start;
@@ -1239,6 +1311,7 @@ button[disabled] {
   .spotlight-grid,
   .closing-checks,
   .premium-split,
+  .confidence-studio__scene,
   .premium-metric-grid,
   .premium-gallery-grid,
   .service-matrix,

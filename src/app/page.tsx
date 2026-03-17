@@ -24,7 +24,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <article className="homepage-story-card">
           <p className="eyebrow">For urgent demand</p>
           <h3>Fast recognition</h3>
-          <p className="muted">Active leaks and other urgent issues need a clear “help now” route without extra thinking.</p>
+          <p className="muted">Active leaks and other urgent issues need a clear "help now" route without extra thinking.</p>
         </article>
         <article className="homepage-story-card">
           <p className="eyebrow">For planned work</p>
