@@ -6,6 +6,7 @@ import {
   buildPlumbingIntegrationBundle,
   type PlumbingEntrypointDefinition,
 } from "@/lib/plumbing-entrypoints";
+import { getTrustAssetModules } from "@/lib/trust-assets";
 import { getNiche } from "@/lib/catalog";
 import { EXPERIENCE_ASSIGNMENT_HEADER } from "@/lib/experiments";
 import { resolveExperienceProfile } from "@/lib/experience";
@@ -1322,6 +1323,36 @@ function renderJourneyArchitecture(entry: PlumbingEntrypointDefinition) {
   );
 }
 
+function renderTrustAssetLibrary(entry: PlumbingEntrypointDefinition) {
+  const modules = getTrustAssetModules(entry.kind);
+
+  return (
+    <section className="trust-assets">
+      <article className="panel trust-assets__lead">
+        <p className="eyebrow">Trust assets and next-step tools</p>
+        <h2>Good funnels also need lighter ways to keep people moving</h2>
+        <p className="muted">
+          Not every visitor is ready for the main CTA on the first pass. Strong trust-based systems keep diagnostic tools, decision aids, and process clarity close by so momentum does not die in the middle.
+        </p>
+      </article>
+      <div className="trust-assets__grid">
+        {modules.map((module) => (
+          <article key={module.title} className="trust-assets__card">
+            <p className="eyebrow">{module.category}</p>
+            <h3>{module.title}</h3>
+            <p className="muted">{module.promise}</p>
+            <div className="cta-row">
+              <Link href={module.href} className="secondary">
+                {module.ctaLabel}
+              </Link>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function renderClosingSection(entry: PlumbingEntrypointDefinition) {
   if (entry.audience === "provider") {
     return (
@@ -1579,6 +1610,7 @@ export async function PlumbingEntryPage({
       {renderConfidenceStudio(entry)}
       {renderTrustArchitecture(entry)}
       {renderJourneyArchitecture(entry)}
+      {renderTrustAssetLibrary(entry)}
 
       <AdaptiveLeadCaptureForm
         source="manual"

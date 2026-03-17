@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import type { ExperienceProfile } from "@/lib/experience";
 import type { IntakeSource } from "@/lib/intake";
-import type { FunnelFamily } from "@/lib/runtime-schema";
+import type { CanonicalEventType, FunnelFamily } from "@/lib/runtime-schema";
 
 type PublicNextStep = {
   family: FunnelFamily;
@@ -53,6 +53,27 @@ function getPathLabel(service: string, providerAudience: boolean) {
   return "Guided help";
 }
 
+type StoredCaptureDraft = {
+  step: number;
+  selectedGoalId: string;
+  firstName: string;
+  email: string;
+  phone: string;
+  company: string;
+  notes: string;
+};
+
+function buildDraftStorageKey(pagePath: string, service: string, audience: string) {
+  return `lead-os:capture-draft:${audience}:${service}:${pagePath}`;
+}
+
+function createClientTraceKey(prefix: string) {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
   const plumbingLike = props.niche === "plumbing" || props.niche === "home-services";
   const providerAudience = props.profile.audience === "provider";
@@ -66,8 +87,14 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
   const [notes, setNotes] = useState("");
   const [result, setResult] = useState<IntakeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [recoveredDraft, setRecoveredDraft] = useState(false);
+  const [visitorId] = useState(() => createClientTraceKey("visitor"));
+  const [sessionId] = useState(() => createClientTraceKey("session"));
   const [isPending, startTransition] = useTransition();
   const statusId = useId();
+  const formStartedRef = useRef(false);
+  const submissionCompletedRef = useRef(false);
+  const storageKey = buildDraftStorageKey(props.pagePath, props.service, props.profile.audience);
 
   const selectedGoal =
     props.profile.discoveryOptions.find((option) => option.id === selectedGoalId) ??
@@ -85,6 +112,165 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
     }
     return Boolean(email.trim() || normalizePhone(phone));
   }
+
+  async function sendPublicEvent(
+    eventType: CanonicalEventType,
+    status: string,
+    metadata: Record<string, unknown> = {},
+  ) {
+    try {
+      await fetch("/api/public-events", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          eventType,
+          visitorId,
+          sessionId,
+          source: props.source,
+          service: props.service,
+          niche: props.niche,
+          pagePath: props.pagePath,
+          blueprintId: props.pagePath,
+          stepId: `capture-step-${step}`,
+          family: props.family,
+          audience: props.profile.audience,
+          experimentId: props.profile.experimentId,
+          variantId: props.profile.variantId,
+          status,
+          metadata,
+        }),
+      });
+    } catch {
+      // Do not block conversion flow on analytics errors.
+    }
+  }
+
+  useEffect(() => {
+    void sendPublicEvent("page_view", "VIEWED", {
+      pageKind: props.service,
+      pathLabel,
+    });
+    // We intentionally only want the first mount event.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as Partial<StoredCaptureDraft>;
+      if (draft.selectedGoalId) setSelectedGoalId(draft.selectedGoalId);
+      if (draft.firstName) setFirstName(draft.firstName);
+      if (draft.email) setEmail(draft.email);
+      if (draft.phone) setPhone(draft.phone);
+      if (draft.company) setCompany(draft.company);
+      if (draft.notes) setNotes(draft.notes);
+      if (typeof draft.step === "number" && draft.step >= 1 && draft.step <= 3) {
+        setStep(draft.step);
+      }
+      setRecoveredDraft(true);
+    } catch {
+      // Ignore draft parsing failures.
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || result) return;
+    const draft: StoredCaptureDraft = {
+      step,
+      selectedGoalId,
+      firstName,
+      email,
+      phone,
+      company,
+      notes,
+    };
+    const hasProgress = Boolean(
+      selectedGoalId ||
+        firstName.trim() ||
+        email.trim() ||
+        phone.trim() ||
+        company.trim() ||
+        notes.trim() ||
+        step > 1,
+    );
+    if (!hasProgress) return;
+    window.localStorage.setItem(storageKey, JSON.stringify(draft));
+  }, [step, selectedGoalId, firstName, email, phone, company, notes, result, storageKey]);
+
+  useEffect(() => {
+    if (!selectedGoalId || formStartedRef.current) return;
+    formStartedRef.current = true;
+    void sendPublicEvent("form_started", "STARTED", {
+      goalId: selectedGoalId,
+      goalLabel: selectedGoal?.label,
+      mode: props.profile.mode,
+    });
+  }, [selectedGoalId, selectedGoal?.label, props.profile.mode]);
+
+  useEffect(() => {
+    if (!formStartedRef.current || submissionCompletedRef.current || typeof window === "undefined") {
+      return;
+    }
+
+    const handleBeforeUnload = () => {
+      const hasProgress = Boolean(
+        selectedGoalId ||
+          firstName.trim() ||
+          email.trim() ||
+          phone.trim() ||
+          company.trim() ||
+          notes.trim() ||
+          step > 1,
+      );
+      if (!hasProgress) return;
+      const body = JSON.stringify({
+        eventType: "form_abandoned",
+        visitorId,
+        sessionId,
+        source: props.source,
+        service: props.service,
+        niche: props.niche,
+        pagePath: props.pagePath,
+        blueprintId: props.pagePath,
+        stepId: `capture-step-${step}`,
+        family: props.family,
+        audience: props.profile.audience,
+        experimentId: props.profile.experimentId,
+        variantId: props.profile.variantId,
+        status: "ABANDONED",
+        metadata: {
+          step,
+          goalId: selectedGoalId,
+        },
+      });
+      navigator.sendBeacon?.("/api/public-events", new Blob([body], { type: "application/json" }));
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [
+    step,
+    selectedGoalId,
+    firstName,
+    email,
+    phone,
+    company,
+    notes,
+    props.source,
+    props.service,
+    props.niche,
+    props.pagePath,
+    props.family,
+    props.profile.audience,
+    props.profile.experimentId,
+    props.profile.variantId,
+    sessionId,
+    visitorId,
+  ]);
 
   function goToNextStep() {
     if (step === 1 && !selectedGoalId) {
@@ -112,6 +298,11 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
     }
 
     setError(null);
+    void sendPublicEvent("form_step_completed", "COMPLETED", {
+      completedStep: step,
+      goalId: selectedGoalId,
+      goalLabel: selectedGoal?.label,
+    });
     setStep((current) => Math.min(current + 1, 3));
   }
 
@@ -172,6 +363,16 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
           return;
         }
 
+        submissionCompletedRef.current = true;
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(storageKey);
+        }
+        void sendPublicEvent("cta_clicked", "CLICKED", {
+          ctaRole: "form-submit",
+          ctaLabel: providerAudience ? "Join the network path" : "Save and continue",
+          goalId: selectedGoal?.id,
+          goalLabel: selectedGoal?.label,
+        });
         setResult(payload);
       } catch {
         setError("We could not connect to the runtime just now. Please try again.");
@@ -225,6 +426,12 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
         <span>{providerAudience ? "Talk to network ops if needed" : "Human fallback stays available"}</span>
       </div>
 
+      {recoveredDraft ? (
+        <div className="status-banner success" role="status">
+          We restored your saved progress so you can keep going without starting over.
+        </div>
+      ) : null}
+
       {result ? (
         <div className="status-banner success" role="status">
           <h3>
@@ -239,10 +446,30 @@ export function AdaptiveLeadCaptureForm(props: AdaptiveLeadCaptureFormProps) {
             {result.hot ? "Fast path activated." : "Standard follow-up path activated."} We saved your context so you should not need to start over.
           </p>
           <div className="cta-row">
-            <Link href={result.nextStep.destination} className="primary">
+            <Link
+              href={result.nextStep.destination}
+              className="primary"
+              onClick={() => {
+                void sendPublicEvent("cta_clicked", "CLICKED", {
+                  ctaRole: "post-submit-primary",
+                  ctaLabel: result.nextStep.ctaLabel,
+                  destination: result.nextStep.destination,
+                });
+              }}
+            >
               {result.nextStep.ctaLabel}
             </Link>
-            <a href={props.profile.secondaryActionHref} className="secondary">
+            <a
+              href={props.profile.secondaryActionHref}
+              className="secondary"
+              onClick={() => {
+                void sendPublicEvent("cta_clicked", "CLICKED", {
+                  ctaRole: "post-submit-secondary",
+                  ctaLabel: props.profile.secondaryActionLabel,
+                  destination: props.profile.secondaryActionHref,
+                });
+              }}
+            >
               {props.profile.secondaryActionLabel}
             </a>
           </div>

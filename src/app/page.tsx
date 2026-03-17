@@ -63,6 +63,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <Link href="/deployments/plumbing" className="secondary">
               Open deployment blueprint
             </Link>
+            <Link href="/resources/plumbing" className="secondary">
+              Open trust asset hub
+            </Link>
             <Link href="/showroom/plumbing" className="secondary">
               Open public showroom
             </Link>
