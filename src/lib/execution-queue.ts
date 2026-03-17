@@ -3,9 +3,11 @@ import {
   emitWorkflowAction,
   generateDocumentAction,
   sendAlertAction,
+  sendConfiguredSmsAction,
+  sendConfiguredSmsFallbackAction,
+  startReferralAction,
   startCommerceAction,
   sendEmailAction,
-  sendSmsAction,
   sendWhatsAppAction,
   type ProviderResult,
 } from "./providers.ts";
@@ -277,7 +279,7 @@ async function processSmsTask(task: ExecutionTaskRecord) {
       ? task.payload.smsPayload as { phone?: string; body?: string; trace?: TraceContext }
       : {};
   const trace = smsPayload.trace;
-  const result = await safelyRunProviderAction("Easy Text Marketing", () => sendSmsAction({
+  const result = await safelyRunProviderAction("SMS", () => sendConfiguredSmsAction({
     phone: String(smsPayload.phone ?? ""),
     body: String(smsPayload.body ?? ""),
   }), task.payload ?? undefined);
@@ -317,7 +319,7 @@ async function processWhatsAppTask(task: ExecutionTaskRecord) {
   }), task.payload ?? undefined);
 
   if (!isOperationalSuccess(result) && whatsappPayload.phone && whatsappPayload.body) {
-    const smsFallback = await safelyRunProviderAction("Easy Text Marketing", () => sendSmsAction({
+    const smsFallback = await safelyRunProviderAction("SMS Fallback", () => sendConfiguredSmsFallbackAction({
       phone: String(whatsappPayload.phone ?? ""),
       body: String(whatsappPayload.body ?? ""),
     }), task.payload ?? undefined);
@@ -452,6 +454,43 @@ async function processCommerceTask(task: ExecutionTaskRecord) {
   return { taskId: task.id, kind: task.kind, ok: isOperationalSuccess(result), detail: result.detail };
 }
 
+async function processReferralTask(task: ExecutionTaskRecord) {
+  const referralPayload =
+    task.payload?.referralPayload && typeof task.payload.referralPayload === "object"
+      ? task.payload.referralPayload as Record<string, unknown>
+      : {};
+  const trace =
+    task.payload?.trace && typeof task.payload.trace === "object"
+      ? task.payload.trace as TraceContext
+      : undefined;
+  const result = await safelyRunProviderAction("Partnero", () => startReferralAction(referralPayload), referralPayload);
+
+  await recordProviderExecution({
+    leadKey: task.leadKey,
+    provider: result.provider,
+    kind: "referral",
+    ok: isOperationalSuccess(result),
+    mode: result.mode,
+    detail: result.detail,
+    payload: result.payload,
+  });
+
+  if (trace && isOperationalSuccess(result)) {
+    await appendEvents([
+      createCanonicalEvent(trace, "referral_invite_sent", "internal", "SENT", {
+        provider: result.provider,
+      }),
+    ]);
+  }
+
+  await finalizeExecutionTask(task.id, {
+    status: isOperationalSuccess(result) ? "completed" : "failed",
+    lastError: isOperationalSuccess(result) ? undefined : buildTaskFailureDetail(result),
+    payload: { ...(task.payload ?? {}), result },
+  });
+  return { taskId: task.id, kind: task.kind, ok: isOperationalSuccess(result), detail: result.detail };
+}
+
 export async function processExecutionTasks(limit = 25) {
   const pending = await getExecutionTasks({ status: "pending" });
   const claimed = [];
@@ -494,6 +533,10 @@ export async function processExecutionTasks(limit = 25) {
     }
     if (task.kind === "commerce") {
       results.push(await processCommerceTask(task));
+      continue;
+    }
+    if (task.kind === "referral") {
+      results.push(await processReferralTask(task));
     }
   }
 

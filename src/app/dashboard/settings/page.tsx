@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { GrowthStackSettingsForm } from "@/components/GrowthStackSettingsForm";
 import { RuntimeConfigForm } from "@/components/RuntimeConfigForm";
 import {
   discoverDocumenteroTemplates,
@@ -85,6 +86,18 @@ export default async function RuntimeSettingsPage() {
               <strong>Crove fallback</strong>
               <span>{summary.crove.hasWebhookUrl ? "Webhook ready" : "Needs webhook"}</span>
             </li>
+            <li>
+              <strong>Call tracking</strong>
+              <span>{summary.callScaler.hasWebhookUrl ? "Webhook ready" : "Needs webhook"}</span>
+            </li>
+            <li>
+              <strong>Behavior scoring</strong>
+              <span>{summary.salespanel.enabled ? "Enabled" : "Disabled"}</span>
+            </li>
+            <li>
+              <strong>CRO layer</strong>
+              <span>{summary.plerdy.enabled ? "Enabled" : "Disabled"}</span>
+            </li>
           </ul>
         </aside>
       </section>
@@ -129,6 +142,21 @@ export default async function RuntimeSettingsPage() {
         </article>
 
         <article className="panel">
+          <p className="eyebrow">Growth stack</p>
+          <h2>Attribution, CRO, and referral control</h2>
+          <ul className="check-list">
+            <li>SuiteDash portal URL: {summary.suiteDash.hasPortalUrl ? "Configured" : "Missing"}</li>
+            <li>Primary SMS provider: {summary.messaging.primarySmsProvider}</li>
+            <li>Fallback SMS provider: {summary.messaging.fallbackSmsProvider}</li>
+            <li>CallScaler dynamic numbers: {summary.callScaler.trackingNumbers}</li>
+            <li>Salespanel tracking: {summary.salespanel.enabled ? "Enabled" : "Disabled"}</li>
+            <li>Plerdy CRO: {summary.plerdy.enabled ? "Enabled" : "Disabled"}</li>
+            <li>Partnero auto-enroll stage: {summary.partnero.autoEnrollStage}</li>
+            <li>Thoughtly callback window: {summary.thoughtly.callbackWindowMinutes}m</li>
+          </ul>
+        </article>
+
+        <article className="panel">
           <p className="eyebrow">Documentero discovery</p>
           <h2>Available templates detected from the account API</h2>
           {templateCatalog.length === 0 ? (
@@ -165,6 +193,18 @@ export default async function RuntimeSettingsPage() {
             </div>
           )}
         </article>
+      </section>
+
+      <section className="stack-grid">
+        <article className="panel">
+          <p className="eyebrow">Growth stack settings</p>
+          <h2>Configure attribution, CRO, referral, and voice recovery</h2>
+          <p className="muted">
+            These non-secret settings let LeadOS activate CallScaler, Salespanel, Plerdy, Partnero,
+            Thoughtly, and CRM billing preferences without another deploy.
+          </p>
+        </article>
+        <GrowthStackSettingsForm initialConfig={config} />
       </section>
 
       <RuntimeConfigForm initialConfig={config} trafftServices={trafftServices} />

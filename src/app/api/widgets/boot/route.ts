@@ -84,6 +84,13 @@ export async function GET(request: Request) {
         liveMode: health.liveMode,
         channels: health.channels,
       },
+      growthStack: {
+        callScaler: runtimeConfig.callScaler,
+        salespanel: runtimeConfig.salespanel,
+        plerdy: runtimeConfig.plerdy,
+        thoughtly: runtimeConfig.thoughtly,
+        messaging: runtimeConfig.messaging,
+      },
     },
   }, {
     headers: buildCorsHeaders(request.headers.get("origin")),

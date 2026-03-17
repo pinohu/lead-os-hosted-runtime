@@ -7,6 +7,7 @@ import { resolveExperienceProfile } from "@/lib/experience";
 import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
 import { tenantConfig } from "@/lib/tenant";
 import { PublicLeadCaptureForm } from "@/components/PublicLeadCaptureForm";
+import { PublicGrowthScripts } from "@/components/PublicGrowthScripts";
 
 type PublicEndUserFunnelPageProps = {
   funnel: EndUserFunnelDefinition;
@@ -164,6 +165,14 @@ export async function PublicEndUserFunnelPage({
         audience={funnel.audience}
         variant={funnel.audience === "provider" ? "provider" : "customer"}
         stickyLabel={funnel.primaryLabel}
+      />
+
+      <PublicGrowthScripts
+        runtimeConfig={runtimeConfig}
+        audience={funnel.audience}
+        pagePath={funnel.route}
+        service={funnel.service}
+        family={funnel.family}
       />
 
       <div className="public-mobile-bar">

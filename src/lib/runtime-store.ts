@@ -129,7 +129,7 @@ export interface IntakeAttemptRecord {
   payload?: Record<string, unknown>;
 }
 
-export type ExecutionTaskKind = "workflow" | "booking" | "document" | "email" | "sms" | "whatsapp" | "alert" | "commerce";
+export type ExecutionTaskKind = "workflow" | "booking" | "document" | "email" | "sms" | "whatsapp" | "alert" | "commerce" | "referral";
 
 export type ExecutionTaskStatus = "pending" | "processing" | "completed" | "failed";
 

@@ -47,6 +47,15 @@ export async function GET(request: Request) {
       endpoint: "/api/embed/wordpress-plugin",
       summary: "Generate a ready-to-install WordPress plugin file for a preset-aware deployment recipe.",
     },
+    growthStack: {
+      callTracking: runtimeConfig.callScaler,
+      salespanel: runtimeConfig.salespanel,
+      plerdy: runtimeConfig.plerdy,
+      partnero: runtimeConfig.partnero,
+      thoughtly: runtimeConfig.thoughtly,
+      messaging: runtimeConfig.messaging,
+      suiteDash: runtimeConfig.suiteDash,
+    },
     funnels: Object.values(graphs).map((graph) => ({
       id: graph.id,
       family: graph.family,

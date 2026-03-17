@@ -30,6 +30,50 @@ export type OperationalRuntimeConfig = {
     defaultServiceId?: string;
     serviceMap: Record<string, string>;
   };
+  suiteDash: {
+    portalUrl?: string;
+    defaultCompanyId?: string;
+    defaultMembershipPlanId?: string;
+    invoicePrefix?: string;
+  };
+  messaging: {
+    primarySmsProvider: "easy-text-marketing" | "sms-it";
+    fallbackSmsProvider?: "easy-text-marketing" | "sms-it";
+  };
+  callScaler: {
+    webhookUrl?: string;
+    webhookSecret?: string;
+    scriptUrl?: string;
+    defaultTrackingNumber?: string;
+    dynamicNumberPool: string[];
+  };
+  salespanel: {
+    enabled: boolean;
+    webhookUrl?: string;
+    scriptUrl?: string;
+    siteId?: string;
+    trackAnonymous: boolean;
+  };
+  plerdy: {
+    enabled: boolean;
+    eventWebhookUrl?: string;
+    scriptUrl?: string;
+    projectId?: string;
+    heatmapsEnabled: boolean;
+    popupsEnabled: boolean;
+  };
+  partnero: {
+    webhookUrl?: string;
+    programId?: string;
+    autoEnrollStage: "paid" | "value-realized" | "referral-ready";
+  };
+  thoughtly: {
+    webhookUrl?: string;
+    defaultAgentId?: string;
+    afterHoursEnabled: boolean;
+    callbackWindowMinutes: number;
+    missedCallSmsEnabled: boolean;
+  };
   dispatch: {
     providers: Array<{
       id: string;
@@ -93,6 +137,30 @@ const DEFAULT_CONFIG: OperationalRuntimeConfig = {
   trafft: {
     serviceMap: {},
   },
+  suiteDash: {},
+  messaging: {
+    primarySmsProvider: "easy-text-marketing",
+  },
+  callScaler: {
+    dynamicNumberPool: [],
+  },
+  salespanel: {
+    enabled: false,
+    trackAnonymous: true,
+  },
+  plerdy: {
+    enabled: false,
+    heatmapsEnabled: true,
+    popupsEnabled: false,
+  },
+  partnero: {
+    autoEnrollStage: "value-realized",
+  },
+  thoughtly: {
+    afterHoursEnabled: false,
+    callbackWindowMinutes: 15,
+    missedCallSmsEnabled: false,
+  },
   dispatch: {
     providers: [],
   },
@@ -107,6 +175,13 @@ const RECORD_KEYS: Record<RuntimeConfigSectionKey, string> = {
   observability: "runtime.observability",
   experiments: "runtime.experiments",
   trafft: "provider.trafft",
+  suiteDash: "provider.suitedash",
+  messaging: "provider.messaging",
+  callScaler: "growth.callscaler",
+  salespanel: "growth.salespanel",
+  plerdy: "growth.plerdy",
+  partnero: "growth.partnero",
+  thoughtly: "provider.thoughtly",
   dispatch: "provider.dispatch",
   marketplace: "provider.marketplace",
   documentero: "provider.documentero",
@@ -315,6 +390,112 @@ function sanitizeTrafftSection(value: Partial<OperationalRuntimeConfig["trafft"]
   } satisfies OperationalRuntimeConfig["trafft"];
 }
 
+function sanitizeSuiteDashSection(value: Partial<OperationalRuntimeConfig["suiteDash"]> | undefined) {
+  if (!value) {
+    return DEFAULT_CONFIG.suiteDash;
+  }
+
+  return {
+    portalUrl: getStringValue(value.portalUrl),
+    defaultCompanyId: getStringValue(value.defaultCompanyId),
+    defaultMembershipPlanId: getStringValue(value.defaultMembershipPlanId),
+    invoicePrefix: getStringValue(value.invoicePrefix),
+  } satisfies OperationalRuntimeConfig["suiteDash"];
+}
+
+function sanitizeMessagingSection(value: Partial<OperationalRuntimeConfig["messaging"]> | undefined) {
+  if (!value) {
+    return DEFAULT_CONFIG.messaging;
+  }
+
+  const primarySmsProvider = value.primarySmsProvider === "sms-it" ? "sms-it" : "easy-text-marketing";
+  const fallbackSmsProvider = value.fallbackSmsProvider === primarySmsProvider
+    ? undefined
+    : value.fallbackSmsProvider === "sms-it" || value.fallbackSmsProvider === "easy-text-marketing"
+      ? value.fallbackSmsProvider
+      : undefined;
+
+  return {
+    primarySmsProvider,
+    fallbackSmsProvider,
+  } satisfies OperationalRuntimeConfig["messaging"];
+}
+
+function sanitizeCallScalerSection(value: Partial<OperationalRuntimeConfig["callScaler"]> | undefined) {
+  if (!value) {
+    return DEFAULT_CONFIG.callScaler;
+  }
+
+  return {
+    webhookUrl: getStringValue(value.webhookUrl),
+    webhookSecret: getStringValue(value.webhookSecret),
+    scriptUrl: getStringValue(value.scriptUrl),
+    defaultTrackingNumber: getStringValue(value.defaultTrackingNumber),
+    dynamicNumberPool: sanitizeStringArray(value.dynamicNumberPool),
+  } satisfies OperationalRuntimeConfig["callScaler"];
+}
+
+function sanitizeSalespanelSection(value: Partial<OperationalRuntimeConfig["salespanel"]> | undefined) {
+  if (!value) {
+    return DEFAULT_CONFIG.salespanel;
+  }
+
+  return {
+    enabled: value.enabled === true,
+    webhookUrl: getStringValue(value.webhookUrl),
+    scriptUrl: getStringValue(value.scriptUrl),
+    siteId: getStringValue(value.siteId),
+    trackAnonymous: value.trackAnonymous !== false,
+  } satisfies OperationalRuntimeConfig["salespanel"];
+}
+
+function sanitizePlerdySection(value: Partial<OperationalRuntimeConfig["plerdy"]> | undefined) {
+  if (!value) {
+    return DEFAULT_CONFIG.plerdy;
+  }
+
+  return {
+    enabled: value.enabled === true,
+    eventWebhookUrl: getStringValue(value.eventWebhookUrl),
+    scriptUrl: getStringValue(value.scriptUrl),
+    projectId: getStringValue(value.projectId),
+    heatmapsEnabled: value.heatmapsEnabled !== false,
+    popupsEnabled: value.popupsEnabled === true,
+  } satisfies OperationalRuntimeConfig["plerdy"];
+}
+
+function sanitizePartneroSection(value: Partial<OperationalRuntimeConfig["partnero"]> | undefined) {
+  if (!value) {
+    return DEFAULT_CONFIG.partnero;
+  }
+
+  return {
+    webhookUrl: getStringValue(value.webhookUrl),
+    programId: getStringValue(value.programId),
+    autoEnrollStage:
+      value.autoEnrollStage === "paid" || value.autoEnrollStage === "referral-ready"
+        ? value.autoEnrollStage
+        : "value-realized",
+  } satisfies OperationalRuntimeConfig["partnero"];
+}
+
+function sanitizeThoughtlySection(value: Partial<OperationalRuntimeConfig["thoughtly"]> | undefined) {
+  if (!value) {
+    return DEFAULT_CONFIG.thoughtly;
+  }
+
+  return {
+    webhookUrl: getStringValue(value.webhookUrl),
+    defaultAgentId: getStringValue(value.defaultAgentId),
+    afterHoursEnabled: value.afterHoursEnabled === true,
+    callbackWindowMinutes:
+      typeof value.callbackWindowMinutes === "number" && Number.isFinite(value.callbackWindowMinutes)
+        ? Math.max(0, Math.min(1440, value.callbackWindowMinutes))
+        : DEFAULT_CONFIG.thoughtly.callbackWindowMinutes,
+    missedCallSmsEnabled: value.missedCallSmsEnabled === true,
+  } satisfies OperationalRuntimeConfig["thoughtly"];
+}
+
 function sanitizeDispatchSection(value: Partial<OperationalRuntimeConfig["dispatch"]> | undefined) {
   if (!value) {
     return DEFAULT_CONFIG.dispatch;
@@ -368,10 +549,17 @@ function sanitizeCroveSection(value: Partial<OperationalRuntimeConfig["crove"]> 
 }
 
 export async function getOperationalRuntimeConfig(): Promise<OperationalRuntimeConfig> {
-  const [observability, experiments, trafft, dispatch, marketplace, documentero, crove] = await Promise.all([
+  const [observability, experiments, trafft, suiteDash, messaging, callScaler, salespanel, plerdy, partnero, thoughtly, dispatch, marketplace, documentero, crove] = await Promise.all([
     getRuntimeConfig(RECORD_KEYS.observability),
     getRuntimeConfig(RECORD_KEYS.experiments),
     getRuntimeConfig(RECORD_KEYS.trafft),
+    getRuntimeConfig(RECORD_KEYS.suiteDash),
+    getRuntimeConfig(RECORD_KEYS.messaging),
+    getRuntimeConfig(RECORD_KEYS.callScaler),
+    getRuntimeConfig(RECORD_KEYS.salespanel),
+    getRuntimeConfig(RECORD_KEYS.plerdy),
+    getRuntimeConfig(RECORD_KEYS.partnero),
+    getRuntimeConfig(RECORD_KEYS.thoughtly),
     getRuntimeConfig(RECORD_KEYS.dispatch),
     getRuntimeConfig(RECORD_KEYS.marketplace),
     getRuntimeConfig(RECORD_KEYS.documentero),
@@ -382,6 +570,13 @@ export async function getOperationalRuntimeConfig(): Promise<OperationalRuntimeC
     observability: sanitizeObservabilitySection(getRecordValue(observability) as OperationalRuntimeConfig["observability"]),
     experiments: sanitizeExperimentsSection(getRecordValue(experiments) as OperationalRuntimeConfig["experiments"]),
     trafft: sanitizeTrafftSection(getRecordValue(trafft) as OperationalRuntimeConfig["trafft"]),
+    suiteDash: sanitizeSuiteDashSection(getRecordValue(suiteDash) as OperationalRuntimeConfig["suiteDash"]),
+    messaging: sanitizeMessagingSection(getRecordValue(messaging) as OperationalRuntimeConfig["messaging"]),
+    callScaler: sanitizeCallScalerSection(getRecordValue(callScaler) as OperationalRuntimeConfig["callScaler"]),
+    salespanel: sanitizeSalespanelSection(getRecordValue(salespanel) as OperationalRuntimeConfig["salespanel"]),
+    plerdy: sanitizePlerdySection(getRecordValue(plerdy) as OperationalRuntimeConfig["plerdy"]),
+    partnero: sanitizePartneroSection(getRecordValue(partnero) as OperationalRuntimeConfig["partnero"]),
+    thoughtly: sanitizeThoughtlySection(getRecordValue(thoughtly) as OperationalRuntimeConfig["thoughtly"]),
     dispatch: sanitizeDispatchSection(getRecordValue(dispatch) as OperationalRuntimeConfig["dispatch"]),
     marketplace: sanitizeMarketplaceSection(getRecordValue(marketplace) as OperationalRuntimeConfig["marketplace"]),
     documentero: sanitizeDocumenteroSection(getRecordValue(documentero) as OperationalRuntimeConfig["documentero"]),
@@ -414,6 +609,13 @@ export async function updateOperationalRuntimeConfig(
       promotions: config.experiments?.promotions ?? current.experiments.promotions,
     }),
     trafft: sanitizeTrafftSection({ ...current.trafft, ...config.trafft }),
+    suiteDash: sanitizeSuiteDashSection({ ...current.suiteDash, ...config.suiteDash }),
+    messaging: sanitizeMessagingSection({ ...current.messaging, ...config.messaging }),
+    callScaler: sanitizeCallScalerSection({ ...current.callScaler, ...config.callScaler }),
+    salespanel: sanitizeSalespanelSection({ ...current.salespanel, ...config.salespanel }),
+    plerdy: sanitizePlerdySection({ ...current.plerdy, ...config.plerdy }),
+    partnero: sanitizePartneroSection({ ...current.partnero, ...config.partnero }),
+    thoughtly: sanitizeThoughtlySection({ ...current.thoughtly, ...config.thoughtly }),
     dispatch: sanitizeDispatchSection({ ...current.dispatch, ...config.dispatch }),
     marketplace: sanitizeMarketplaceSection({ ...current.marketplace, ...config.marketplace }),
     documentero: sanitizeDocumenteroSection({ ...current.documentero, ...config.documentero }),
@@ -434,6 +636,41 @@ export async function updateOperationalRuntimeConfig(
     upsertRuntimeConfig({
       key: RECORD_KEYS.trafft,
       value: next.trafft,
+      updatedBy,
+    }),
+    upsertRuntimeConfig({
+      key: RECORD_KEYS.suiteDash,
+      value: next.suiteDash,
+      updatedBy,
+    }),
+    upsertRuntimeConfig({
+      key: RECORD_KEYS.messaging,
+      value: next.messaging,
+      updatedBy,
+    }),
+    upsertRuntimeConfig({
+      key: RECORD_KEYS.callScaler,
+      value: next.callScaler,
+      updatedBy,
+    }),
+    upsertRuntimeConfig({
+      key: RECORD_KEYS.salespanel,
+      value: next.salespanel,
+      updatedBy,
+    }),
+    upsertRuntimeConfig({
+      key: RECORD_KEYS.plerdy,
+      value: next.plerdy,
+      updatedBy,
+    }),
+    upsertRuntimeConfig({
+      key: RECORD_KEYS.partnero,
+      value: next.partnero,
+      updatedBy,
+    }),
+    upsertRuntimeConfig({
+      key: RECORD_KEYS.thoughtly,
+      value: next.thoughtly,
       updatedBy,
     }),
     upsertRuntimeConfig({
@@ -484,6 +721,43 @@ export function buildRuntimeConfigSummary(config: OperationalRuntimeConfig) {
       hasPublicBookingUrl: Boolean(config.trafft.publicBookingUrl),
       hasDefaultServiceId: Boolean(config.trafft.defaultServiceId),
       mappedServices: Object.keys(config.trafft.serviceMap).length,
+    },
+    suiteDash: {
+      hasPortalUrl: Boolean(config.suiteDash.portalUrl),
+      hasMembershipPlan: Boolean(config.suiteDash.defaultMembershipPlanId),
+      hasDefaultCompanyId: Boolean(config.suiteDash.defaultCompanyId),
+    },
+    messaging: {
+      primarySmsProvider: config.messaging.primarySmsProvider,
+      fallbackSmsProvider: config.messaging.fallbackSmsProvider ?? "none",
+    },
+    callScaler: {
+      hasWebhookUrl: Boolean(config.callScaler.webhookUrl),
+      hasScriptUrl: Boolean(config.callScaler.scriptUrl),
+      trackingNumbers: config.callScaler.dynamicNumberPool.length,
+    },
+    salespanel: {
+      enabled: config.salespanel.enabled,
+      hasWebhookUrl: Boolean(config.salespanel.webhookUrl),
+      hasScriptUrl: Boolean(config.salespanel.scriptUrl),
+      trackAnonymous: config.salespanel.trackAnonymous,
+    },
+    plerdy: {
+      enabled: config.plerdy.enabled,
+      hasWebhookUrl: Boolean(config.plerdy.eventWebhookUrl),
+      hasScriptUrl: Boolean(config.plerdy.scriptUrl),
+    },
+    partnero: {
+      hasWebhookUrl: Boolean(config.partnero.webhookUrl),
+      hasProgramId: Boolean(config.partnero.programId),
+      autoEnrollStage: config.partnero.autoEnrollStage,
+    },
+    thoughtly: {
+      hasWebhookUrl: Boolean(config.thoughtly.webhookUrl),
+      hasDefaultAgentId: Boolean(config.thoughtly.defaultAgentId),
+      afterHoursEnabled: config.thoughtly.afterHoursEnabled,
+      missedCallSmsEnabled: config.thoughtly.missedCallSmsEnabled,
+      callbackWindowMinutes: config.thoughtly.callbackWindowMinutes,
     },
     dispatch: {
       providerCount: config.dispatch.providers.length,

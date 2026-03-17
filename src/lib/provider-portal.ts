@@ -1,6 +1,6 @@
 import type { CustomerMilestoneId, LeadMilestoneId, PlumbingJobOutcome } from "./runtime-schema.ts";
 import { createCanonicalEvent } from "./trace.ts";
-import { getDispatchProviderById, updateDispatchProviderSelfServe } from "./runtime-config.ts";
+import { getDispatchProviderById, getOperationalRuntimeConfig, updateDispatchProviderSelfServe } from "./runtime-config.ts";
 import {
   appendEvents,
   enqueueExecutionTask,
@@ -416,6 +416,52 @@ export async function recordProviderDispatchCompletion(input: {
           paymentAmount: outcome.paymentAmount ?? outcome.revenueValue,
           invoiceNumber: outcome.invoiceNumber,
           note: outcome.note,
+        },
+      },
+    });
+  }
+
+  const runtimeConfig = await getOperationalRuntimeConfig();
+  if (paymentCollected && runtimeConfig.partnero.autoEnrollStage === "paid") {
+    await enqueueExecutionTask({
+      leadKey: lead.leadKey,
+      kind: "referral",
+      provider: "Partnero",
+      dedupeKey: `referral:${lead.leadKey}:paid`,
+      payload: {
+        trace: lead.trace,
+        referralPayload: {
+          leadKey: lead.leadKey,
+          email: lead.email,
+          phone: lead.phone,
+          firstName: lead.firstName,
+          lastName: lead.lastName,
+          revenueValue: outcome.revenueValue,
+          paymentAmount: outcome.paymentAmount ?? outcome.revenueValue,
+          provider: provider.label,
+          stage: "paid",
+        },
+      },
+    });
+  }
+  if (paymentCollected && runtimeConfig.partnero.autoEnrollStage === "value-realized") {
+    await enqueueExecutionTask({
+      leadKey: lead.leadKey,
+      kind: "referral",
+      provider: "Partnero",
+      dedupeKey: `referral:${lead.leadKey}:value-realized`,
+      payload: {
+        trace: lead.trace,
+        referralPayload: {
+          leadKey: lead.leadKey,
+          email: lead.email,
+          phone: lead.phone,
+          firstName: lead.firstName,
+          lastName: lead.lastName,
+          revenueValue: outcome.revenueValue,
+          paymentAmount: outcome.paymentAmount ?? outcome.revenueValue,
+          provider: provider.label,
+          stage: "value-realized",
         },
       },
     });

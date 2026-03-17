@@ -3,6 +3,15 @@ const EMPTY_EMBEDDED_SECRETS = {
     publicId: "",
     secretKey: "",
   },
+  callscaler: {
+    apiKey: "",
+  },
+  salespanel: {
+    apiKey: "",
+  },
+  plerdy: {
+    apiKey: "",
+  },
   emailit: {
     apiKey: "",
   },

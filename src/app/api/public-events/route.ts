@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { appendEvents } from "@/lib/runtime-store";
+import { dispatchPublicEventFanout } from "@/lib/growth-integrations";
 import { ensureTraceContext, createCanonicalEvent } from "@/lib/trace";
 import { tenantConfig } from "@/lib/tenant";
 import type { CanonicalEventType, FunnelFamily, MarketplaceAudience } from "@/lib/runtime-schema";
@@ -77,9 +78,11 @@ export async function POST(request: Request) {
   );
 
   await appendEvents([event]);
+  const fanout = await dispatchPublicEventFanout(event, payload);
 
   return NextResponse.json({
     success: true,
     eventId: event.id,
+    fanout,
   });
 }

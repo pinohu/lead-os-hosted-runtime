@@ -59,6 +59,30 @@ function getN8nWebhookUrl() {
   return getEnvValue("N8N_WEBHOOK_URL", "N8N_LEADOS_WEBHOOK_URL", "LEAD_OS_N8N_WEBHOOK_URL", "N8N_WEBHOOK");
 }
 
+function getCallScalerApiKey() {
+  return getEnvValue("CALLSCALER_API_KEY") ?? embeddedSecrets.callscaler.apiKey;
+}
+
+function getCallScalerWebhookUrl() {
+  return getEnvValue("CALLSCALER_WEBHOOK_URL");
+}
+
+function getSalespanelApiKey() {
+  return getEnvValue("SALESPANEL_API_KEY") ?? embeddedSecrets.salespanel.apiKey;
+}
+
+function getSalespanelWebhookUrl() {
+  return getEnvValue("SALESPANEL_WEBHOOK_URL");
+}
+
+function getPlerdyApiKey() {
+  return getEnvValue("PLERDY_API_KEY") ?? embeddedSecrets.plerdy.apiKey;
+}
+
+function getPlerdyEventWebhookUrl() {
+  return getEnvValue("PLERDY_EVENT_WEBHOOK_URL");
+}
+
 function getN8nApiKey() {
   return getEnvValue("N8N_API_KEY");
 }
@@ -344,6 +368,9 @@ function integration(configured: boolean, ownerKey: keyof typeof TOOL_OWNERSHIP_
 
 export const integrationMap = {
   suitedash: integration(Boolean((process.env.SUITEDASH_PUBLIC_ID ?? embeddedSecrets.suitedash.publicId) && (process.env.SUITEDASH_SECRET_KEY ?? embeddedSecrets.suitedash.secretKey)), "crm"),
+  callscaler: integration(Boolean(getCallScalerApiKey() || getCallScalerWebhookUrl()), "telephony"),
+  salespanel: integration(Boolean(getSalespanelApiKey() || getSalespanelWebhookUrl()), "scoring"),
+  plerdy: integration(Boolean(getPlerdyApiKey() || getPlerdyEventWebhookUrl()), "cro"),
   aitable: integration(Boolean((process.env.AITABLE_API_TOKEN ?? embeddedSecrets.aitable.apiToken) && (process.env.AITABLE_DATASHEET_ID ?? embeddedSecrets.aitable.datasheetId)), "ledger"),
   agenticflow: integration(Boolean(process.env.AGENTICFLOW_API_KEY ?? embeddedSecrets.agenticflow.apiKey), "intelligence"),
   n8n: integration(Boolean(
@@ -1109,6 +1136,12 @@ export function getAutomationHealth() {
     switch (key) {
       case "easyTextMarketing":
         return getEasyTextMarketingWebhookUrl() ? "executable" : "degraded";
+      case "callscaler":
+        return getCallScalerWebhookUrl() ? "executable" : "degraded";
+      case "salespanel":
+        return getSalespanelWebhookUrl() ? "executable" : "degraded";
+      case "plerdy":
+        return getPlerdyEventWebhookUrl() ? "executable" : "degraded";
       case "smsit":
         return "degraded";
       case "n8n":
@@ -1170,6 +1203,7 @@ export function getAutomationHealth() {
       email: providers.emailit.live,
       whatsapp: providers.wbiztool.live,
       sms: providers.easyTextMarketing.live || providers.smsit.live,
+      calls: providers.callscaler.live,
       chat: providers.insighto.live,
       voice: providers.thoughtly.live,
     },
@@ -1433,6 +1467,32 @@ export async function sendSmsFallbackAction(payload: { phone: string; body: stri
   } satisfies ProviderResult;
 }
 
+export async function sendConfiguredSmsAction(payload: { phone: string; body: string }) {
+  const runtimeConfig = await getOperationalRuntimeConfig();
+  if (runtimeConfig.messaging.primarySmsProvider === "sms-it") {
+    return sendSmsFallbackAction(payload);
+  }
+  return sendSmsAction(payload);
+}
+
+export async function sendConfiguredSmsFallbackAction(payload: { phone: string; body: string }) {
+  const runtimeConfig = await getOperationalRuntimeConfig();
+  const fallbackProvider = runtimeConfig.messaging.fallbackSmsProvider;
+  if (fallbackProvider === "sms-it") {
+    return sendSmsFallbackAction(payload);
+  }
+  if (fallbackProvider === "easy-text-marketing") {
+    return sendSmsAction(payload);
+  }
+  return {
+    ok: false,
+    provider: "SMS Fallback",
+    mode: "prepared",
+    detail: "No SMS fallback provider is configured in runtime settings",
+    payload,
+  } satisfies ProviderResult;
+}
+
 export async function sendAlertAction(payload: { title: string; body: string; trace: TraceContext }) {
   if (!LIVE_MODE) {
     return dryRunResult("Ops Alert", "Discord/Telegram alert prepared", payload);
@@ -1557,10 +1617,12 @@ export async function startVoiceAction(payload: Record<string, unknown>) {
   if (!provider.configured || !provider.live) {
     return dryRunResult("Thoughtly", "Voice workflow prepared", payload);
   }
-  const webhookUrl = getThoughtlyWebhookUrl();
+  const runtimeConfig = await getOperationalRuntimeConfig();
+  const webhookUrl = getThoughtlyWebhookUrl() ?? runtimeConfig.thoughtly.webhookUrl;
+  const agentId = getThoughtlyAgentId() ?? runtimeConfig.thoughtly.defaultAgentId;
   if (webhookUrl) {
     const response = await postJson(webhookUrl, {
-      agentId: getThoughtlyAgentId(),
+      agentId,
       payload,
     }, getThoughtlyApiKey() ? { Authorization: `Bearer ${getThoughtlyApiKey()}` } : {});
     return {
@@ -1574,12 +1636,12 @@ export async function startVoiceAction(payload: Record<string, unknown>) {
     ok: true,
     provider: "Thoughtly",
     mode: "prepared",
-    detail: getThoughtlyAgentId()
+    detail: agentId
       ? "Thoughtly configured with agent metadata; add webhook to trigger live voice workflows"
       : "Thoughtly adapter is wired and awaiting account-specific endpoint details",
     payload: {
       ...payload,
-      agentId: getThoughtlyAgentId(),
+      agentId,
     },
   } satisfies ProviderResult;
 }
@@ -1984,10 +2046,12 @@ export async function startReferralAction(payload: Record<string, unknown>) {
   if (!provider.configured || !provider.live) {
     return dryRunResult("Partnero", "Referral workflow prepared", payload);
   }
-  const webhookUrl = getPartneroWebhookUrl();
+  const runtimeConfig = await getOperationalRuntimeConfig();
+  const webhookUrl = getPartneroWebhookUrl() ?? runtimeConfig.partnero.webhookUrl;
+  const programId = getPartneroProgramId() ?? runtimeConfig.partnero.programId;
   if (webhookUrl) {
     const response = await postJson(webhookUrl, {
-      programId: getPartneroProgramId(),
+      programId,
       payload,
     }, getPartneroApiKey() ? { Authorization: `Bearer ${getPartneroApiKey()}` } : {});
     return {
@@ -2001,12 +2065,12 @@ export async function startReferralAction(payload: Record<string, unknown>) {
     ok: true,
     provider: "Partnero",
     mode: "prepared",
-    detail: getPartneroProgramId()
+    detail: programId
       ? "Partnero program detected; add webhook URL to activate referral enrollment"
       : "Partnero adapter is wired and awaiting account-specific endpoint details",
     payload: {
       ...payload,
-      programId: getPartneroProgramId(),
+      programId,
     },
   } satisfies ProviderResult;
 }

@@ -129,6 +129,7 @@ test("dispatch completion records customer value milestones and revenue", async 
   });
 
   const storedLead = await getLeadRecord("email:dispatch@example.com");
+  const executionTasks = await getExecutionTasks({ leadKey: "email:dispatch@example.com" });
   assert.equal(storedLead?.stage, "active");
   assert.equal(storedLead?.status, "PAYMENT-COLLECTED");
   assert.deepEqual(storedLead?.milestones.customerMilestones, [
@@ -152,6 +153,7 @@ test("dispatch completion records customer value milestones and revenue", async 
     (storedLead?.metadata.plumbingOutcome as { complaintStatus?: string } | undefined)?.complaintStatus,
     "minor",
   );
+  assert.ok(executionTasks.some((task) => task.kind === "referral" && task.status === "pending"));
 });
 
 test("dispatch completion awaiting payment keeps value-realized milestone closed and queues commerce handoff", async () => {

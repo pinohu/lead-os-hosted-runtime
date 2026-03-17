@@ -102,6 +102,7 @@ test("provider accepting a dispatch request updates lead, capacity, and booking 
   const updatedLead = await getLeadRecord(result.leadKey);
   const updatedProvider = await getDispatchProviderById("crew-dallas");
   const bookingJobs = await getBookingJobs(result.leadKey);
+  const executionTasks = await getExecutionTasks({ leadKey: result.leadKey });
 
   assert.equal(updatedRequest?.status, "accepted");
   assert.equal(updatedLead?.status, "PROVIDER-CLAIMED");
@@ -186,6 +187,7 @@ test("provider completion records closed-loop economics and releases capacity", 
   const updatedLead = await getLeadRecord(result.leadKey);
   const updatedProvider = await getDispatchProviderById("crew-dallas");
   const bookingJobs = await getBookingJobs(result.leadKey);
+  const executionTasks = await getExecutionTasks({ leadKey: result.leadKey });
 
   assert.equal(updatedLead?.stage, "active");
   assert.equal(updatedLead?.status, "PAYMENT-COLLECTED");
@@ -196,6 +198,7 @@ test("provider completion records closed-loop economics and releases capacity", 
   assert.equal(updatedProvider?.activeJobs, 1);
   assert.equal(updatedProvider?.acceptingNewJobs, true);
   assert.equal(bookingJobs[0]?.status, "completed");
+  assert.ok(executionTasks.some((task) => task.kind === "referral" && task.status === "pending"));
 });
 
 test("provider completion without collected payment does not mark value realized and can queue commerce follow-up", async () => {

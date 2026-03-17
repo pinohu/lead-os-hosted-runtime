@@ -22,6 +22,9 @@ export type ProviderConfigStatus = {
 
 const PROVIDER_CONFIGS: ProviderConfigDescriptor[] = [
   { key: "suitedash", label: "SuiteDash", envKeys: ["SUITEDASH_PUBLIC_ID", "SUITEDASH_SECRET_KEY"], embedded: Boolean(embeddedSecrets.suitedash.publicId && embeddedSecrets.suitedash.secretKey) },
+  { key: "callscaler", label: "CallScaler", envKeys: ["CALLSCALER_API_KEY", "CALLSCALER_WEBHOOK_URL"], embedded: Boolean(embeddedSecrets.callscaler.apiKey) },
+  { key: "salespanel", label: "Salespanel", envKeys: ["SALESPANEL_API_KEY", "SALESPANEL_WEBHOOK_URL"], embedded: Boolean(embeddedSecrets.salespanel.apiKey) },
+  { key: "plerdy", label: "Plerdy", envKeys: ["PLERDY_API_KEY", "PLERDY_EVENT_WEBHOOK_URL"], embedded: Boolean(embeddedSecrets.plerdy.apiKey) },
   { key: "aitable", label: "AITable", envKeys: ["AITABLE_API_TOKEN", "AITABLE_DATASHEET_ID"], embedded: Boolean(embeddedSecrets.aitable.apiToken && embeddedSecrets.aitable.datasheetId) },
   { key: "agenticflow", label: "AgenticFlow", envKeys: ["AGENTICFLOW_API_KEY"], embedded: Boolean(embeddedSecrets.agenticflow.apiKey) },
   { key: "n8n", label: "n8n", envKeys: ["N8N_WEBHOOK_URL", "N8N_API_KEY", "N8N_BASE_URL", "N8N_MCP_URL", "N8N_MCP_ACCESS_TOKEN"], embedded: Boolean(embeddedSecrets.n8n.apiBaseUrl || embeddedSecrets.n8n.apiKey || embeddedSecrets.n8n.mcpUrl || embeddedSecrets.n8n.mcpAccessToken) },

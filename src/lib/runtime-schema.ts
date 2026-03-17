@@ -243,6 +243,8 @@ export type TriggerEvent =
   | "form_submit"
   | "chat_reply"
   | "call_connected"
+  | "call_started"
+  | "call_completed"
   | "timer_elapsed"
   | "message_opened"
   | "message_clicked"
@@ -277,6 +279,9 @@ export type CanonicalEventType =
   | "page_view"
   | "session_started"
   | "source_detected"
+  | "call_started"
+  | "call_answered"
+  | "call_completed"
   | "cta_clicked"
   | "form_started"
   | "form_step_completed"
@@ -497,6 +502,7 @@ export const TOOL_OWNERSHIP_MAP: Record<string, ToolOwnership> = {
   runtime: { primary: "LeadOS runtime", responsibility: "capture, routing, trace, graph execution" },
   crm: { primary: "SuiteDash", responsibility: "contacts, companies, onboarding, client delivery" },
   ledger: { primary: "AITable", responsibility: "event ledger, reporting, traceability" },
+  telephony: { primary: "CallScaler", responsibility: "call attribution, call tracking, phone conversion intelligence" },
   intelligence: { primary: "AgenticFlow", responsibility: "scoring, persona inference, objection detection, next-best-action" },
   orchestration: { primary: "n8n", responsibility: "workflow execution", support: ["Boost.space"] },
   email: { primary: "Emailit", responsibility: "transactional and nurture email" },

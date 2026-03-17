@@ -6,6 +6,7 @@ import type {
   PlumbingOperatorActionType,
 } from "./runtime-schema.ts";
 import { createCanonicalEvent } from "./trace.ts";
+import { getOperationalRuntimeConfig } from "./runtime-config.ts";
 import {
   appendEvents,
   enqueueExecutionTask,
@@ -495,6 +496,34 @@ export async function applyPlumbingDispatchAction({
         },
       },
     });
+  }
+
+  const runtimeConfig = await getOperationalRuntimeConfig();
+  const paymentCollected = mutation.outcome.paymentStatus === "paid" || Boolean(mutation.outcome.paidAt) || Boolean(mutation.outcome.paymentAmount);
+  if (actionType === "mark-completed" && paymentCollected) {
+    const referralStage = runtimeConfig.partnero.autoEnrollStage;
+    if (referralStage === "paid" || referralStage === "value-realized") {
+      await enqueueExecutionTask({
+        leadKey,
+        kind: "referral",
+        provider: "Partnero",
+        dedupeKey: `referral:${leadKey}:${referralStage}:operator`,
+        payload: {
+          trace: lead.trace,
+          referralPayload: {
+            leadKey,
+            email: lead.email,
+            phone: lead.phone,
+            firstName: lead.firstName,
+            lastName: lead.lastName,
+            revenueValue: mutation.outcome.revenueValue,
+            paymentAmount: mutation.outcome.paymentAmount ?? mutation.outcome.revenueValue,
+            provider: currentProvider,
+            stage: referralStage,
+          },
+        },
+      });
+    }
   }
 
   return {
