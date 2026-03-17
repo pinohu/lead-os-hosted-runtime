@@ -47,6 +47,14 @@ export type EndUserFunnelDefinition = {
   stickyLabel: string;
   heroPills: string[];
   trustStrip: string[];
+  valueStack?: Array<{
+    title: string;
+    detail: string;
+  }>;
+  systemModules?: Array<{
+    title: string;
+    detail: string;
+  }>;
   sections: EndUserFunnelSection[];
   faq: EndUserFunnelFaq[];
   relatedLinks: EndUserFunnelLink[];
@@ -379,54 +387,106 @@ export function getEndUserFunnel(kind: EndUserFunnelKind, options?: { zip?: stri
         secondaryLabel: "See customer-facing pages",
         secondaryHref: "/start",
         stickyLabel: "Apply to join",
-        heroPills: ["Preferred ZIPs", "Issue fit", "After-hours coverage", "Quality-first routing"],
-        trustStrip: ["Selective network", "Better-fit work", "Built for serious operators"],
-        sections: [
+        heroPills: ["Call-to-cash", "Dispatch control", "Flat-rate quoting", "Repeat revenue"],
+        trustStrip: [
+          "Built around profitable jobs",
+          "Less admin leakage between call and payment",
+          "Made for serious plumbing operators",
+        ],
+        valueStack: [
           {
-            eyebrow: "What matters first",
-            title: "Lead with fit, territory, and readiness",
-            items: [
-              {
-                title: "Service area",
-                detail: "Tell us where you actually want to work.",
-              },
-              {
-                title: "Job fit",
-                detail: "Show the kinds of plumbing work you want more of.",
-              },
-              {
-                title: "Response windows",
-                detail: "Emergency and after-hours coverage should be visible early.",
-              },
-            ],
+            title: "Book faster",
+            detail: "Keep leads, phone calls, and job requests moving without missed handoffs or front-office chaos.",
           },
           {
-            eyebrow: "Why providers join",
-            title: "A clearer opportunity than generic listings",
-            items: [
-              {
-                title: "Better-fit opportunities",
-                detail: "The network is meant to reflect issue fit, geography, and readiness.",
-              },
-              {
-                title: "Operational relevance",
-                detail: "Serious teams want more than a profile page buried in a directory.",
-              },
-              {
-                title: "Quality matters",
-                detail: "Standards and response quality should shape how the opportunity works over time.",
-              },
-            ],
+            title: "Route smarter",
+            detail: "Dispatch and schedule around technician time, fit, and geography so margin is not lost on the calendar.",
+          },
+          {
+            title: "Quote consistently",
+            detail: "Use a tighter price-book and estimate path so the customer hears a confident number instead of a guess.",
+          },
+          {
+            title: "Collect sooner",
+            detail: "Finish the job, invoice immediately, and shorten the gap between completed work and collected cash.",
           },
         ],
+        systemModules: [
+          {
+            title: "Call-to-cash flow",
+            detail: "Lead capture, booking, dispatch, work completion, invoicing, and payment collection should live in one connected operating system.",
+          },
+          {
+            title: "Dispatch and schedule control",
+            detail: "Empty technician time, late arrivals, and poor routing destroy margin. Strong dispatch control fixes that first.",
+          },
+          {
+            title: "Flat-rate pricing and estimating",
+            detail: "Standardized quoting protects margin, improves customer confidence, and keeps technician pricing consistent.",
+          },
+          {
+            title: "CRM and customer history",
+            detail: "When a customer calls, the team should instantly see prior work, equipment, notes, warranties, and unpaid balances.",
+          },
+          {
+            title: "Job profitability visibility",
+            detail: "Owners need to know which techs, job types, ZIP codes, and lead sources actually turn into collected profit.",
+          },
+          {
+            title: "Membership and follow-up",
+            detail: "Recurring inspections, maintenance plans, reminders, and reactivation turn one-time work into steadier revenue.",
+          },
+        ],
+        sections: [
+          {
+              eyebrow: "What owners actually want",
+              title: "A tighter operating system, not more disconnected software",
+              items: [
+                {
+                  title: "Less leakage",
+                  detail: "The biggest gain is reducing what gets lost between the phone call, the dispatch board, the estimate, and the invoice.",
+                },
+                {
+                  title: "More collected revenue",
+                  detail: "The point is not just to book work. It is to finish more jobs cleanly and collect faster from the same volume of work.",
+                },
+                {
+                  title: "Standardized execution",
+                  detail: "Good systems help average office staff and average techs perform more like strong ones because the workflow is harder to break.",
+                },
+              ],
+            },
+            {
+              eyebrow: "Why serious shops care",
+              title: "The system should make every job easier to run",
+              items: [
+                {
+                  title: "Before the truck rolls",
+                  detail: "Capture the lead, book quickly, route well, and show the tech the right context before they arrive.",
+                },
+                {
+                  title: "On the job",
+                  detail: "Quote cleanly, document the work, get approval, and invoice without creating loose ends.",
+                },
+                {
+                  title: "After the job",
+                  detail: "Collect promptly, keep the customer history current, and use follow-up to create repeat revenue instead of a forgotten invoice.",
+                },
+              ],
+            },
+          ],
         faq: [
           {
             question: "Who is the best fit?",
-            answer: "Providers with clear service areas, reliable response windows, and real plumbing capacity are the strongest fit.",
+            answer: "Plumbing owners who want tighter dispatch, more consistent quoting, faster collection, and clearer profit visibility are the strongest fit.",
           },
           {
             question: "Do I need to share everything up front?",
             answer: "No. The first step is short and focused on fit, not paperwork.",
+          },
+          {
+            question: "Is this mainly a lead source?",
+            answer: "No. The bigger value is running work more cleanly from booked job to collected payment while keeping customer history and follow-up usable.",
           },
         ],
         relatedLinks: links,

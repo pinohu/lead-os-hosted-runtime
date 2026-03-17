@@ -90,6 +90,40 @@ export async function PublicEndUserFunnelPage({
         </section>
       ))}
 
+      {funnel.valueStack?.length ? (
+        <section className="public-funnel__section">
+          <article className="panel public-funnel__section-lead">
+            <p className="eyebrow">Why owners switch</p>
+            <h2>The value is operational, not theoretical</h2>
+          </article>
+          <div className="public-funnel__card-grid">
+            {funnel.valueStack.map((item) => (
+              <article key={item.title} className="public-funnel__card">
+                <h3>{item.title}</h3>
+                <p className="muted">{item.detail}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {funnel.systemModules?.length ? (
+        <section className="public-funnel__section">
+          <article className="panel public-funnel__section-lead">
+            <p className="eyebrow">The operating system</p>
+            <h2>What the platform should tighten first</h2>
+          </article>
+          <div className="public-funnel__card-grid">
+            {funnel.systemModules.map((item) => (
+              <article key={item.title} className="public-funnel__card">
+                <h3>{item.title}</h3>
+                <p className="muted">{item.detail}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <section className="public-funnel__section">
         <article className="panel public-funnel__section-lead">
           <p className="eyebrow">Other paths</p>
