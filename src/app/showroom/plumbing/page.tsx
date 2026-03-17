@@ -12,43 +12,36 @@ type ShowroomItem = {
 const buyerFunnels: ShowroomItem[] = [
   {
     audience: "Customer",
-    label: "Marketplace home",
-    href: "/",
-    summary: "Top-level marketplace entry that helps a visitor choose the right plumbing path first.",
-    bestFor: "Broad traffic, homepage handoff, and mixed-intent campaigns.",
-  },
-  {
-    audience: "Customer",
-    label: "Customer help hub",
-    href: "/get-plumbing-help",
-    summary: "Demand-side decision page for visitors choosing between emergency, estimate, and commercial help.",
-    bestFor: "Mixed homeowner and tenant demand that needs quick path selection.",
+    label: "Start hub",
+    href: "/start",
+    summary: "Primary public entry that helps a visitor choose the right plumbing path quickly.",
+    bestFor: "Homepage handoff, mixed-intent campaigns, and broad public traffic.",
   },
   {
     audience: "Customer",
     label: "Emergency plumbing",
-    href: "/plumbing/emergency",
-    summary: "Fast, urgent, dispatch-first path for active plumbing issues and mobile solve-now traffic.",
+    href: "/start/plumbing/emergency",
+    summary: "Fast, urgent path for active plumbing issues and mobile solve-now traffic.",
     bestFor: "Paid traffic, urgent SEO, sticky CTAs, and \"need help now\" entry points.",
   },
   {
     audience: "Customer",
     label: "Plumbing estimate",
-    href: "/plumbing/estimate",
+    href: "/start/plumbing/estimate",
     summary: "Calmer planned-work flow for installs, replacements, and estimate-minded visitors.",
     bestFor: "Water heater pages, repair pages, and project comparison traffic.",
   },
   {
     audience: "Customer",
     label: "Commercial plumbing",
-    href: "/plumbing/commercial",
+    href: "/start/plumbing/commercial",
     summary: "Structured intake for property managers, facilities teams, and commercial service requests.",
     bestFor: "Commercial landing pages and B2B service acquisition.",
   },
   {
     audience: "Customer",
     label: "Local ZIP page",
-    href: "/local/19103",
+    href: "/start/local/19103",
     summary: "ZIP-aware local landing page that keeps relevance and locality visible from the first screen.",
     bestFor: "Local SEO, geo pages, and area-specific high-intent traffic.",
   },
@@ -58,7 +51,7 @@ const providerFunnels: ShowroomItem[] = [
   {
     audience: "Provider",
     label: "Join provider network",
-    href: "/join-provider-network",
+    href: "/start/providers/join",
     summary: "Public provider-acquisition page for plumbers and service teams who want better-fit dispatched work.",
     bestFor: "Recruiting providers, supply growth, and network onboarding campaigns.",
   },
@@ -133,7 +126,7 @@ export default function PlumbingShowroomPage() {
             <Link href="/deployments/plumbing" className="secondary">
               Open deployment blueprint
             </Link>
-            <Link href="/plumbing/emergency" className="primary">
+            <Link href="/start/plumbing/emergency" className="primary">
               Open emergency funnel
             </Link>
           </div>
@@ -190,9 +183,10 @@ export default function PlumbingShowroomPage() {
           <p className="eyebrow">What this page is for</p>
           <h2>Public review, not implementation details</h2>
           <ul className="check-list">
-            <li>Use this page when you want to review actual customer and provider funnels.</li>
+            <li>Use this page when you want to review the new concise customer and provider funnels.</li>
             <li>Use the blueprint page when you want widget code, hosted links, bulk ZIP rollout, or WordPress packages.</li>
             <li>Use the blueprint links on each card if you want the operator/deployment version of the same asset.</li>
+            <li>The older verbose pages still exist, but these `/start/...` routes are now the preferred public-facing paths.</li>
           </ul>
         </article>
         <article className="panel">

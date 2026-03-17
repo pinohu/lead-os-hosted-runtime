@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PlumbingEntryPage } from "@/components/PlumbingEntryPage";
-import { getMarketplaceEntrypointLinks, getPlumbingEntrypoint } from "@/lib/plumbing-entrypoints";
+import { getPlumbingEntrypoint } from "@/lib/plumbing-entrypoints";
 
 type HomePageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -8,7 +8,23 @@ type HomePageProps = {
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = (await searchParams) ?? {};
-  const customerPaths = getMarketplaceEntrypointLinks().slice(0, 3);
+  const customerPaths = [
+    {
+      href: "/start/plumbing/emergency",
+      label: "Emergency plumbing",
+      description: "Fastest route for active leaks, backups, no hot water, and other urgent problems.",
+    },
+    {
+      href: "/start/plumbing/estimate",
+      label: "Plumbing estimate",
+      description: "A calmer quote path for repairs, installs, replacements, and planned work.",
+    },
+    {
+      href: "/start/plumbing/commercial",
+      label: "Commercial plumbing",
+      description: "Structured service intake for properties, facilities teams, and commercial buyers.",
+    },
+  ];
 
   return (
     <>
@@ -60,6 +76,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <li>The public landing system can grow into a real marketplace surface instead of a single plumbing form.</li>
           </ul>
           <div className="cta-row">
+            <Link href="/start" className="primary">
+              Open new public funnels
+            </Link>
             <Link href="/deployments/plumbing" className="secondary">
               Open deployment blueprint
             </Link>
