@@ -1120,6 +1120,208 @@ function renderConfidenceStudio(entry: PlumbingEntrypointDefinition) {
   }
 }
 
+function renderTrustArchitecture(entry: PlumbingEntrypointDefinition) {
+  const audienceTitle =
+    entry.audience === "provider"
+      ? "What makes this page feel worth a provider's time"
+      : "What makes this page feel easy to trust";
+
+  const trustCards =
+    entry.kind === "emergency"
+      ? [
+          {
+            title: "Recognizable problem",
+            detail: "The visitor should know within seconds that this page is built for active leaks, backups, no hot water, or other time-sensitive plumbing issues.",
+          },
+          {
+            title: "Visible next step",
+            detail: "The page should explain what happens after they reach out before they start wondering if this is just another dead-end form.",
+          },
+          {
+            title: "Safe fallback",
+            detail: "If the situation is unusual, the page should still leave a believable human path open instead of forcing a bad-fit submit.",
+          },
+        ]
+      : entry.kind === "estimate"
+        ? [
+            {
+              title: "Project recognition",
+              detail: "Estimate buyers stay longer when they immediately recognize the kinds of repair, replacement, and installation work the page is meant for.",
+            },
+            {
+              title: "Expectation clarity",
+              detail: "The quote path should explain what information is useful now, what can wait, and what happens after contact is made.",
+            },
+            {
+              title: "Low-pressure momentum",
+              detail: "People comparing options still need an easy way forward that does not feel like emergency-mode pressure.",
+            },
+          ]
+        : entry.kind === "commercial"
+          ? [
+              {
+                title: "Operational credibility",
+                detail: "Property teams need a service desk feel, not a homeowner page with a few commercial words added on top.",
+              },
+              {
+                title: "Structured intake",
+                detail: "The request path should signal that building context, coordination, and repeat-work realities are expected and supported.",
+              },
+              {
+                title: "Accountable next step",
+                detail: "Commercial visitors should know whether they are requesting urgent service, beginning a service conversation, or discussing broader coverage.",
+              },
+            ]
+          : entry.kind === "provider"
+            ? [
+                {
+                  title: "Selective opportunity",
+                  detail: "Stronger providers respond when the page makes it obvious that territory, issue fit, and readiness standards actually matter.",
+                },
+                {
+                  title: "Operational relevance",
+                  detail: "The copy should feel built for real plumbing teams, not generic recruitment language aimed at anyone with a truck.",
+                },
+                {
+                  title: "Performance logic",
+                  detail: "Providers need confidence that better fit and stronger response quality lead to better opportunities over time.",
+                },
+              ]
+            : [
+                {
+                  title: "Specific audience fit",
+                  detail: "The page should quickly prove whether it is meant for urgent help, planned work, commercial service, provider signup, or local search intent.",
+                },
+                {
+                  title: "Transparent process",
+                  detail: "People trust pages more when the next step is visible before the form asks for much effort.",
+                },
+                {
+                  title: "Recovery path",
+                  detail: "Visitors should always have a path to switch lanes or keep moving if their first choice is not quite right.",
+                },
+              ];
+
+  return (
+    <section className="trust-architecture">
+      <article className="panel trust-architecture__lead">
+        <p className="eyebrow">Trust architecture</p>
+        <h2>{audienceTitle}</h2>
+        <p className="muted">
+          High-converting funnels do not rely on one testimonial or one headline. They stack clear promises, visible proof, process clarity, and low-risk next steps in the right order.
+        </p>
+      </article>
+      <div className="trust-architecture__grid">
+        {trustCards.map((card) => (
+          <article key={card.title} className="trust-architecture__card">
+            <h3>{card.title}</h3>
+            <p className="muted">{card.detail}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function renderJourneyArchitecture(entry: PlumbingEntrypointDefinition) {
+  const phases =
+    entry.kind === "emergency"
+      ? [
+          {
+            title: "Immediate action",
+            detail: "Choose the urgent path, share the minimum details needed, and keep the fastest next step visible without leaving the visitor guessing.",
+          },
+          {
+            title: "Fast reassurance",
+            detail: "Confirm what happens next, preserve urgency and issue context, and keep a dispatch-style fallback available if the job is unusual.",
+          },
+          {
+            title: "Recovery if needed",
+            detail: "If the visitor pauses or the urgent path is not the best fit, LeadOS should recover them into a human or estimate lane rather than losing them.",
+          },
+        ]
+      : entry.kind === "estimate"
+        ? [
+            {
+              title: "Fit the project",
+              detail: "Help the buyer recognize whether they are in a repair, replacement, or installation conversation before the page asks for much detail.",
+            },
+            {
+              title: "Set expectations",
+              detail: "Explain what a useful quote path looks like and what information helps without overwhelming the buyer up front.",
+            },
+            {
+              title: "Keep evaluation alive",
+              detail: "If the buyer is not ready to submit, the path should still move them forward with guidance, context, and light follow-up.",
+            },
+          ]
+        : entry.kind === "commercial"
+          ? [
+              {
+                title: "Clarify the request",
+                detail: "Separate urgent service needs, structured service requests, and account-style coverage conversations early.",
+              },
+              {
+                title: "Support coordination",
+                detail: "Preserve site, building, and stakeholder context so the next step feels organized rather than generic.",
+              },
+              {
+                title: "Maintain continuity",
+                detail: "Commercial buyers should have a path from first request into repeat-work, account discussion, or service continuity without re-explaining everything.",
+              },
+            ]
+          : entry.kind === "provider"
+            ? [
+                {
+                  title: "Qualify the fit",
+                  detail: "Lead with geography, issue fit, response readiness, and standards instead of burying them behind generic signup friction.",
+                },
+                {
+                  title: "Review seriously",
+                  detail: "The provider should understand that readiness, territory, and service quality drive whether the opportunity is worth pursuing.",
+                },
+                {
+                  title: "Activate into the network",
+                  detail: "After apply, the path should move smoothly into readiness review, portal activation, and eventual dispatch participation.",
+                },
+              ]
+            : [
+                {
+                  title: "Recognize the lane",
+                  detail: "The first job is to help the visitor recognize the right lane before unnecessary friction starts.",
+                },
+                {
+                  title: "Keep momentum visible",
+                  detail: "The path should explain what happens next so the visitor does not have to infer how the system works.",
+                },
+                {
+                  title: "Protect the recovery path",
+                  detail: "If someone is interested but not ready, the system should still have a light next step instead of losing the session.",
+                },
+              ];
+
+  return (
+    <section className="journey-architecture">
+      <article className="panel journey-architecture__lead">
+        <p className="eyebrow">Compounding journey design</p>
+        <h2>This funnel should do more than collect a lead</h2>
+        <p className="muted">
+          The strongest trust-based funnels are designed across the whole journey: first click, next step, recovery, and follow-up. Each phase should make the next one easier.
+        </p>
+      </article>
+      <div className="journey-architecture__grid">
+        {phases.map((phase) => (
+          <article key={phase.title} className="journey-architecture__card">
+            <p className="eyebrow">Phase</p>
+            <h3>{phase.title}</h3>
+            <p className="muted">{phase.detail}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function renderClosingSection(entry: PlumbingEntrypointDefinition) {
   if (entry.audience === "provider") {
     return (
@@ -1375,6 +1577,8 @@ export async function PlumbingEntryPage({
       {renderPremiumModules(entry)}
       {renderPremiumProofMosaic(entry)}
       {renderConfidenceStudio(entry)}
+      {renderTrustArchitecture(entry)}
+      {renderJourneyArchitecture(entry)}
 
       <AdaptiveLeadCaptureForm
         source="manual"

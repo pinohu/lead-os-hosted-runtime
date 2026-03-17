@@ -502,17 +502,27 @@ button[disabled] {
   gap: 18px;
 }
 
+.trust-architecture,
+.journey-architecture {
+  display: grid;
+  gap: 18px;
+}
+
 .spotlight-lead,
 .closing-lead,
 .premium-module__lead,
-.confidence-studio__lead {
+.confidence-studio__lead,
+.trust-architecture__lead,
+.journey-architecture__lead {
   min-width: 0;
 }
 
 .spotlight-grid,
 .closing-checks,
 .premium-split,
-.confidence-studio__scene {
+.confidence-studio__scene,
+.trust-architecture__grid,
+.journey-architecture__grid {
   display: grid;
   gap: 14px;
 }
@@ -597,6 +607,29 @@ button[disabled] {
 
 .confidence-story-card {
   background: rgba(255, 255, 255, 0.74);
+}
+
+.trust-architecture__card,
+.journey-architecture__card {
+  display: grid;
+  gap: 10px;
+  padding: 24px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(20, 33, 29, 0.1);
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: var(--shadow-card);
+}
+
+.trust-architecture__card {
+  background:
+    linear-gradient(180deg, rgba(255, 250, 243, 0.95), rgba(255, 255, 255, 0.84)),
+    radial-gradient(circle at top left, rgba(34, 95, 84, 0.1), transparent 18rem);
+}
+
+.journey-architecture__card {
+  background:
+    linear-gradient(180deg, rgba(255, 251, 246, 0.95), rgba(255, 255, 255, 0.84)),
+    radial-gradient(circle at top left, rgba(196, 99, 45, 0.12), transparent 18rem);
 }
 
 .confidence-tag-row {
@@ -1303,6 +1336,8 @@ button[disabled] {
   .funnel-spotlight,
   .premium-module,
   .confidence-studio,
+  .trust-architecture,
+  .journey-architecture,
   .closing-band {
     grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
     align-items: start;
@@ -1312,6 +1347,8 @@ button[disabled] {
   .closing-checks,
   .premium-split,
   .confidence-studio__scene,
+  .trust-architecture__grid,
+  .journey-architecture__grid,
   .premium-metric-grid,
   .premium-gallery-grid,
   .service-matrix,
