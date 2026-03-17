@@ -3,6 +3,7 @@ import {
   emitWorkflowAction,
   generateDocumentAction,
   sendAlertAction,
+  startCommerceAction,
   sendEmailAction,
   sendSmsAction,
   sendWhatsAppAction,
@@ -34,6 +35,16 @@ function failedProviderResult(
     detail,
     payload,
   };
+}
+
+function isOperationalSuccess(result: ProviderResult) {
+  return result.ok && result.mode === "live";
+}
+
+function buildTaskFailureDetail(result: ProviderResult) {
+  return result.mode === "prepared"
+    ? `Provider is configured but not fully executable: ${result.detail}`
+    : result.detail;
 }
 
 async function safelyRunProviderAction(
@@ -93,8 +104,8 @@ async function processWorkflowTask(task: ExecutionTaskRecord) {
   });
 
   await finalizeExecutionTask(task.id, {
-    status: result.ok ? "completed" : "failed",
-    lastError: result.ok ? undefined : result.detail,
+    status: isOperationalSuccess(result) ? "completed" : "failed",
+    lastError: isOperationalSuccess(result) ? undefined : buildTaskFailureDetail(result),
     payload: {
       ...(task.payload ?? {}),
       result,
@@ -104,7 +115,7 @@ async function processWorkflowTask(task: ExecutionTaskRecord) {
   return {
     taskId: task.id,
     kind: task.kind,
-    ok: result.ok,
+    ok: isOperationalSuccess(result),
     detail: result.detail,
   };
 }
@@ -142,8 +153,8 @@ async function processBookingTask(task: ExecutionTaskRecord) {
   });
 
   await finalizeExecutionTask(task.id, {
-    status: result.ok ? "completed" : "failed",
-    lastError: result.ok ? undefined : result.detail,
+    status: isOperationalSuccess(result) ? "completed" : "failed",
+    lastError: isOperationalSuccess(result) ? undefined : buildTaskFailureDetail(result),
     payload: {
       ...(task.payload ?? {}),
       result,
@@ -153,7 +164,7 @@ async function processBookingTask(task: ExecutionTaskRecord) {
   return {
     taskId: task.id,
     kind: task.kind,
-    ok: result.ok,
+    ok: isOperationalSuccess(result),
     detail: result.detail,
   };
 }
@@ -185,7 +196,7 @@ async function processDocumentTask(task: ExecutionTaskRecord) {
     });
   }
 
-  if (result.ok && result.mode === "live" && documentType === "proposal" && trace) {
+  if (isOperationalSuccess(result) && documentType === "proposal" && trace) {
     await appendEvents([
       createCanonicalEvent(trace, "proposal_sent", "internal", "SENT", {
         provider: result.provider,
@@ -205,8 +216,8 @@ async function processDocumentTask(task: ExecutionTaskRecord) {
   });
 
   await finalizeExecutionTask(task.id, {
-    status: result.ok ? "completed" : "failed",
-    lastError: result.ok ? undefined : result.detail,
+    status: isOperationalSuccess(result) ? "completed" : "failed",
+    lastError: isOperationalSuccess(result) ? undefined : buildTaskFailureDetail(result),
     payload: {
       ...(task.payload ?? {}),
       result,
@@ -216,7 +227,7 @@ async function processDocumentTask(task: ExecutionTaskRecord) {
   return {
     taskId: task.id,
     kind: task.kind,
-    ok: result.ok,
+    ok: isOperationalSuccess(result),
     detail: result.detail,
   };
 }
@@ -245,19 +256,19 @@ async function processEmailTask(task: ExecutionTaskRecord) {
   });
   if (trace) {
     await appendEvents([
-      createCanonicalEvent(trace, "followup_email_sent", "email", result.ok ? "SENT" : "FAILED"),
+      createCanonicalEvent(trace, "followup_email_sent", "email", isOperationalSuccess(result) ? "SENT" : "FAILED"),
     ]);
   }
-  if (result.ok && emailPayload.nurtureStageId) {
+  if (isOperationalSuccess(result) && emailPayload.nurtureStageId) {
     await markNurtureStageSent(task.leadKey, emailPayload.nurtureStageId);
   }
 
   await finalizeExecutionTask(task.id, {
-    status: result.ok ? "completed" : "failed",
-    lastError: result.ok ? undefined : result.detail,
+    status: isOperationalSuccess(result) ? "completed" : "failed",
+    lastError: isOperationalSuccess(result) ? undefined : buildTaskFailureDetail(result),
     payload: { ...(task.payload ?? {}), result },
   });
-  return { taskId: task.id, kind: task.kind, ok: result.ok, detail: result.detail };
+  return { taskId: task.id, kind: task.kind, ok: isOperationalSuccess(result), detail: result.detail };
 }
 
 async function processSmsTask(task: ExecutionTaskRecord) {
@@ -282,16 +293,16 @@ async function processSmsTask(task: ExecutionTaskRecord) {
   });
   if (trace) {
     await appendEvents([
-      createCanonicalEvent(trace, "followup_sms_sent", "sms", result.ok ? "SENT" : "FAILED"),
+      createCanonicalEvent(trace, "followup_sms_sent", "sms", isOperationalSuccess(result) ? "SENT" : "FAILED"),
     ]);
   }
 
   await finalizeExecutionTask(task.id, {
-    status: result.ok ? "completed" : "failed",
-    lastError: result.ok ? undefined : result.detail,
+    status: isOperationalSuccess(result) ? "completed" : "failed",
+    lastError: isOperationalSuccess(result) ? undefined : buildTaskFailureDetail(result),
     payload: { ...(task.payload ?? {}), result },
   });
-  return { taskId: task.id, kind: task.kind, ok: result.ok, detail: result.detail };
+  return { taskId: task.id, kind: task.kind, ok: isOperationalSuccess(result), detail: result.detail };
 }
 
 async function processWhatsAppTask(task: ExecutionTaskRecord) {
@@ -305,13 +316,13 @@ async function processWhatsAppTask(task: ExecutionTaskRecord) {
     body: String(whatsappPayload.body ?? ""),
   }), task.payload ?? undefined);
 
-  if (!result.ok && whatsappPayload.phone && whatsappPayload.body) {
+  if (!isOperationalSuccess(result) && whatsappPayload.phone && whatsappPayload.body) {
     const smsFallback = await safelyRunProviderAction("Easy Text Marketing", () => sendSmsAction({
       phone: String(whatsappPayload.phone ?? ""),
       body: String(whatsappPayload.body ?? ""),
     }), task.payload ?? undefined);
 
-    if (smsFallback.ok) {
+    if (isOperationalSuccess(smsFallback)) {
       await recordProviderExecution({
         leadKey: task.leadKey,
         provider: smsFallback.provider,
@@ -362,16 +373,16 @@ async function processWhatsAppTask(task: ExecutionTaskRecord) {
   });
   if (trace) {
     await appendEvents([
-      createCanonicalEvent(trace, "followup_whatsapp_sent", "whatsapp", result.ok ? "SENT" : "FAILED"),
+      createCanonicalEvent(trace, "followup_whatsapp_sent", "whatsapp", isOperationalSuccess(result) ? "SENT" : "FAILED"),
     ]);
   }
 
   await finalizeExecutionTask(task.id, {
-    status: result.ok ? "completed" : "failed",
-    lastError: result.ok ? undefined : result.detail,
+    status: isOperationalSuccess(result) ? "completed" : "failed",
+    lastError: isOperationalSuccess(result) ? undefined : buildTaskFailureDetail(result),
     payload: { ...(task.payload ?? {}), result },
   });
-  return { taskId: task.id, kind: task.kind, ok: result.ok, detail: result.detail };
+  return { taskId: task.id, kind: task.kind, ok: isOperationalSuccess(result), detail: result.detail };
 }
 
 async function processAlertTask(task: ExecutionTaskRecord) {
@@ -396,11 +407,49 @@ async function processAlertTask(task: ExecutionTaskRecord) {
   });
 
   await finalizeExecutionTask(task.id, {
-    status: result.ok ? "completed" : "failed",
-    lastError: result.ok ? undefined : result.detail,
+    status: isOperationalSuccess(result) ? "completed" : "failed",
+    lastError: isOperationalSuccess(result) ? undefined : buildTaskFailureDetail(result),
     payload: { ...(task.payload ?? {}), result },
   });
-  return { taskId: task.id, kind: task.kind, ok: result.ok, detail: result.detail };
+  return { taskId: task.id, kind: task.kind, ok: isOperationalSuccess(result), detail: result.detail };
+}
+
+async function processCommerceTask(task: ExecutionTaskRecord) {
+  const commercePayload =
+    task.payload?.commercePayload && typeof task.payload.commercePayload === "object"
+      ? task.payload.commercePayload as Record<string, unknown>
+      : {};
+  const trace =
+    task.payload?.trace && typeof task.payload.trace === "object"
+      ? task.payload.trace as TraceContext
+      : undefined;
+  const result = await safelyRunProviderAction("ThriveCart", () => startCommerceAction(commercePayload), commercePayload);
+
+  await recordProviderExecution({
+    leadKey: task.leadKey,
+    provider: result.provider,
+    kind: "commerce",
+    ok: isOperationalSuccess(result),
+    mode: result.mode,
+    detail: result.detail,
+    payload: result.payload,
+  });
+
+  if (trace && isOperationalSuccess(result)) {
+    await appendEvents([
+      createCanonicalEvent(trace, "checkout_started", "checkout", "STARTED", {
+        checkoutUrl: typeof result.payload?.checkoutUrl === "string" ? result.payload.checkoutUrl : undefined,
+        provider: result.provider,
+      }),
+    ]);
+  }
+
+  await finalizeExecutionTask(task.id, {
+    status: isOperationalSuccess(result) ? "completed" : "failed",
+    lastError: isOperationalSuccess(result) ? undefined : buildTaskFailureDetail(result),
+    payload: { ...(task.payload ?? {}), result },
+  });
+  return { taskId: task.id, kind: task.kind, ok: isOperationalSuccess(result), detail: result.detail };
 }
 
 export async function processExecutionTasks(limit = 25) {
@@ -441,6 +490,10 @@ export async function processExecutionTasks(limit = 25) {
     }
     if (task.kind === "alert") {
       results.push(await processAlertTask(task));
+      continue;
+    }
+    if (task.kind === "commerce") {
+      results.push(await processCommerceTask(task));
     }
   }
 

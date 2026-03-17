@@ -155,7 +155,7 @@ export async function PublicEndUserFunnelPage({
       </section>
 
       <PublicLeadCaptureForm
-        source="manual"
+        source="public_funnel"
         family={profile.family}
         niche={niche.slug}
         service={funnel.service}

@@ -26,6 +26,12 @@ export async function POST(request: Request) {
     requestId?: string;
     action?: "accept" | "decline" | "complete";
     note?: string;
+    invoiceNumber?: string;
+    invoiceStatus?: "not-issued" | "issued" | "sent" | "collected";
+    paymentStatus?: "not-requested" | "pending" | "paid" | "failed";
+    paymentMethod?: "cash" | "card" | "ach" | "financing" | "check" | "digital-link" | "other";
+    paymentAmount?: number;
+    paidAt?: string;
     revenueValue?: number;
     marginValue?: number;
     complaintStatus?: "none" | "minor" | "major";
@@ -43,6 +49,12 @@ export async function POST(request: Request) {
         providerId: auth.session.providerId,
         actorEmail: auth.session.email,
         note: body.note,
+        invoiceNumber: typeof body.invoiceNumber === "string" && body.invoiceNumber.trim() ? body.invoiceNumber.trim() : undefined,
+        invoiceStatus: body.invoiceStatus,
+        paymentStatus: body.paymentStatus,
+        paymentMethod: body.paymentMethod,
+        paymentAmount: typeof body.paymentAmount === "number" && Number.isFinite(body.paymentAmount) ? body.paymentAmount : undefined,
+        paidAt: typeof body.paidAt === "string" && body.paidAt.trim() ? new Date(body.paidAt).toISOString() : undefined,
         revenueValue: typeof body.revenueValue === "number" && Number.isFinite(body.revenueValue) ? body.revenueValue : undefined,
         marginValue: typeof body.marginValue === "number" && Number.isFinite(body.marginValue) ? body.marginValue : undefined,
         complaintStatus: body.complaintStatus,

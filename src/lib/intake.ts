@@ -24,7 +24,7 @@ import {
   upsertLeadRecord,
   upsertProviderDispatchRequest,
 } from "./runtime-store.ts";
-import { getOperationalRuntimeConfig } from "./runtime-config.ts";
+import { getOperationalRuntimeConfig, upsertDispatchProviderCandidate } from "./runtime-config.ts";
 import {
   buildLeadKey,
   createCanonicalEvent,
@@ -41,6 +41,7 @@ export type IntakeSource =
   | "chat"
   | "webinar"
   | "checkout"
+  | "public_funnel"
   | "manual";
 
 export interface HostedLeadPayload {
@@ -137,6 +138,7 @@ const VALID_SOURCES: IntakeSource[] = [
   "chat",
   "webinar",
   "checkout",
+  "public_funnel",
   "manual",
 ];
 
@@ -487,7 +489,7 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
   });
 
   const now = new Date().toISOString();
-  const record = await upsertLeadRecord({
+  let record = await upsertLeadRecord({
     leadKey,
     trace,
     firstName,
@@ -521,6 +523,35 @@ export async function processLeadIntake(payload: HostedLeadPayload): Promise<Int
       operatingModel: decision.operatingModel,
     },
   });
+
+  if (decision.operatingModel === "plumbing-provider-network" && payload.marketplaceAudience === "provider" && !payload.dryRun) {
+    const providerCandidate = await upsertDispatchProviderCandidate(
+      {
+        email: normalizedEmail,
+        phone: normalizedPhone,
+        company: payload.company,
+        firstName,
+        lastName,
+        state: payload.state,
+        county: payload.county,
+        city: payload.city,
+        zip: payload.zip,
+      },
+      normalizedEmail ?? "system@lead-os.local",
+    );
+
+    if (providerCandidate) {
+      record.metadata.providerOnboarding = {
+        providerId: providerCandidate.id,
+        providerLabel: providerCandidate.label,
+        provisionedAt: now,
+        status: providerCandidate.active ? "active" : "candidate",
+        acceptingNewJobs: providerCandidate.acceptingNewJobs,
+      };
+      record.updatedAt = new Date().toISOString();
+      record = await upsertLeadRecord(record);
+    }
+  }
 
   const events = [
     createCanonicalEvent(trace, "lead_validated", "internal", "VALIDATED", {

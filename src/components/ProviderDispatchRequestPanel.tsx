@@ -26,6 +26,12 @@ export function ProviderDispatchRequestPanel({ requests }: Props) {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [revenueValues, setRevenueValues] = useState<Record<string, string>>({});
   const [marginValues, setMarginValues] = useState<Record<string, string>>({});
+  const [invoiceNumbers, setInvoiceNumbers] = useState<Record<string, string>>({});
+  const [invoiceStatuses, setInvoiceStatuses] = useState<Record<string, "not-issued" | "issued" | "sent" | "collected">>({});
+  const [paymentStatuses, setPaymentStatuses] = useState<Record<string, "not-requested" | "pending" | "paid" | "failed">>({});
+  const [paymentMethods, setPaymentMethods] = useState<Record<string, "cash" | "card" | "ach" | "financing" | "check" | "digital-link" | "other">>({});
+  const [paymentAmounts, setPaymentAmounts] = useState<Record<string, string>>({});
+  const [paidAtValues, setPaidAtValues] = useState<Record<string, string>>({});
   const [reviewRatings, setReviewRatings] = useState<Record<string, string>>({});
   const [complaintStatuses, setComplaintStatuses] = useState<Record<string, "none" | "minor" | "major">>({});
   const [reviewStatuses, setReviewStatuses] = useState<Record<string, "not-requested" | "requested" | "positive" | "mixed" | "negative">>({});
@@ -50,6 +56,12 @@ export function ProviderDispatchRequestPanel({ requests }: Props) {
           requestId,
           action,
           note: notes[requestId] ?? "",
+          invoiceNumber: invoiceNumbers[requestId]?.trim() ? invoiceNumbers[requestId] : undefined,
+          invoiceStatus: invoiceStatuses[requestId] ?? "issued",
+          paymentStatus: paymentStatuses[requestId] ?? "pending",
+          paymentMethod: paymentMethods[requestId],
+          paymentAmount: paymentAmounts[requestId]?.trim() ? Number(paymentAmounts[requestId]) : undefined,
+          paidAt: paidAtValues[requestId]?.trim() ? paidAtValues[requestId] : undefined,
           revenueValue: revenueValues[requestId]?.trim() ? Number(revenueValues[requestId]) : undefined,
           marginValue: marginValues[requestId]?.trim() ? Number(marginValues[requestId]) : undefined,
           complaintStatus: complaintStatuses[requestId] ?? "none",
@@ -128,6 +140,88 @@ export function ProviderDispatchRequestPanel({ requests }: Props) {
                 ) : accepted ? (
                   <div className="stack-grid">
                     <div className="portal-data-list compact">
+                      <div>
+                        <dt>Invoice #</dt>
+                        <dd>
+                          <input
+                            value={invoiceNumbers[request.id] ?? ""}
+                            onChange={(event) => setInvoiceNumbers((current) => ({ ...current, [request.id]: event.target.value }))}
+                            placeholder="INV-10024"
+                            disabled={isPending}
+                          />
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Invoice status</dt>
+                        <dd>
+                          <select
+                            value={invoiceStatuses[request.id] ?? "issued"}
+                            onChange={(event) => setInvoiceStatuses((current) => ({ ...current, [request.id]: event.target.value as "not-issued" | "issued" | "sent" | "collected" }))}
+                            disabled={isPending}
+                          >
+                            <option value="not-issued">Not issued</option>
+                            <option value="issued">Issued</option>
+                            <option value="sent">Sent</option>
+                            <option value="collected">Collected</option>
+                          </select>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Payment status</dt>
+                        <dd>
+                          <select
+                            value={paymentStatuses[request.id] ?? "pending"}
+                            onChange={(event) => setPaymentStatuses((current) => ({ ...current, [request.id]: event.target.value as "not-requested" | "pending" | "paid" | "failed" }))}
+                            disabled={isPending}
+                          >
+                            <option value="not-requested">Not requested</option>
+                            <option value="pending">Pending</option>
+                            <option value="paid">Paid</option>
+                            <option value="failed">Failed</option>
+                          </select>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Payment method</dt>
+                        <dd>
+                          <select
+                            value={paymentMethods[request.id] ?? "card"}
+                            onChange={(event) => setPaymentMethods((current) => ({ ...current, [request.id]: event.target.value as "cash" | "card" | "ach" | "financing" | "check" | "digital-link" | "other" }))}
+                            disabled={isPending}
+                          >
+                            <option value="cash">Cash</option>
+                            <option value="card">Card</option>
+                            <option value="ach">ACH</option>
+                            <option value="financing">Financing</option>
+                            <option value="check">Check</option>
+                            <option value="digital-link">Digital link</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Payment amount</dt>
+                        <dd>
+                          <input
+                            value={paymentAmounts[request.id] ?? ""}
+                            onChange={(event) => setPaymentAmounts((current) => ({ ...current, [request.id]: event.target.value }))}
+                            inputMode="decimal"
+                            placeholder="Collected amount"
+                            disabled={isPending}
+                          />
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Paid at</dt>
+                        <dd>
+                          <input
+                            type="datetime-local"
+                            value={paidAtValues[request.id] ?? ""}
+                            onChange={(event) => setPaidAtValues((current) => ({ ...current, [request.id]: event.target.value }))}
+                            disabled={isPending}
+                          />
+                        </dd>
+                      </div>
                       <div>
                         <dt>Revenue</dt>
                         <dd>

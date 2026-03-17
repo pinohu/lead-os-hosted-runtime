@@ -8,6 +8,7 @@ import type {
 import { createCanonicalEvent } from "./trace.ts";
 import {
   appendEvents,
+  enqueueExecutionTask,
   getBookingJobs,
   getLeadRecord,
   recordOperatorAction,
@@ -21,6 +22,12 @@ type ApplyPlumbingDispatchActionInput = {
   actionType: PlumbingOperatorActionType;
   actorEmail: string;
   note?: string;
+  invoiceNumber?: string;
+  invoiceStatus?: "not-issued" | "issued" | "sent" | "collected";
+  paymentStatus?: "not-requested" | "pending" | "paid" | "failed";
+  paymentMethod?: "cash" | "card" | "ach" | "financing" | "check" | "digital-link" | "other";
+  paymentAmount?: number;
+  paidAt?: string;
   revenueValue?: number;
   marginValue?: number;
   complaintStatus?: "none" | "minor" | "major";
@@ -66,6 +73,12 @@ function buildActionMutation(
   actorEmail: string,
   note: string | undefined,
   provider: string | undefined,
+  invoiceNumber: string | undefined,
+  invoiceStatus: "not-issued" | "issued" | "sent" | "collected" | undefined,
+  paymentStatus: "not-requested" | "pending" | "paid" | "failed" | undefined,
+  paymentMethod: "cash" | "card" | "ach" | "financing" | "check" | "digital-link" | "other" | undefined,
+  paymentAmount: number | undefined,
+  paidAt: string | undefined,
   revenueValue: number | undefined,
   marginValue: number | undefined,
   complaintStatus: "none" | "minor" | "major" | undefined,
@@ -87,6 +100,10 @@ function buildActionMutation(
   const normalizedComplaintStatus = complaintStatus ?? "none";
   const normalizedReviewStatus = reviewStatus ?? "not-requested";
   const normalizedRefundIssued = refundIssued ?? false;
+  const paymentCollected =
+    paymentStatus === "paid" ||
+    Boolean(paidAt) ||
+    (typeof paymentAmount === "number" && paymentAmount > 0);
 
   switch (actionType) {
     case "dispatch-now":
@@ -101,6 +118,12 @@ function buildActionMutation(
           recordedAt,
           note,
           provider,
+          invoiceNumber,
+          invoiceStatus: invoiceStatus ?? "not-issued",
+          paymentStatus: paymentStatus ?? "not-requested",
+          paymentMethod,
+          paymentAmount,
+          paidAt,
           revenueValue,
           marginValue,
           marginBand: derivedMarginBand,
@@ -122,6 +145,12 @@ function buildActionMutation(
           recordedAt,
           note,
           provider,
+          invoiceNumber,
+          invoiceStatus: invoiceStatus ?? "not-issued",
+          paymentStatus: paymentStatus ?? "not-requested",
+          paymentMethod,
+          paymentAmount,
+          paidAt,
           revenueValue,
           marginValue,
           marginBand: derivedMarginBand,
@@ -144,6 +173,12 @@ function buildActionMutation(
           recordedAt,
           note,
           provider,
+          invoiceNumber,
+          invoiceStatus: invoiceStatus ?? "not-issued",
+          paymentStatus: paymentStatus ?? "not-requested",
+          paymentMethod,
+          paymentAmount,
+          paidAt,
           revenueValue,
           marginValue,
           marginBand: derivedMarginBand,
@@ -167,6 +202,12 @@ function buildActionMutation(
           recordedAt,
           note,
           provider,
+          invoiceNumber,
+          invoiceStatus: invoiceStatus ?? "issued",
+          paymentStatus: paymentStatus ?? "pending",
+          paymentMethod,
+          paymentAmount,
+          paidAt,
           revenueValue,
           marginValue,
           marginBand: derivedMarginBand,
@@ -178,18 +219,26 @@ function buildActionMutation(
       };
     case "mark-completed":
       return {
-        stage: "active",
-        status: "JOB-COMPLETED",
+        stage: paymentCollected ? "active" : "converted",
+        status: paymentCollected ? "PAYMENT-COLLECTED" : "JOB-COMPLETED-AWAITING-PAYMENT",
         hot: false,
         detail: "Operator recorded this plumbing job as completed.",
         leadMilestones: ["lead-m2-return-engaged", "lead-m3-booked-or-offered"],
-        customerMilestones: ["customer-m1-onboarded", "customer-m2-activated", "customer-m3-value-realized"],
+        customerMilestones: paymentCollected
+          ? ["customer-m1-onboarded", "customer-m2-activated", "customer-m3-value-realized"]
+          : ["customer-m1-onboarded", "customer-m2-activated"],
         outcome: {
           status: "completed",
           actorEmail,
           recordedAt,
           note,
           provider,
+          invoiceNumber,
+          invoiceStatus: invoiceStatus ?? (paymentCollected ? "collected" : "issued"),
+          paymentStatus: paymentStatus ?? (paymentCollected ? "paid" : "pending"),
+          paymentMethod,
+          paymentAmount,
+          paidAt,
           revenueValue,
           marginValue,
           marginBand: derivedMarginBand,
@@ -212,6 +261,12 @@ function buildActionMutation(
           recordedAt,
           note,
           provider,
+          invoiceNumber,
+          invoiceStatus: invoiceStatus ?? "not-issued",
+          paymentStatus: paymentStatus ?? "not-requested",
+          paymentMethod,
+          paymentAmount,
+          paidAt,
           revenueValue,
           marginValue,
           marginBand: derivedMarginBand,
@@ -229,6 +284,12 @@ export async function applyPlumbingDispatchAction({
   actionType,
   actorEmail,
   note,
+  invoiceNumber,
+  invoiceStatus,
+  paymentStatus,
+  paymentMethod,
+  paymentAmount,
+  paidAt,
   revenueValue,
   marginValue,
   complaintStatus,
@@ -253,6 +314,12 @@ export async function applyPlumbingDispatchAction({
     actorEmail,
     note,
     currentProvider,
+    invoiceNumber,
+    invoiceStatus,
+    paymentStatus,
+    paymentMethod,
+    paymentAmount,
+    paidAt,
     revenueValue,
     marginValue,
     complaintStatus,
@@ -300,6 +367,12 @@ export async function applyPlumbingDispatchAction({
         actionType,
         actorEmail,
         outcomeStatus: mutation.outcome.status,
+        invoiceNumber: mutation.outcome.invoiceNumber,
+        invoiceStatus: mutation.outcome.invoiceStatus,
+        paymentStatus: mutation.outcome.paymentStatus,
+        paymentMethod: mutation.outcome.paymentMethod,
+        paymentAmount: mutation.outcome.paymentAmount,
+        paidAt: mutation.outcome.paidAt,
         revenueValue,
         marginValue,
         complaintStatus: mutation.outcome.complaintStatus,
@@ -318,6 +391,12 @@ export async function applyPlumbingDispatchAction({
     payload: {
       note,
       provider: currentProvider,
+      invoiceNumber: mutation.outcome.invoiceNumber,
+      invoiceStatus: mutation.outcome.invoiceStatus,
+      paymentStatus: mutation.outcome.paymentStatus,
+      paymentMethod: mutation.outcome.paymentMethod,
+      paymentAmount: mutation.outcome.paymentAmount,
+      paidAt: mutation.outcome.paidAt,
       revenueValue,
       marginValue,
       complaintStatus: mutation.outcome.complaintStatus,
@@ -334,6 +413,12 @@ export async function applyPlumbingDispatchAction({
       actorEmail,
       note,
       provider: currentProvider,
+      invoiceNumber: mutation.outcome.invoiceNumber,
+      invoiceStatus: mutation.outcome.invoiceStatus,
+      paymentStatus: mutation.outcome.paymentStatus,
+      paymentMethod: mutation.outcome.paymentMethod,
+      paymentAmount: mutation.outcome.paymentAmount,
+      paidAt: mutation.outcome.paidAt,
       revenueValue,
       marginValue,
       marginBand: mutation.outcome.marginBand,
@@ -347,6 +432,12 @@ export async function applyPlumbingDispatchAction({
       actorEmail,
       note,
       provider: currentProvider,
+      invoiceNumber: mutation.outcome.invoiceNumber,
+      invoiceStatus: mutation.outcome.invoiceStatus,
+      paymentStatus: mutation.outcome.paymentStatus,
+      paymentMethod: mutation.outcome.paymentMethod,
+      paymentAmount: mutation.outcome.paymentAmount,
+      paidAt: mutation.outcome.paidAt,
       revenueValue,
       marginValue,
       marginBand: mutation.outcome.marginBand,
@@ -369,8 +460,42 @@ export async function applyPlumbingDispatchAction({
         stage: lead.stage,
       })
     ),
+    ...((mutation.outcome.paymentStatus === "paid" || mutation.outcome.paidAt || mutation.outcome.paymentAmount)
+      ? [
+          createCanonicalEvent(lead.trace, "payment_received", "checkout", "PAID", {
+            paymentAmount: mutation.outcome.paymentAmount ?? mutation.outcome.revenueValue,
+            paymentMethod: mutation.outcome.paymentMethod,
+            paidAt: mutation.outcome.paidAt ?? now,
+            invoiceNumber: mutation.outcome.invoiceNumber,
+            provider: currentProvider,
+          }),
+        ]
+      : []),
   ];
   await appendEvents(events);
+
+  if (actionType === "mark-completed" && mutation.outcome.paymentStatus !== "paid" && mutation.outcome.paymentMethod === "digital-link") {
+    await enqueueExecutionTask({
+      leadKey,
+      kind: "commerce",
+      provider: "ThriveCart",
+      dedupeKey: `commerce:${leadKey}:operator-complete`,
+      payload: {
+        trace: lead.trace,
+        commercePayload: {
+          leadKey,
+          email: lead.email,
+          phone: lead.phone,
+          firstName: lead.firstName,
+          lastName: lead.lastName,
+          revenueValue: mutation.outcome.revenueValue,
+          paymentAmount: mutation.outcome.paymentAmount ?? mutation.outcome.revenueValue,
+          invoiceNumber: mutation.outcome.invoiceNumber,
+          note,
+        },
+      },
+    });
+  }
 
   return {
     lead,

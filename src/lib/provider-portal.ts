@@ -3,6 +3,7 @@ import { createCanonicalEvent } from "./trace.ts";
 import { getDispatchProviderById, updateDispatchProviderSelfServe } from "./runtime-config.ts";
 import {
   appendEvents,
+  enqueueExecutionTask,
   getBookingJobs,
   getLeadRecord,
   getProviderDispatchRequestById,
@@ -188,6 +189,12 @@ export async function recordProviderDispatchCompletion(input: {
   providerId: string;
   actorEmail: string;
   note?: string;
+  invoiceNumber?: string;
+  invoiceStatus?: "not-issued" | "issued" | "sent" | "collected";
+  paymentStatus?: "not-requested" | "pending" | "paid" | "failed";
+  paymentMethod?: "cash" | "card" | "ach" | "financing" | "check" | "digital-link" | "other";
+  paymentAmount?: number;
+  paidAt?: string;
   revenueValue?: number;
   marginValue?: number;
   complaintStatus?: "none" | "minor" | "major";
@@ -221,13 +228,23 @@ export async function recordProviderDispatchCompletion(input: {
           ? "thin"
           : input.marginValue < 500
             ? "healthy"
-            : "exceptional";
+          : "exceptional";
+  const paymentCollected =
+    input.paymentStatus === "paid" ||
+    Boolean(input.paidAt) ||
+    (typeof input.paymentAmount === "number" && input.paymentAmount > 0);
   const outcome: PlumbingJobOutcome = {
     status: "completed",
     actorEmail: input.actorEmail,
     recordedAt: now,
     note: input.note?.trim() || undefined,
     provider: provider.label,
+    invoiceNumber: input.invoiceNumber,
+    invoiceStatus: input.invoiceStatus ?? (paymentCollected ? "collected" : "issued"),
+    paymentStatus: input.paymentStatus ?? (paymentCollected ? "paid" : "pending"),
+    paymentMethod: input.paymentMethod,
+    paymentAmount: input.paymentAmount,
+    paidAt: input.paidAt,
     revenueValue: input.revenueValue,
     marginValue: input.marginValue,
     marginBand,
@@ -243,6 +260,12 @@ export async function recordProviderDispatchCompletion(input: {
     ...(request.payload ?? {}),
     completionRecordedAt: now,
     completionRecordedBy: input.actorEmail,
+    invoiceNumber: outcome.invoiceNumber,
+    invoiceStatus: outcome.invoiceStatus,
+    paymentStatus: outcome.paymentStatus,
+    paymentMethod: outcome.paymentMethod,
+    paymentAmount: outcome.paymentAmount,
+    paidAt: outcome.paidAt,
     revenueValue: input.revenueValue,
     marginValue: input.marginValue,
     complaintStatus: outcome.complaintStatus,
@@ -252,8 +275,8 @@ export async function recordProviderDispatchCompletion(input: {
   };
   const updatedRequest = await upsertProviderDispatchRequest(request);
 
-  lead.stage = "active";
-  lead.status = "JOB-COMPLETED";
+  lead.stage = paymentCollected ? "active" : "converted";
+  lead.status = paymentCollected ? "PAYMENT-COLLECTED" : "JOB-COMPLETED-AWAITING-PAYMENT";
   lead.hot = false;
   lead.updatedAt = now;
   lead.metadata.providerDispatch = {
@@ -271,7 +294,9 @@ export async function recordProviderDispatchCompletion(input: {
   ensureLeadMilestone(lead, "lead-m3-booked-or-offered");
   ensureCustomerMilestone(lead, "customer-m1-onboarded");
   ensureCustomerMilestone(lead, "customer-m2-activated");
-  ensureCustomerMilestone(lead, "customer-m3-value-realized");
+  if (paymentCollected) {
+    ensureCustomerMilestone(lead, "customer-m3-value-realized");
+  }
   await upsertLeadRecord(lead);
 
   const bookingJobs = await getBookingJobs(lead.leadKey);
@@ -285,6 +310,12 @@ export async function recordProviderDispatchCompletion(input: {
       providerId: provider.id,
       requestId: updatedRequest.id,
       completedAt: now,
+      invoiceNumber: outcome.invoiceNumber,
+      invoiceStatus: outcome.invoiceStatus,
+      paymentStatus: outcome.paymentStatus,
+      paymentMethod: outcome.paymentMethod,
+      paymentAmount: outcome.paymentAmount,
+      paidAt: outcome.paidAt,
       revenueValue: input.revenueValue,
       marginValue: input.marginValue,
       complaintStatus: outcome.complaintStatus,
@@ -319,6 +350,12 @@ export async function recordProviderDispatchCompletion(input: {
       requestId: updatedRequest.id,
       providerId: provider.id,
       actorEmail: input.actorEmail,
+      invoiceNumber: outcome.invoiceNumber,
+      invoiceStatus: outcome.invoiceStatus,
+      paymentStatus: outcome.paymentStatus,
+      paymentMethod: outcome.paymentMethod,
+      paymentAmount: outcome.paymentAmount,
+      paidAt: outcome.paidAt,
       revenueValue: input.revenueValue,
       marginValue: input.marginValue,
       complaintStatus: outcome.complaintStatus,
@@ -334,6 +371,12 @@ export async function recordProviderDispatchCompletion(input: {
       actorEmail: input.actorEmail,
       provider: provider.label,
       note: input.note?.trim() || undefined,
+      invoiceNumber: outcome.invoiceNumber,
+      invoiceStatus: outcome.invoiceStatus,
+      paymentStatus: outcome.paymentStatus,
+      paymentMethod: outcome.paymentMethod,
+      paymentAmount: outcome.paymentAmount,
+      paidAt: outcome.paidAt,
       revenueValue: input.revenueValue,
       marginValue: input.marginValue,
       marginBand,
@@ -342,7 +385,41 @@ export async function recordProviderDispatchCompletion(input: {
       reviewRating: outcome.reviewRating,
       refundIssued: outcome.refundIssued,
     }),
+    ...(paymentCollected
+      ? [
+          createCanonicalEvent(lead.trace, "payment_received", "checkout", "PAID", {
+            paymentAmount: outcome.paymentAmount ?? outcome.revenueValue,
+            paymentMethod: outcome.paymentMethod,
+            paidAt: outcome.paidAt ?? now,
+            invoiceNumber: outcome.invoiceNumber,
+            provider: provider.label,
+          }),
+        ]
+      : []),
   ]);
+
+  if (!paymentCollected && outcome.paymentMethod === "digital-link") {
+    await enqueueExecutionTask({
+      leadKey: lead.leadKey,
+      kind: "commerce",
+      provider: "ThriveCart",
+      dedupeKey: `commerce:${lead.leadKey}:${updatedRequest.id}`,
+      payload: {
+        trace: lead.trace,
+        commercePayload: {
+          leadKey: lead.leadKey,
+          email: lead.email,
+          phone: lead.phone,
+          firstName: lead.firstName,
+          lastName: lead.lastName,
+          revenueValue: outcome.revenueValue,
+          paymentAmount: outcome.paymentAmount ?? outcome.revenueValue,
+          invoiceNumber: outcome.invoiceNumber,
+          note: outcome.note,
+        },
+      },
+    });
+  }
 
   return {
     request: updatedRequest,

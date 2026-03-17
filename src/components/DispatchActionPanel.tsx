@@ -45,6 +45,12 @@ export function DispatchActionPanel({
   const router = useRouter();
   const [pendingAction, setPendingAction] = useState<PlumbingOperatorActionType | null>(null);
   const [note, setNote] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [invoiceStatus, setInvoiceStatus] = useState<"not-issued" | "issued" | "sent" | "collected">("issued");
+  const [paymentStatus, setPaymentStatus] = useState<"not-requested" | "pending" | "paid" | "failed">("pending");
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "ach" | "financing" | "check" | "digital-link" | "other">("card");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paidAt, setPaidAt] = useState("");
   const [revenueValue, setRevenueValue] = useState("");
   const [marginValue, setMarginValue] = useState("");
   const [complaintStatus, setComplaintStatus] = useState<"none" | "minor" | "major">("none");
@@ -72,6 +78,12 @@ export function DispatchActionPanel({
           leadKey,
           actionType,
           note: note.trim() || undefined,
+          invoiceNumber: invoiceNumber.trim() || undefined,
+          invoiceStatus,
+          paymentStatus,
+          paymentMethod,
+          paymentAmount: paymentAmount.trim() ? Number(paymentAmount) : undefined,
+          paidAt: paidAt.trim() || undefined,
           revenueValue: revenueValue.trim() ? Number(revenueValue) : undefined,
           marginValue: marginValue.trim() ? Number(marginValue) : undefined,
           complaintStatus,
@@ -117,9 +129,76 @@ export function DispatchActionPanel({
             placeholder="Add operator context for this dispatch move"
             rows={3}
           />
-          <label htmlFor={`dispatch-revenue-${leadKey}`} className="sr-only">
-            Revenue value
+          <label htmlFor={`dispatch-invoice-${leadKey}`} className="sr-only">
+            Invoice number
           </label>
+          <input
+            id={`dispatch-invoice-${leadKey}`}
+            className="dispatch-action-revenue"
+            value={invoiceNumber}
+            onChange={(event) => setInvoiceNumber(event.target.value)}
+            placeholder="Invoice number"
+          />
+          <div className="portal-data-list compact">
+            <div>
+              <dt>Invoice status</dt>
+              <dd>
+                <select value={invoiceStatus} onChange={(event) => setInvoiceStatus(event.target.value as "not-issued" | "issued" | "sent" | "collected")}>
+                  <option value="not-issued">Not issued</option>
+                  <option value="issued">Issued</option>
+                  <option value="sent">Sent</option>
+                  <option value="collected">Collected</option>
+                </select>
+              </dd>
+            </div>
+            <div>
+              <dt>Payment status</dt>
+              <dd>
+                <select value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value as "not-requested" | "pending" | "paid" | "failed")}>
+                  <option value="not-requested">Not requested</option>
+                  <option value="pending">Pending</option>
+                  <option value="paid">Paid</option>
+                  <option value="failed">Failed</option>
+                </select>
+              </dd>
+            </div>
+            <div>
+              <dt>Payment method</dt>
+              <dd>
+                <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as "cash" | "card" | "ach" | "financing" | "check" | "digital-link" | "other")}>
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="ach">ACH</option>
+                  <option value="financing">Financing</option>
+                  <option value="check">Check</option>
+                  <option value="digital-link">Digital link</option>
+                  <option value="other">Other</option>
+                </select>
+              </dd>
+            </div>
+            <div>
+              <dt>Payment amount</dt>
+              <dd>
+                <input
+                  className="dispatch-action-revenue"
+                  value={paymentAmount}
+                  onChange={(event) => setPaymentAmount(event.target.value)}
+                  inputMode="decimal"
+                  placeholder="Collected amount"
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>Paid at</dt>
+              <dd>
+                <input
+                  type="datetime-local"
+                  value={paidAt}
+                  onChange={(event) => setPaidAt(event.target.value)}
+                />
+              </dd>
+            </div>
+          </div>
           <input
             id={`dispatch-revenue-${leadKey}`}
             className="dispatch-action-revenue"

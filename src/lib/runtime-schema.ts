@@ -107,6 +107,13 @@ export interface PlumbingJobOutcome {
   actorEmail: string;
   recordedAt: string;
   note?: string;
+  invoiceNumber?: string;
+  invoiceStatus?: "not-issued" | "issued" | "sent" | "collected";
+  paymentStatus?: "not-requested" | "pending" | "paid" | "failed";
+  paymentMethod?: "cash" | "card" | "ach" | "financing" | "check" | "digital-link" | "other";
+  paymentAmount?: number;
+  paidAt?: string;
+  checkoutUrl?: string;
   revenueValue?: number;
   marginValue?: number;
   marginBand?: "negative" | "thin" | "healthy" | "exceptional";

@@ -4,6 +4,7 @@ import { applyPlumbingDispatchAction } from "../src/lib/dispatch-ops.ts";
 import {
   getBookingJobs,
   getCanonicalEvents,
+  getExecutionTasks,
   getLeadRecord,
   getOperatorActions,
   resetRuntimeStore,
@@ -112,6 +113,12 @@ test("dispatch completion records customer value milestones and revenue", async 
     leadKey: "email:dispatch@example.com",
     actionType: "mark-completed",
     actorEmail: "operator@example.com",
+    invoiceNumber: "INV-5500",
+    invoiceStatus: "collected",
+    paymentStatus: "paid",
+    paymentMethod: "card",
+    paymentAmount: 850,
+    paidAt: new Date("2026-03-15T12:00:00Z").toISOString(),
     revenueValue: 850,
     marginValue: 320,
     complaintStatus: "minor",
@@ -123,6 +130,7 @@ test("dispatch completion records customer value milestones and revenue", async 
 
   const storedLead = await getLeadRecord("email:dispatch@example.com");
   assert.equal(storedLead?.stage, "active");
+  assert.equal(storedLead?.status, "PAYMENT-COLLECTED");
   assert.deepEqual(storedLead?.milestones.customerMilestones, [
     "customer-m1-onboarded",
     "customer-m2-activated",
@@ -144,4 +152,33 @@ test("dispatch completion records customer value milestones and revenue", async 
     (storedLead?.metadata.plumbingOutcome as { complaintStatus?: string } | undefined)?.complaintStatus,
     "minor",
   );
+});
+
+test("dispatch completion awaiting payment keeps value-realized milestone closed and queues commerce handoff", async () => {
+  await resetRuntimeStore();
+  await upsertLeadRecord(buildPlumbingLead());
+
+  await applyPlumbingDispatchAction({
+    leadKey: "email:dispatch@example.com",
+    actionType: "mark-completed",
+    actorEmail: "operator@example.com",
+    invoiceNumber: "INV-5501",
+    invoiceStatus: "sent",
+    paymentStatus: "pending",
+    paymentMethod: "digital-link",
+    revenueValue: 850,
+    marginValue: 320,
+    note: "Completed and sent payment link.",
+  });
+
+  const storedLead = await getLeadRecord("email:dispatch@example.com");
+  const executionTasks = await getExecutionTasks({ leadKey: "email:dispatch@example.com" });
+
+  assert.equal(storedLead?.stage, "converted");
+  assert.equal(storedLead?.status, "JOB-COMPLETED-AWAITING-PAYMENT");
+  assert.deepEqual(storedLead?.milestones.customerMilestones, [
+    "customer-m1-onboarded",
+    "customer-m2-activated",
+  ]);
+  assert.ok(executionTasks.some((task) => task.kind === "commerce" && task.status === "pending"));
 });

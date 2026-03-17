@@ -14,6 +14,7 @@ import {
 } from "../src/lib/runtime-store.ts";
 import { tenantConfig } from "../src/lib/tenant.ts";
 import { updateOperationalRuntimeConfig } from "../src/lib/runtime-config.ts";
+import { getDispatchProviderByEmail } from "../src/lib/runtime-config.ts";
 
 test("validateLeadPayload requires a source and identity", () => {
   assert.throws(() => validateLeadPayload({} as never), /Lead source is required/);
@@ -49,6 +50,20 @@ test("persistLead honors a preferred funnel family when one is supplied", async 
 
   assert.equal(result.decision.family, "webinar");
   assert.match(result.decision.reason, /honoring the preferred funnel family/i);
+});
+
+test("persistLead accepts the public funnel source and preserves attribution", async () => {
+  await resetRuntimeStore();
+  const result = await persistLead({
+    source: "public_funnel",
+    email: "publicfunnel@test.com",
+    firstName: "Public",
+    niche: "plumbing",
+    service: "emergency-plumbing",
+  });
+
+  assert.equal(result.record.source, "public_funnel");
+  assert.equal(result.trace.source, "public_funnel");
 });
 
 test("default funnel graphs exist for canonical families", () => {
@@ -237,6 +252,34 @@ test("persistLead creates provider dispatch requests for plumbing dispatch leads
   assert.equal(requests[0]?.status, "pending");
 });
 
+test("provider-network intake provisions a candidate dispatch provider record", async () => {
+  await resetRuntimeStore();
+
+  const result = await persistLead({
+    source: "public_funnel",
+    email: "owner@candidateplumbing.com",
+    phone: "5551234567",
+    firstName: "Casey",
+    lastName: "Owner",
+    company: "Candidate Plumbing",
+    niche: "plumbing",
+    service: "provider-network",
+    marketplaceAudience: "provider",
+    city: "Dallas",
+    state: "Texas",
+    zip: "75201",
+  });
+
+  assert.equal(result.decision.operatingModel, "plumbing-provider-network");
+
+  const provider = await getDispatchProviderByEmail("owner@candidateplumbing.com");
+  assert.ok(provider);
+  assert.equal(provider?.label, "Candidate Plumbing");
+  assert.equal(provider?.active, false);
+  assert.equal(provider?.acceptingNewJobs, false);
+  assert.equal((result.record.metadata.providerOnboarding as { providerId?: string } | undefined)?.providerId, provider?.id);
+});
+
 test("processExecutionTasks drains queued workflow and booking work", async () => {
   await resetRuntimeStore();
   const result = await persistLead({
@@ -251,6 +294,10 @@ test("processExecutionTasks drains queued workflow and booking work", async () =
 
   const remaining = await getExecutionTasks({ leadKey: result.leadKey, status: "pending" });
   assert.equal(remaining.length, 0);
+
+  const failed = await getExecutionTasks({ leadKey: result.leadKey, status: "failed" });
+  assert.ok(failed.length >= 1);
+  assert.ok(failed.every((task) => typeof task.lastError === "string" && task.lastError.length > 0));
 
   const runs = await getWorkflowRuns(result.leadKey);
   assert.ok(runs.some((run) => run.eventName === "lead.captured"));

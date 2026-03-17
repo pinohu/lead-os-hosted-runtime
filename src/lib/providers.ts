@@ -1098,6 +1098,50 @@ function buildDocumentData(payload: Record<string, unknown>) {
 }
 
 export function getAutomationHealth() {
+  const resolveCapability = (key: keyof typeof integrationMap, value: IntegrationConfig): ProviderCapabilityState => {
+    if (!value.configured) {
+      return "missing";
+    }
+    if (!value.live) {
+      return "configured";
+    }
+
+    switch (key) {
+      case "easyTextMarketing":
+        return getEasyTextMarketingWebhookUrl() ? "executable" : "degraded";
+      case "smsit":
+        return "degraded";
+      case "n8n":
+        return getN8nWebhookUrl() ? "executable" : "degraded";
+      case "insighto":
+        return getInsightoWebhookUrl() ? "executable" : "degraded";
+      case "thoughtly":
+        return getThoughtlyWebhookUrl() ? "executable" : "degraded";
+      case "trafft":
+        return getTrafftBookingUrl() || getTrafftBearerToken() || (getTrafftClientId() && getTrafftClientSecret() && getTrafftApiUrl())
+          ? "executable"
+          : "degraded";
+      case "documentero":
+        return getDocumenteroWebhookUrl() || getDocumenteroTemplateId() || getDocumenteroProposalTemplateId() || getDocumenteroAgreementTemplateId() || getDocumenteroOnboardingTemplateId()
+          ? "executable"
+          : "degraded";
+      case "crove":
+        return getCroveWebhookUrl() || getCroveTemplateId() || getCroveProposalTemplateId() || getCroveAgreementTemplateId() || getCroveOnboardingTemplateId()
+          ? "executable"
+          : "degraded";
+      case "thrivecart":
+        return getThrivecartWebhookUrl() || getThrivecartCheckoutUrl() ? "executable" : "degraded";
+      case "partnero":
+        return getPartneroWebhookUrl() ? "executable" : "degraded";
+      case "activepieces":
+        return getActivepiecesWebhookUrl() ? "executable" : "degraded";
+      case "electroneek":
+        return getElectroneekWebhookUrl() ? "executable" : "degraded";
+      default:
+        return "executable";
+    }
+  };
+
   const providers = Object.entries(integrationMap).reduce<Record<string, {
     status: ProviderStatus;
     capability: ProviderCapabilityState;
@@ -1106,16 +1150,13 @@ export function getAutomationHealth() {
     live: boolean;
   }>>(
     (acc, [key, value]) => {
-      const capability: ProviderCapabilityState =
-        !value.configured ? "missing"
-        : !value.live ? "configured"
-        : "executable";
+      const capability = resolveCapability(key as keyof typeof integrationMap, value);
       acc[key] = {
         status: value.configured ? (value.live ? "configured" : "dry-run") : "missing",
         capability,
         owner: value.owner,
         responsibility: value.responsibility,
-        live: value.live,
+        live: capability === "executable",
       };
       return acc;
     },

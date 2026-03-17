@@ -560,3 +560,92 @@ export async function updateDispatchProviderSelfServe(
 
   return next.dispatch.providers.find((provider) => provider.id === providerId);
 }
+
+function buildDispatchProviderCandidateId(input: {
+  email?: string;
+  phone?: string;
+  company?: string;
+  firstName?: string;
+  lastName?: string;
+}) {
+  const base =
+    input.email?.trim().toLowerCase() ||
+    input.phone?.replace(/[^\d+]/g, "") ||
+    input.company?.trim().toLowerCase() ||
+    `${input.firstName ?? ""} ${input.lastName ?? ""}`.trim().toLowerCase();
+
+  const slug = base
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+
+  return `provider-${slug || crypto.randomUUID()}`;
+}
+
+export async function upsertDispatchProviderCandidate(
+  input: {
+    email?: string;
+    phone?: string;
+    company?: string;
+    firstName?: string;
+    lastName?: string;
+    state?: string;
+    county?: string;
+    city?: string;
+    zip?: string;
+    propertyTypes?: string[];
+    issueTypes?: string[];
+  },
+  updatedBy?: string,
+) {
+  const current = await getOperationalRuntimeConfig();
+  const normalizedEmail = input.email?.trim().toLowerCase();
+  const normalizedPhone = input.phone?.trim();
+  const label =
+    input.company?.trim() ||
+    `${input.firstName ?? ""} ${input.lastName ?? ""}`.trim() ||
+    normalizedEmail ||
+    "New provider";
+  const zipPrefix = input.zip?.trim().slice(0, 3).toLowerCase();
+
+  const existing = current.dispatch.providers.find((provider) =>
+    (normalizedEmail && provider.contactEmail === normalizedEmail) ||
+    (normalizedPhone && provider.phone === normalizedPhone),
+  );
+
+  const candidate: OperationalRuntimeConfig["dispatch"]["providers"][number] = {
+    id: existing?.id ?? buildDispatchProviderCandidateId(input),
+    label,
+    contactEmail: normalizedEmail,
+    phone: normalizedPhone,
+    active: existing?.active ?? false,
+    acceptingNewJobs: existing?.acceptingNewJobs ?? false,
+    priorityWeight: existing?.priorityWeight ?? 25,
+    maxConcurrentJobs: existing?.maxConcurrentJobs,
+    activeJobs: existing?.activeJobs ?? 0,
+    acceptsEmergency: existing?.acceptsEmergency ?? false,
+    acceptsCommercial: existing?.acceptsCommercial ?? false,
+    propertyTypes: input.propertyTypes?.length ? input.propertyTypes : existing?.propertyTypes ?? [],
+    issueTypes: input.issueTypes?.length ? input.issueTypes : existing?.issueTypes ?? [],
+    states: input.state ? [input.state.trim().toLowerCase()] : existing?.states ?? [],
+    counties: input.county ? [input.county.trim().toLowerCase()] : existing?.counties ?? [],
+    cities: input.city ? [input.city.trim().toLowerCase()] : existing?.cities ?? [],
+    zipPrefixes: zipPrefix ? [zipPrefix] : existing?.zipPrefixes ?? [],
+    emergencyCoverageWindow: existing?.emergencyCoverageWindow,
+    payoutModel: existing?.payoutModel ?? "flat-fee",
+    payoutFlatFee: existing?.payoutFlatFee,
+    payoutSharePercent: existing?.payoutSharePercent,
+    payoutNotes: existing?.payoutNotes,
+    lastSelfUpdatedAt: new Date().toISOString(),
+  };
+
+  const providers = existing
+    ? current.dispatch.providers.map((provider) => (provider.id === existing.id ? candidate : provider))
+    : [...current.dispatch.providers, candidate];
+
+  const next = await updateOperationalRuntimeConfig({
+    dispatch: { providers },
+  }, updatedBy);
+
+  return next.dispatch.providers.find((provider) => provider.id === candidate.id);
+}

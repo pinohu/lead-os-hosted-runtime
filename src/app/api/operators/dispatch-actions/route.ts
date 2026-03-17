@@ -22,6 +22,12 @@ export async function POST(request: Request) {
     leadKey?: string;
     actionType?: PlumbingOperatorActionType;
     note?: string;
+    invoiceNumber?: string;
+    invoiceStatus?: "not-issued" | "issued" | "sent" | "collected";
+    paymentStatus?: "not-requested" | "pending" | "paid" | "failed";
+    paymentMethod?: "cash" | "card" | "ach" | "financing" | "check" | "digital-link" | "other";
+    paymentAmount?: number;
+    paidAt?: number | string;
     revenueValue?: number;
     marginValue?: number;
     complaintStatus?: "none" | "minor" | "major";
@@ -41,6 +47,22 @@ export async function POST(request: Request) {
   const note = typeof body.note === "string" ? body.note.trim() : undefined;
   const revenueValue = typeof body.revenueValue === "number" && Number.isFinite(body.revenueValue)
     ? body.revenueValue
+    : undefined;
+  const invoiceNumber = typeof body.invoiceNumber === "string" ? body.invoiceNumber.trim() || undefined : undefined;
+  const invoiceStatus = body.invoiceStatus === "not-issued" || body.invoiceStatus === "issued" || body.invoiceStatus === "sent" || body.invoiceStatus === "collected"
+    ? body.invoiceStatus
+    : undefined;
+  const paymentStatus = body.paymentStatus === "not-requested" || body.paymentStatus === "pending" || body.paymentStatus === "paid" || body.paymentStatus === "failed"
+    ? body.paymentStatus
+    : undefined;
+  const paymentMethod = body.paymentMethod === "cash" || body.paymentMethod === "card" || body.paymentMethod === "ach" || body.paymentMethod === "financing" || body.paymentMethod === "check" || body.paymentMethod === "digital-link" || body.paymentMethod === "other"
+    ? body.paymentMethod
+    : undefined;
+  const paymentAmount = typeof body.paymentAmount === "number" && Number.isFinite(body.paymentAmount)
+    ? body.paymentAmount
+    : undefined;
+  const paidAt = typeof body.paidAt === "string" && body.paidAt.trim()
+    ? new Date(body.paidAt).toISOString()
     : undefined;
   const marginValue = typeof body.marginValue === "number" && Number.isFinite(body.marginValue)
     ? body.marginValue
@@ -69,6 +91,12 @@ export async function POST(request: Request) {
       actionType,
       actorEmail: auth.session.email,
       note,
+      invoiceNumber,
+      invoiceStatus,
+      paymentStatus,
+      paymentMethod,
+      paymentAmount,
+      paidAt,
       revenueValue,
       marginValue,
       complaintStatus,
