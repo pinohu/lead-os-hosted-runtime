@@ -9,6 +9,7 @@ import {
   type PlumbingIntegrationBundle,
 } from "./plumbing-entrypoints.ts";
 import type { FunnelFamily, MarketplaceAudience } from "./runtime-schema.ts";
+import { getVerticalOperatingModel, listVerticalOperatingModels, universalOperatingPriorities } from "./service-operating-models.ts";
 import type { TenantConfig } from "./tenant.ts";
 
 export type WidgetPresetId =
@@ -107,6 +108,7 @@ export type GeneratedDeploymentPackage = {
   entrypointPreset: EntrypointPreset;
   widgetPreset: WidgetPreset;
   deploymentPattern?: DeploymentPattern;
+  operatingModel: ReturnType<typeof getVerticalOperatingModel>;
   experience: ReturnType<typeof buildExperienceManifest>;
   bundle: PlumbingIntegrationBundle;
   wordpressEmbedBlock: string;
@@ -446,6 +448,8 @@ export function buildManifestCatalog(
 
   return {
     niches: Object.values(nicheCatalog),
+    operatingModels: listVerticalOperatingModels(),
+    operatingPriorities: universalOperatingPriorities,
     experienceCatalog,
     entrypointPresets: listEntrypointPresets(),
     widgetPresets,
@@ -574,6 +578,7 @@ export function generateDeploymentPackage(
     entrypointPreset: resolved.entrypointPreset,
     widgetPreset: resolved.widgetPreset,
     deploymentPattern: resolved.deploymentPattern ?? findDeploymentPatternById(query.recipe),
+    operatingModel: getVerticalOperatingModel(resolved.niche),
     experience: resolved.experience,
     bundle,
     wordpressEmbedBlock: buildWordpressEmbedBlock(bundle),

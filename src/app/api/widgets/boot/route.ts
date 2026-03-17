@@ -4,6 +4,7 @@ import { resolveWidgetBoot } from "@/lib/embed-deployment";
 import { buildDefaultFunnelGraphs } from "@/lib/funnel-library";
 import { getAutomationHealth } from "@/lib/providers";
 import { getOperationalRuntimeConfig } from "@/lib/runtime-config";
+import { getVerticalOperatingModel, universalOperatingPriorities } from "@/lib/service-operating-models";
 import { tenantConfig } from "@/lib/tenant";
 
 export async function OPTIONS(request: Request) {
@@ -30,6 +31,7 @@ export async function GET(request: Request) {
     pageType: url.searchParams.get("pageType") ?? undefined,
     launcherLabel: url.searchParams.get("launcherLabel") ?? undefined,
   }, tenantConfig, runtimeConfig.experiments.promotions);
+  const operatingModel = getVerticalOperatingModel(url.searchParams.get("niche") ?? resolved.niche);
   return NextResponse.json({
     success: true,
     widget: {
@@ -66,6 +68,8 @@ export async function GET(request: Request) {
       resolvedEntrypoint: resolved.entrypointPreset,
       widgetPreset: resolved.widgetPreset,
       deploymentPattern: resolved.deploymentPattern,
+      operatingModel,
+      operatingPriorities: universalOperatingPriorities,
       location: {
         zip: resolved.zip ?? null,
         city: resolved.city ?? null,

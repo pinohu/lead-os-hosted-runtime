@@ -31,6 +31,8 @@ export async function GET(request: Request) {
     },
     experience: catalog.experienceCatalog,
     experienceCatalog: catalog.experienceCatalog,
+    operatingModels: catalog.operatingModels,
+    operatingPriorities: catalog.operatingPriorities,
     entrypointPresets: catalog.entrypointPresets,
     widgetPresets: catalog.widgetPresets,
     deploymentPatterns: catalog.deploymentPatterns,
