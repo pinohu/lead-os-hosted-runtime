@@ -14,6 +14,7 @@ import {
   resolvePublicOrigin,
   sanitizeNextPath,
 } from "./operator-auth-core.ts";
+import { getOperatorMagicLinkThrottle, markOperatorMagicLinkRequested } from "./operator-auth-throttle.ts";
 import { sendEmailAction } from "./providers.ts";
 import { tenantConfig } from "./tenant.ts";
 import { ensureTraceContext } from "./trace.ts";
@@ -136,6 +137,20 @@ export async function createMagicLink(email: string, origin: string, nextPath?: 
 export async function sendOperatorMagicLink(email: string, origin: string, nextPath?: string) {
   const normalizedEmail = normalizeEmail(email);
   try {
+    const throttle = await getOperatorMagicLinkThrottle(normalizedEmail);
+    if (throttle.throttled) {
+      return {
+        ok: true,
+        provider: "Emailit",
+        mode: "live",
+        detail: "Magic link recently requested. Please check your inbox before requesting another.",
+        payload: {
+          throttled: true,
+          retryAfterSeconds: throttle.retryAfterSeconds,
+        },
+      } as const;
+    }
+
     const magicLink = await createMagicLink(normalizedEmail, origin, nextPath);
     const trace = ensureTraceContext({
       tenant: tenantConfig.tenantId,
@@ -146,8 +161,9 @@ export async function sendOperatorMagicLink(email: string, origin: string, nextP
       stepId: "magic-link",
       email: normalizedEmail,
     });
+    await markOperatorMagicLinkRequested(normalizedEmail, undefined, throttle.record);
 
-    return await sendEmailAction({
+    const result = await sendEmailAction({
       to: normalizedEmail,
       subject: `${tenantConfig.brandName} operator sign-in link`,
       html: `
@@ -160,6 +176,8 @@ export async function sendOperatorMagicLink(email: string, origin: string, nextP
       `,
       trace,
     });
+    await markOperatorMagicLinkRequested(normalizedEmail, result.detail, throttle.record);
+    return result;
   } catch (error) {
     const detail = error instanceof Error && error.message
       ? `Magic link delivery failed: ${error.message}`

@@ -34,6 +34,7 @@ interface HttpResult {
   text: string;
   json?: unknown;
   contentType?: string | null;
+  retryAfterSeconds?: number;
 }
 
 type TrafftRuntimeConfig = Awaited<ReturnType<typeof getOperationalRuntimeConfig>>["trafft"];
@@ -588,13 +589,37 @@ function getEmailSenderCandidates() {
 async function request(url: string, init: RequestInit): Promise<HttpResult> {
   const response = await fetch(url, init);
   const text = await response.text();
+  const json = parseJson(text);
+  const retryAfterHeader = response.headers.get("retry-after");
+  const retryAfterFromHeader = retryAfterHeader ? Number(retryAfterHeader) : NaN;
+  const retryAfterFromBody =
+    json && typeof json === "object" && "retry_after" in json
+      ? Number((json as Record<string, unknown>).retry_after)
+      : NaN;
   return {
     ok: response.ok,
     status: response.status,
     text,
-    json: parseJson(text),
+    json,
     contentType: response.headers.get("content-type"),
+    retryAfterSeconds:
+      Number.isFinite(retryAfterFromHeader) && retryAfterFromHeader >= 0
+        ? retryAfterFromHeader
+        : Number.isFinite(retryAfterFromBody) && retryAfterFromBody >= 0
+          ? retryAfterFromBody
+          : undefined,
   };
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function resolveRateLimitDelayMs(response: HttpResult) {
+  if (typeof response.retryAfterSeconds === "number" && Number.isFinite(response.retryAfterSeconds)) {
+    return Math.max(1000, Math.min(10_000, Math.ceil(response.retryAfterSeconds * 1000)));
+  }
+  return 1500;
 }
 
 async function postJson(url: string, body: unknown, headers: Record<string, string> = {}) {
@@ -1340,22 +1365,38 @@ export async function sendEmailAction(payload: {
       ];
 
       for (const body of variants) {
-        const response = await postJson("https://api.emailit.com/v1/emails", body, authHeaders);
-        if (response.ok) {
-          return {
-            ok: true,
-            provider: "Emailit",
-            mode: "live",
-            detail: responseAttempts.length === 0 ? "Email sent" : "Email sent after sender fallback",
-          } satisfies ProviderResult;
-        }
+        for (let retry = 0; retry < 2; retry += 1) {
+          const response = await postJson("https://api.emailit.com/v1/emails", body, authHeaders);
+          if (response.ok) {
+            return {
+              ok: true,
+              provider: "Emailit",
+              mode: "live",
+              detail:
+                responseAttempts.length === 0 && retry === 0
+                  ? "Email sent"
+                  : retry > 0
+                    ? "Email sent after provider retry"
+                    : "Email sent after sender fallback",
+            } satisfies ProviderResult;
+          }
 
-        responseAttempts.push({
-          from,
-          variant: "headers" in body ? "rich" : "basic",
-          status: response.status,
-          response: response.json ?? response.text,
-        });
+          responseAttempts.push({
+            from,
+            variant: "headers" in body ? "rich" : "basic",
+            retry,
+            status: response.status,
+            retryAfterSeconds: response.retryAfterSeconds,
+            response: response.json ?? response.text,
+          });
+
+          if (response.status === 429 && retry === 0) {
+            await sleep(resolveRateLimitDelayMs(response));
+            continue;
+          }
+
+          break;
+        }
       }
     }
 

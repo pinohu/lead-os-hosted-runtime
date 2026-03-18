@@ -202,3 +202,72 @@ test("sendEmailAction retries with alternate sender shapes when the first Emaili
     }
   }
 });
+
+test("sendEmailAction retries after a temporary Emailit rate limit", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalEnv = {
+    LEAD_OS_ENABLE_LIVE_SENDS: process.env.LEAD_OS_ENABLE_LIVE_SENDS,
+    LEAD_OS_ALLOW_EMBEDDED_SECRETS: process.env.LEAD_OS_ALLOW_EMBEDDED_SECRETS,
+    EMAILIT_API_KEY: process.env.EMAILIT_API_KEY,
+    NEXT_PUBLIC_SUPPORT_EMAIL: process.env.NEXT_PUBLIC_SUPPORT_EMAIL,
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+  };
+
+  process.env.LEAD_OS_ENABLE_LIVE_SENDS = "true";
+  process.env.LEAD_OS_ALLOW_EMBEDDED_SECRETS = "false";
+  process.env.EMAILIT_API_KEY = "emailit-live-key";
+  process.env.NEXT_PUBLIC_SUPPORT_EMAIL = "support@yourdeputy.com";
+  process.env.NEXT_PUBLIC_SITE_URL = "https://leados.yourdeputy.com";
+
+  let callCount = 0;
+  globalThis.fetch = async () => {
+    callCount += 1;
+    if (callCount === 1) {
+      return new Response(JSON.stringify({
+        error: "Rate limit exceeded",
+        retry_after: 0,
+      }), {
+        status: 429,
+        headers: { "content-type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ id: "email_789" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  try {
+    const modulePath = new URL(`../src/lib/providers.ts?email-rate-limit-${Date.now()}`, import.meta.url).href;
+    const { sendEmailAction } = await import(modulePath);
+    const result = await sendEmailAction({
+      to: "polycarpohu@gmail.com",
+      subject: "Operator sign-in",
+      html: "<p>Test</p>",
+      trace: {
+        leadKey: "email:polycarpohu@gmail.com",
+        tenant: "default-tenant",
+        source: "manual",
+        service: "operator-auth",
+        niche: "operations",
+        blueprintId: "operator-auth",
+        stepId: "magic-link",
+      },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(callCount, 2);
+    assert.match(result.detail, /provider retry/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (typeof value === "undefined") {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+});

@@ -12,7 +12,9 @@ export default async function CheckEmailPage({ searchParams }: CheckEmailPagePro
   const delivery = asString(params.delivery);
   const nextPath = asString(params.next) ?? "/dashboard";
   const reason = asString(params.reason);
+  const retryAfter = Number(asString(params.retryAfter) ?? "");
   const deliveryFailed = delivery === "failed";
+  const rateLimited = Number.isFinite(retryAfter) && retryAfter > 0;
 
   return (
     <main>
@@ -22,8 +24,12 @@ export default async function CheckEmailPage({ searchParams }: CheckEmailPagePro
         <p className="lede">
           {deliveryFailed
             ? email
-              ? `We could not deliver the sign-in email to ${email}. LeadOS no longer bypasses mailbox verification, so you will need email delivery restored before you can sign in again.`
-              : "We could not deliver the sign-in email. LeadOS no longer bypasses mailbox verification, so email delivery must be restored before you can sign in again."
+              ? rateLimited
+                ? `We hit a temporary email rate limit while sending the sign-in email to ${email}. Wait a moment and request the link again.`
+                : `We could not deliver the sign-in email to ${email}. LeadOS no longer bypasses mailbox verification, so you will need email delivery restored before you can sign in again.`
+              : rateLimited
+                ? "We hit a temporary email rate limit while sending the sign-in email. Wait a moment and request the link again."
+                : "We could not deliver the sign-in email. LeadOS no longer bypasses mailbox verification, so email delivery must be restored before you can sign in again."
             : email
               ? `We sent a secure sign-in link to ${email}.`
               : "We sent a secure sign-in link to your operator email."}
@@ -34,8 +40,9 @@ export default async function CheckEmailPage({ searchParams }: CheckEmailPagePro
         {deliveryFailed ? (
           <div className="stack-grid">
             <div className="status-banner error" role="alert">
-              Email delivery is currently unavailable. Operator access now requires mailbox
-              possession, so there is no same-browser fallback.
+              {rateLimited
+                ? `Email delivery is being rate-limited by the live provider. Wait about ${Math.ceil(retryAfter)} second${Math.ceil(retryAfter) === 1 ? "" : "s"} and try again.`
+                : "Email delivery is currently unavailable. Operator access now requires mailbox possession, so there is no same-browser fallback."}
             </div>
             {reason ? (
               <div className="portal-notice">
@@ -46,6 +53,7 @@ export default async function CheckEmailPage({ searchParams }: CheckEmailPagePro
             <div className="portal-notice">
               <strong>How to recover</strong>
               <ul className="check-list">
+                {rateLimited ? <li>Wait for the short provider cooldown to pass, then request a new sign-in link.</li> : null}
                 <li>Verify the configured sender email or domain is accepted by the live email provider.</li>
                 <li>Check Emailit provider health and retry the sign-in request after sender verification is restored.</li>
                 <li>If you still have an active operator session in another tab, keep using that session while delivery is repaired.</li>

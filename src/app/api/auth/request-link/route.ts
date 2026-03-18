@@ -51,6 +51,18 @@ export async function POST(request: Request) {
     url.searchParams.set("email", email);
     url.searchParams.set("next", nextPath);
     url.searchParams.set("reason", result.detail);
+    const retryAfterSeconds = typeof result.payload?.retryAfterSeconds === "number"
+      ? result.payload.retryAfterSeconds
+      : Array.isArray(result.payload?.attempts)
+        ? result.payload.attempts
+            .map((attempt) => (attempt && typeof attempt === "object" && "retryAfterSeconds" in attempt)
+              ? Number((attempt as Record<string, unknown>).retryAfterSeconds)
+              : NaN)
+            .find((value) => Number.isFinite(value))
+        : undefined;
+    if (typeof retryAfterSeconds === "number" && Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+      url.searchParams.set("retryAfter", String(Math.ceil(retryAfterSeconds)));
+    }
     return NextResponse.redirect(url);
   }
 
