@@ -32,6 +32,9 @@ type PublicLeadCaptureFormProps = {
   audience: MarketplaceAudience;
   variant: "customer" | "provider";
   stickyLabel: string;
+  customEyebrow?: string;
+  customTitle?: string;
+  customSummary?: string;
 };
 
 type StoredCaptureDraft = {
@@ -347,18 +350,18 @@ export function PublicLeadCaptureForm(props: PublicLeadCaptureFormProps) {
     <section className="public-capture panel" id="capture-form">
       <div className="public-capture__header">
         <div>
-          <p className="eyebrow">{props.variant === "provider" ? "Provider application" : "Get started"}</p>
+          <p className="eyebrow">{props.customEyebrow ?? (props.variant === "provider" ? "Provider application" : "Get started")}</p>
           <h2>
-            {props.variant === "provider"
+            {props.customTitle ?? (props.variant === "provider"
               ? "A short first step for serious providers"
-              : "A short first step to the right next move"}
+              : "A short first step to the right next move")}
           </h2>
           <p className="muted">
-            {props.variant === "provider"
+            {props.customSummary ?? (props.variant === "provider"
               ? "Share the basics and we will keep the next step focused on service area, fit, and readiness."
               : requiresPhone
                 ? "Share the minimum we need to keep the fastest path open."
-                : "Share the minimum we need to keep the next step relevant."}
+                : "Share the minimum we need to keep the next step relevant.")}
           </p>
         </div>
         <div className="public-capture__progress" aria-label="Progress">

@@ -12,6 +12,7 @@ export type EndUserFunnelKind =
 export type EndUserFunnelSection = {
   eyebrow: string;
   title: string;
+  description?: string;
   items: Array<{
     title: string;
     detail: string;
@@ -45,16 +46,27 @@ export type EndUserFunnelDefinition = {
   secondaryLabel: string;
   secondaryHref: string;
   stickyLabel: string;
+  asideEyebrow?: string;
+  asideTitle?: string;
   heroPills: string[];
   trustStrip: string[];
+  valueEyebrow?: string;
+  valueTitle?: string;
   valueStack?: Array<{
     title: string;
     detail: string;
   }>;
+  systemEyebrow?: string;
+  systemTitle?: string;
   systemModules?: Array<{
     title: string;
     detail: string;
   }>;
+  faqEyebrow?: string;
+  faqTitle?: string;
+  captureEyebrow?: string;
+  captureTitle?: string;
+  captureSummary?: string;
   sections: EndUserFunnelSection[];
   faq: EndUserFunnelFaq[];
   relatedLinks: EndUserFunnelLink[];
@@ -111,12 +123,18 @@ export function getEndUserFunnel(kind: EndUserFunnelKind, options?: { zip?: stri
         secondaryLabel: "Join provider network",
         secondaryHref: "/start/providers/join",
         stickyLabel: "Get plumbing help",
+        asideEyebrow: "Start here",
+        asideTitle: "Choose the path that matches what you need right now",
         heroPills: ["Emergency help", "Estimate path", "Commercial service", "Provider network"],
-        trustStrip: ["Local-first routes", "Clear next step", "Human fallback when needed"],
+        trustStrip: ["Fast path by situation", "Clear next step", "Human help when needed"],
+        faqTitle: "Before you choose",
+        captureTitle: "Tell us what you need",
+        captureSummary: "Start with the path that fits best. We keep the first step short.",
         sections: [
           {
             eyebrow: "Choose your lane",
             title: "Different situations need different first screens",
+            description: "The right first click saves time and keeps the next step relevant.",
             items: [
               {
                 title: "Emergency",
@@ -134,7 +152,7 @@ export function getEndUserFunnel(kind: EndUserFunnelKind, options?: { zip?: stri
           },
           {
             eyebrow: "Why this works",
-            title: "The first step should remove confusion, not create it",
+            title: "A good first step removes confusion",
             items: [
               {
                 title: "Faster decisions",
@@ -174,18 +192,24 @@ export function getEndUserFunnel(kind: EndUserFunnelKind, options?: { zip?: stri
         service: "emergency-plumbing",
         eyebrow: "Emergency plumbing",
         title: "Need a plumber now?",
-        summary: "Tell us what is happening and we will guide the fastest useful next step for your home.",
+        summary: "For leaks, backups, no hot water, and other urgent plumbing problems. Start the fastest useful next step now.",
         primaryLabel: "Get emergency help",
         primaryHref: "#capture-form",
         secondaryLabel: "Need an estimate instead?",
         secondaryHref: "/start/plumbing/estimate",
         stickyLabel: "Get emergency help",
+        asideEyebrow: "Fast response",
+        asideTitle: "Made for problems that cannot wait until tomorrow",
         heroPills: ["Burst pipe", "Active leak", "Backup", "No hot water"],
         trustStrip: ["Fast-response routing", "Licensed and insured providers", "Human fallback if needed"],
+        faqTitle: "Before you request help",
+        captureTitle: "Start your emergency request",
+        captureSummary: "Pick the issue, add your contact details, and keep the fastest path open.",
         sections: [
           {
             eyebrow: "How it works",
-            title: "A short path for urgent problems",
+            title: "A short path built for urgent issues",
+            description: "You should not have to fight through a long form when water is already where it should not be.",
             items: [
               {
                 title: "Pick the issue",
@@ -203,7 +227,7 @@ export function getEndUserFunnel(kind: EndUserFunnelKind, options?: { zip?: stri
           },
           {
             eyebrow: "When to use this page",
-            title: "Best for active plumbing problems",
+            title: "Best when speed matters most",
             items: [
               {
                 title: "Water is leaking now",
@@ -243,18 +267,24 @@ export function getEndUserFunnel(kind: EndUserFunnelKind, options?: { zip?: stri
         service: "plumbing-estimate",
         eyebrow: "Plumbing estimate",
         title: "Book a plumbing estimate without the back-and-forth",
-        summary: "For planned repairs, replacements, and installs. Start with the type of project and we will guide the next step.",
+        summary: "For planned repairs, replacements, and installs. Start with the project and move toward a clear next step.",
         primaryLabel: "Book an estimate",
         primaryHref: "#capture-form",
         secondaryLabel: "Need emergency help instead?",
         secondaryHref: "/start/plumbing/emergency",
         stickyLabel: "Book an estimate",
+        asideEyebrow: "Planned work",
+        asideTitle: "A calmer path for quote shoppers and planned projects",
         heroPills: ["Repairs", "Replacements", "Installs", "Project planning"],
         trustStrip: ["Quote-friendly path", "Clear expectations", "No emergency-style pressure"],
+        faqTitle: "Before you book",
+        captureTitle: "Start your estimate request",
+        captureSummary: "Tell us what kind of project you have and we will keep the next step focused.",
         sections: [
           {
             eyebrow: "Common projects",
             title: "Built for the work people usually plan ahead",
+            description: "This path works best when you want clarity, not panic.",
             items: [
               {
                 title: "Repair",
@@ -272,7 +302,7 @@ export function getEndUserFunnel(kind: EndUserFunnelKind, options?: { zip?: stri
           },
           {
             eyebrow: "What to expect",
-            title: "A quote path that stays useful",
+            title: "A quote path that stays simple",
             items: [
               {
                 title: "Start with the project",
@@ -318,12 +348,18 @@ export function getEndUserFunnel(kind: EndUserFunnelKind, options?: { zip?: stri
         secondaryLabel: "Need residential help instead?",
         secondaryHref: "/start",
         stickyLabel: "Request service",
+        asideEyebrow: "Commercial service",
+        asideTitle: "Structured for buildings, sites, and repeat-work relationships",
         heroPills: ["Property managers", "Facilities teams", "Multi-site coverage", "Repeat work"],
         trustStrip: ["Structured intake", "Site-aware service path", "Clear coordination next step"],
+        faqTitle: "Before you request service",
+        captureTitle: "Start your commercial request",
+        captureSummary: "Tell us the request type and site context so we can move it into the right conversation.",
         sections: [
           {
             eyebrow: "Who this is for",
             title: "Built for commercial requests, not homeowner forms",
+            description: "Property and facility work needs a more structured first step.",
             items: [
               {
                 title: "Facilities teams",
@@ -380,19 +416,23 @@ export function getEndUserFunnel(kind: EndUserFunnelKind, options?: { zip?: stri
         intent: "compare",
         service: "provider-network",
         eyebrow: "Provider network",
-        title: "Join the plumbing provider network",
-        summary: "Grow with better-fit work across your preferred service area, specialties, and response windows.",
+        title: "Grow your plumbing business with better-fit work",
+        summary: "Apply to join a network built for serious shops that want cleaner dispatch, stronger follow-through, and more collected revenue.",
         primaryLabel: "Apply to join",
         primaryHref: "#capture-form",
         secondaryLabel: "See customer-facing pages",
         secondaryHref: "/start",
         stickyLabel: "Apply to join",
+        asideEyebrow: "For plumbing owners",
+        asideTitle: "Built around profitable jobs, cleaner operations, and less admin leakage",
         heroPills: ["Call-to-cash", "Dispatch control", "Flat-rate quoting", "Repeat revenue"],
         trustStrip: [
-          "Built around profitable jobs",
+          "Better-fit work",
           "Less admin leakage between call and payment",
           "Made for serious plumbing operators",
         ],
+        valueEyebrow: "Why shops join",
+        valueTitle: "The gains show up in the day-to-day operation",
         valueStack: [
           {
             title: "Book faster",
@@ -411,6 +451,8 @@ export function getEndUserFunnel(kind: EndUserFunnelKind, options?: { zip?: stri
             detail: "Finish the job, invoice immediately, and shorten the gap between completed work and collected cash.",
           },
         ],
+        systemEyebrow: "What gets tighter",
+        systemTitle: "The core operating pieces that matter most",
         systemModules: [
           {
             title: "Call-to-cash flow",
@@ -437,10 +479,14 @@ export function getEndUserFunnel(kind: EndUserFunnelKind, options?: { zip?: stri
             detail: "Recurring inspections, maintenance plans, reminders, and reactivation turn one-time work into steadier revenue.",
           },
         ],
+        captureEyebrow: "Provider application",
+        captureTitle: "A short first step for serious shops",
+        captureSummary: "Start with the basics. We keep the next step focused on fit, service area, and readiness.",
         sections: [
           {
               eyebrow: "What owners actually want",
-              title: "A tighter operating system, not more disconnected software",
+              title: "Less chaos between the phone call and the payment",
+              description: "Most plumbing owners do not want more software. They want fewer leaks in the way the work gets run.",
               items: [
                 {
                   title: "Less leakage",
@@ -457,8 +503,8 @@ export function getEndUserFunnel(kind: EndUserFunnelKind, options?: { zip?: stri
               ],
             },
             {
-              eyebrow: "Why serious shops care",
-              title: "The system should make every job easier to run",
+              eyebrow: "What better looks like",
+              title: "Make each job easier to run from start to finish",
               items: [
                 {
                   title: "Before the truck rolls",
@@ -508,12 +554,18 @@ export function getEndUserFunnel(kind: EndUserFunnelKind, options?: { zip?: stri
         secondaryLabel: "View all plumbing paths",
         secondaryHref: "/start",
         stickyLabel: "Get local help",
+        asideEyebrow: "Local service",
+        asideTitle: `A faster local path for ${zipLabel(zip)}`,
         heroPills: [zipLabel(zip), "Emergency help", "Estimates", "Local-first path"],
         trustStrip: ["ZIP-aware copy", "Fast path for urgent jobs", "Clear local next step"],
+        faqTitle: "Before you start",
+        captureTitle: "Start your local request",
+        captureSummary: "Choose the type of help you need and keep the next step local and clear.",
         sections: [
           {
             eyebrow: "Why local pages work",
             title: "Specific beats generic when someone searches nearby",
+            description: "Local pages convert best when they feel relevant right away.",
             items: [
               {
                 title: "Keep the area visible",

@@ -65,7 +65,8 @@ export async function PublicEndUserFunnelPage({
           </div>
         </div>
         <aside className="public-funnel__aside">
-          <p className="eyebrow">Why people choose this path</p>
+          <p className="eyebrow">{funnel.asideEyebrow ?? "Why people choose this path"}</p>
+          <h2>{funnel.asideTitle ?? "A simpler path to the right next step"}</h2>
           <ul className="public-funnel__trust-list">
             {funnel.trustStrip.map((item) => (
               <li key={item}>{item}</li>
@@ -79,6 +80,7 @@ export async function PublicEndUserFunnelPage({
           <article className="panel public-funnel__section-lead">
             <p className="eyebrow">{section.eyebrow}</p>
             <h2>{section.title}</h2>
+            {section.description ? <p className="muted">{section.description}</p> : null}
           </article>
           <div className="public-funnel__card-grid">
             {section.items.map((item) => (
@@ -94,8 +96,8 @@ export async function PublicEndUserFunnelPage({
       {funnel.valueStack?.length ? (
         <section className="public-funnel__section">
           <article className="panel public-funnel__section-lead">
-            <p className="eyebrow">Why owners switch</p>
-            <h2>The value is operational, not theoretical</h2>
+            <p className="eyebrow">{funnel.valueEyebrow ?? "Why people choose this"}</p>
+            <h2>{funnel.valueTitle ?? "Why this path pays off in the real operation"}</h2>
           </article>
           <div className="public-funnel__card-grid">
             {funnel.valueStack.map((item) => (
@@ -111,8 +113,8 @@ export async function PublicEndUserFunnelPage({
       {funnel.systemModules?.length ? (
         <section className="public-funnel__section">
           <article className="panel public-funnel__section-lead">
-            <p className="eyebrow">The operating system</p>
-            <h2>What the platform should tighten first</h2>
+            <p className="eyebrow">{funnel.systemEyebrow ?? "What gets tighter"}</p>
+            <h2>{funnel.systemTitle ?? "The operational pieces that matter most"}</h2>
           </article>
           <div className="public-funnel__card-grid">
             {funnel.systemModules.map((item) => (
@@ -142,8 +144,8 @@ export async function PublicEndUserFunnelPage({
 
       <section className="public-funnel__section">
         <article className="panel public-funnel__section-lead">
-          <p className="eyebrow">Common questions</p>
-          <h2>Before you start</h2>
+          <p className="eyebrow">{funnel.faqEyebrow ?? "Common questions"}</p>
+          <h2>{funnel.faqTitle ?? "Before you start"}</h2>
         </article>
         <div className="public-funnel__faq-grid">
           {funnel.faq.map((item) => (
@@ -165,6 +167,9 @@ export async function PublicEndUserFunnelPage({
         audience={funnel.audience}
         variant={funnel.audience === "provider" ? "provider" : "customer"}
         stickyLabel={funnel.primaryLabel}
+        customEyebrow={funnel.captureEyebrow}
+        customTitle={funnel.captureTitle}
+        customSummary={funnel.captureSummary}
       />
 
       <PublicGrowthScripts
