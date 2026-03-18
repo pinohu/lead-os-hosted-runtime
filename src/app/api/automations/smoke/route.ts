@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireOperatorApiSession } from "@/lib/operator-auth";
+import { runGrowthStackSmokeTest } from "@/lib/growth-integrations";
 import { runSmokeTest } from "@/lib/providers";
 
 export async function POST(request: Request) {
@@ -16,8 +17,14 @@ export async function POST(request: Request) {
     dryRun = true;
   }
 
+  const [smoke, growthSmoke] = await Promise.all([
+    runSmokeTest(dryRun),
+    runGrowthStackSmokeTest(dryRun),
+  ]);
+
   return NextResponse.json({
     success: true,
-    smoke: await runSmokeTest(dryRun),
+    smoke,
+    growthSmoke,
   });
 }

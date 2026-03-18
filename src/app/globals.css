@@ -1098,6 +1098,14 @@ button[disabled] {
   background: rgba(255, 255, 255, 0.68);
 }
 
+.growth-verification-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.growth-verification-card {
+  min-height: 12rem;
+}
+
 .tone-warning,
 .severity-warning {
   border-color: rgba(196, 99, 45, 0.22);

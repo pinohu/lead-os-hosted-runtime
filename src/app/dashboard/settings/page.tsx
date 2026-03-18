@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { GrowthStackVerificationPanel } from "@/components/GrowthStackVerificationPanel";
 import { GrowthStackSettingsForm } from "@/components/GrowthStackSettingsForm";
 import { RuntimeConfigForm } from "@/components/RuntimeConfigForm";
+import { buildGrowthStackHealth } from "@/lib/growth-integrations";
 import {
   discoverDocumenteroTemplates,
   discoverTrafftServices,
@@ -25,6 +27,7 @@ export default async function RuntimeSettingsPage() {
     discoverTrafftServices(config.trafft.publicBookingUrl),
   ]);
   const summary = buildRuntimeConfigSummary(config);
+  const growthHealth = buildGrowthStackHealth(config);
 
   return (
     <main className="experience-page">
@@ -206,6 +209,8 @@ export default async function RuntimeSettingsPage() {
         </article>
         <GrowthStackSettingsForm initialConfig={config} />
       </section>
+
+      <GrowthStackVerificationPanel initialHealth={growthHealth} />
 
       <RuntimeConfigForm initialConfig={config} trafftServices={trafftServices} />
     </main>
