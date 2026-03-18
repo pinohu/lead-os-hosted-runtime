@@ -2,13 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildGrowthStackHealth,
+  dispatchPublicEventFanout,
   buildPublicGrowthBootConfig,
   processCallScalerWebhook,
   runGrowthStackSmokeTest,
   verifyCallScalerWebhookAuthorization,
 } from "../src/lib/growth-integrations.ts";
-import { getCanonicalEvents, resetRuntimeStore } from "../src/lib/runtime-store.ts";
+import { getCanonicalEvents, getProviderExecutions, resetRuntimeStore } from "../src/lib/runtime-store.ts";
 import { getOperationalRuntimeConfig, updateOperationalRuntimeConfig } from "../src/lib/runtime-config.ts";
+import { createCanonicalEvent } from "../src/lib/trace.ts";
 
 test("runtime config stores growth stack settings", async () => {
   await resetRuntimeStore();
@@ -166,6 +168,49 @@ test("growth stack smoke test covers the full activation spine in dry run mode",
   assert.equal(smoke.providers.plerdy.ok, true);
   assert.equal(smoke.providers.partnero.ok, true);
   assert.equal(smoke.providers.thoughtly.ok, true);
+});
+
+test("public event fanout records growth execution activity", async () => {
+  await resetRuntimeStore();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ success: true }), { status: 200 })) as typeof globalThis.fetch;
+
+  try {
+    await updateOperationalRuntimeConfig({
+      salespanel: {
+        enabled: true,
+        webhookUrl: "https://example.com/salespanel",
+      },
+      plerdy: {
+        enabled: true,
+        eventWebhookUrl: "https://example.com/plerdy",
+      },
+    });
+
+    const event = createCanonicalEvent({
+      visitorId: "visitor_123",
+      sessionId: "session_123",
+      leadKey: "email:test@example.com",
+      tenant: "lead-os",
+      source: "public_funnel",
+      service: "emergency-plumbing",
+      niche: "plumbing",
+      blueprintId: "public-start",
+      stepId: "hero",
+      family: "qualification",
+    }, "cta_clicked", "web", "RECORDED");
+
+    await dispatchPublicEventFanout(event, {
+      audience: "client",
+      pagePath: "/start/plumbing/emergency",
+    });
+
+    const executions = await getProviderExecutions();
+    assert.ok(executions.some((entry) => entry.provider === "Salespanel" && entry.kind === "attribution"));
+    assert.ok(executions.some((entry) => entry.provider === "Plerdy" && entry.kind === "cro"));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("callscaler webhook verification and ingestion append call events", async () => {

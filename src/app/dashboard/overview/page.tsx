@@ -90,6 +90,9 @@ export default async function OverviewDashboardPage() {
             <Link href="/dashboard/alerts" className="secondary">
               Alert operations
             </Link>
+            <Link href="/dashboard/growth" className="secondary">
+              Growth ops
+            </Link>
             <Link href="/dashboard/providers" className="secondary">
               Provider health
             </Link>
@@ -253,6 +256,13 @@ export default async function OverviewDashboardPage() {
               <p className="muted">Review paging failures, suppressions, and acknowledged rules in one place.</p>
               <div className="cta-row">
                 <Link href="/dashboard/alerts" className="secondary">Alert operations</Link>
+              </div>
+            </article>
+            <article className="stack-card">
+              <p className="eyebrow">Growth</p>
+              <p className="muted">Verify calls, attribution, CRO, checkout starts, and referral activity as one connected system.</p>
+              <div className="cta-row">
+                <Link href="/dashboard/growth" className="secondary">Growth ops</Link>
               </div>
             </article>
             <article className="stack-card">

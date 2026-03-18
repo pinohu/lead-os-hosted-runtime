@@ -57,6 +57,7 @@ This document lists the main public, provider, operator, and API URLs in LeadOS 
 | Operator/Admin | `https://leados.yourdeputy.com/auth/check-email` | `GET` | Operators | None | `email`, `next`, `delivery`, `reason` | None | Operator check-email page |
 | Operator/Admin | `https://leados.yourdeputy.com/dashboard` | `GET` | Operators | None | queue/filter context params | None | Main dispatch desk |
 | Operator/Admin | `https://leados.yourdeputy.com/dashboard/overview` | `GET` | Operators | None | None | None | Bird’s-eye system view |
+| Operator/Admin | `https://leados.yourdeputy.com/dashboard/growth` | `GET` | Operators | None | None | None | Growth operations control surface |
 | Operator/Admin | `https://leados.yourdeputy.com/dashboard/alerts` | `GET` | Operators | None | None | None | Alert operations |
 | Operator/Admin | `https://leados.yourdeputy.com/dashboard/bookings` | `GET` | Operators | None | queue/filter params | None | Booking queue |
 | Operator/Admin | `https://leados.yourdeputy.com/dashboard/documents` | `GET` | Operators | None | queue/filter params | None | Document queue |

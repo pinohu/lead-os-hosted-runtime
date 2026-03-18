@@ -1,6 +1,6 @@
 import type { CanonicalEvent } from "./trace.ts";
 import { createCanonicalEvent, ensureTraceContext } from "./trace.ts";
-import { appendEvents } from "./runtime-store.ts";
+import { appendEvents, recordProviderExecution, type ProviderExecutionRecord } from "./runtime-store.ts";
 import { getOperationalRuntimeConfig } from "./runtime-config.ts";
 import { tenantConfig } from "./tenant.ts";
 import type { CanonicalEventType, FunnelFamily, MarketplaceAudience } from "./runtime-schema.ts";
@@ -56,6 +56,10 @@ async function postJson(url: string, body: unknown, headers: Record<string, stri
   };
 }
 
+async function recordGrowthExecution(record: Omit<ProviderExecutionRecord, "id" | "createdAt">) {
+  await recordProviderExecution(record);
+}
+
 export async function dispatchPublicEventFanout(event: CanonicalEvent, payload: PublicEventPayload) {
   const runtimeConfig = await getOperationalRuntimeConfig();
   const results: FanoutResult[] = [];
@@ -75,11 +79,37 @@ export async function dispatchPublicEventFanout(event: CanonicalEvent, payload: 
         sent: response.ok,
         detail: response.ok ? "Behavior event sent" : `Behavior event failed: ${response.status}`,
       });
+      await recordGrowthExecution({
+        leadKey: event.leadKey,
+        provider: "Salespanel",
+        kind: "attribution",
+        ok: response.ok,
+        mode: "live",
+        detail: response.ok ? "Behavior event sent" : `Behavior event failed: ${response.status}`,
+        payload: {
+          eventType: event.eventType,
+          pagePath: payload.pagePath,
+          audience: payload.audience,
+        },
+      });
     } catch (error) {
       results.push({
         provider: "Salespanel",
         sent: false,
         detail: error instanceof Error ? error.message : "Behavior event failed",
+      });
+      await recordGrowthExecution({
+        leadKey: event.leadKey,
+        provider: "Salespanel",
+        kind: "attribution",
+        ok: false,
+        mode: "live",
+        detail: error instanceof Error ? error.message : "Behavior event failed",
+        payload: {
+          eventType: event.eventType,
+          pagePath: payload.pagePath,
+          audience: payload.audience,
+        },
       });
     }
   }
@@ -100,11 +130,37 @@ export async function dispatchPublicEventFanout(event: CanonicalEvent, payload: 
         sent: response.ok,
         detail: response.ok ? "CRO event sent" : `CRO event failed: ${response.status}`,
       });
+      await recordGrowthExecution({
+        leadKey: event.leadKey,
+        provider: "Plerdy",
+        kind: "cro",
+        ok: response.ok,
+        mode: "live",
+        detail: response.ok ? "CRO event sent" : `CRO event failed: ${response.status}`,
+        payload: {
+          eventType: event.eventType,
+          pagePath: payload.pagePath,
+          audience: payload.audience,
+        },
+      });
     } catch (error) {
       results.push({
         provider: "Plerdy",
         sent: false,
         detail: error instanceof Error ? error.message : "CRO event failed",
+      });
+      await recordGrowthExecution({
+        leadKey: event.leadKey,
+        provider: "Plerdy",
+        kind: "cro",
+        ok: false,
+        mode: "live",
+        detail: error instanceof Error ? error.message : "CRO event failed",
+        payload: {
+          eventType: event.eventType,
+          pagePath: payload.pagePath,
+          audience: payload.audience,
+        },
       });
     }
   }
@@ -364,6 +420,33 @@ export async function runGrowthStackSmokeTest(dryRun = true) {
       };
     }
   }
+
+  await Promise.all(
+    Object.entries(results).map(([providerKey, result]) =>
+      recordGrowthExecution({
+        provider: providerKey === "suiteDash"
+          ? "SuiteDash"
+          : providerKey === "callScaler"
+            ? "CallScaler"
+            : providerKey === "salespanel"
+              ? "Salespanel"
+              : providerKey === "plerdy"
+                ? "Plerdy"
+                : providerKey === "partnero"
+                  ? "Partnero"
+                  : providerKey === "thoughtly"
+                    ? "Thoughtly"
+                    : "Growth Stack",
+        kind: "verification",
+        ok: result.ok,
+        mode: result.mode,
+        detail: result.detail,
+        payload: {
+          dryRun,
+          providerKey,
+        },
+      })),
+  );
 
   return {
     dryRun,

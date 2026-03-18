@@ -45,6 +45,9 @@ export default async function RuntimeSettingsPage() {
             <Link href="/dashboard" className="secondary">
               Back to dashboard
             </Link>
+            <Link href="/dashboard/growth" className="secondary">
+              Growth ops
+            </Link>
             <Link href="/dashboard/providers" className="secondary">
               Provider health
             </Link>
