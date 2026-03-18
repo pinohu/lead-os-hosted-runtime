@@ -68,4 +68,6 @@ test("growth ops snapshot exposes blockers and tool activity", async () => {
   assert.ok(snapshot.blockers.some((entry) => entry.includes("Forms are starting")));
   assert.equal(snapshot.toolPulse.find((entry) => entry.label === "Salespanel")?.totalExecutions, 1);
   assert.equal(snapshot.pulse.find((entry) => entry.label === "Form starts")?.value, 1);
+  assert.equal(snapshot.metrics.pageViews, 1);
+  assert.equal(snapshot.metrics.formStarts, 1);
 });

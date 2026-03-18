@@ -9,6 +9,11 @@ export const OBSERVABILITY_RULE_IDS = [
   "stale-rollout",
   "provider-capability-health",
   "deployment-verification",
+  "growth-pageview-no-cta",
+  "growth-formstart-no-capture",
+  "growth-checkout-no-payment",
+  "growth-referral-inactive",
+  "growth-voice-recovery-inactive",
 ] as const;
 
 export const OBSERVABILITY_RULE_OPTIONS = [
@@ -22,4 +27,9 @@ export const OBSERVABILITY_RULE_OPTIONS = [
   { id: "stale-rollout", label: "Stale rollout" },
   { id: "provider-capability-health", label: "Provider capability health" },
   { id: "deployment-verification", label: "Deployment verification" },
+  { id: "growth-pageview-no-cta", label: "Growth page views without CTA activity" },
+  { id: "growth-formstart-no-capture", label: "Growth form starts without lead captures" },
+  { id: "growth-checkout-no-payment", label: "Growth checkouts without payments" },
+  { id: "growth-referral-inactive", label: "Growth referral layer inactive" },
+  { id: "growth-voice-recovery-inactive", label: "Growth after-hours voice recovery inactive" },
 ] as const;

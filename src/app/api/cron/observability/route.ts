@@ -62,6 +62,8 @@ export async function GET(request: Request) {
   );
   const overview = buildSystemOverviewSnapshot({
     consoleSnapshot,
+    runtimeConfig,
+    events,
     leads,
     workflowRuns,
     providerExecutions,

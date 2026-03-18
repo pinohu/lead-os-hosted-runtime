@@ -60,6 +60,8 @@ export default async function OverviewDashboardPage() {
   const health = getAutomationHealth();
   const overview = buildSystemOverviewSnapshot({
     consoleSnapshot,
+    runtimeConfig,
+    events,
     leads,
     workflowRuns,
     providerExecutions,

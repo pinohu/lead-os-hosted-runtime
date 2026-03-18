@@ -223,6 +223,20 @@ export function buildGrowthOpsSnapshot(
 
   return {
     health,
+    metrics: {
+      pageViews: publicSignal.pageViews.length,
+      ctaClicks: publicSignal.ctaClicks.length,
+      formStarts: publicSignal.formStarts.length,
+      formSteps: publicSignal.formSteps.length,
+      formAbandons: publicSignal.formAbandons.length,
+      leadsCaptured: publicSignal.leadsCaptured.length,
+      callsStarted: callSignal.started.length,
+      callsAnswered: callSignal.answered.length,
+      callsCompleted: callSignal.completed.length,
+      checkoutsStarted: valueSignal.checkouts.length,
+      paymentsReceived: valueSignal.payments.length,
+      referralsSent: valueSignal.referrals.length,
+    },
     pulse,
     funnelBreakdown,
     toolPulse,

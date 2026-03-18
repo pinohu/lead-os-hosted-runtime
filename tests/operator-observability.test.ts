@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildLeadJourneySnapshot, buildSystemOverviewSnapshot } from "../src/lib/operator-observability.ts";
+import { createCanonicalEvent } from "../src/lib/trace.ts";
+import { getOperationalRuntimeConfig, updateOperationalRuntimeConfig } from "../src/lib/runtime-config.ts";
+import { resetRuntimeStore } from "../src/lib/runtime-store.ts";
 import type {
   BookingJobRecord,
   DocumentJobRecord,
@@ -182,8 +185,27 @@ test("buildLeadJourneySnapshot creates chronological timeline and operator issue
   assert.equal(typeof snapshot.issues[0]?.href, "string");
 });
 
-test("buildSystemOverviewSnapshot combines queue, rollout, and provider alerts", () => {
+test("buildSystemOverviewSnapshot combines queue, rollout, provider, and growth leak alerts", async () => {
   const lead = createLead();
+  await resetRuntimeStore();
+  await updateOperationalRuntimeConfig({
+    partnero: {
+      webhookUrl: "https://example.com/partnero",
+      programId: "program_1",
+      autoEnrollStage: "value-realized",
+    },
+    thoughtly: {
+      afterHoursEnabled: true,
+      callbackWindowMinutes: 15,
+      missedCallSmsEnabled: true,
+    },
+  });
+  const runtimeConfig = await getOperationalRuntimeConfig();
+  const events = [
+    createCanonicalEvent(lead.trace, "page_view", "web", "RECORDED"),
+    createCanonicalEvent(lead.trace, "form_started", "web", "RECORDED"),
+    createCanonicalEvent(lead.trace, "checkout_started", "web", "RECORDED"),
+  ];
   const snapshot = buildSystemOverviewSnapshot({
     consoleSnapshot: {
       totals: { leads: 12, hotLeads: 5 },
@@ -210,6 +232,8 @@ test("buildSystemOverviewSnapshot combines queue, rollout, and provider alerts",
         },
       },
     },
+    runtimeConfig,
+    events,
     leads: [lead],
     workflowRuns: [],
     providerExecutions: [],
@@ -225,6 +249,8 @@ test("buildSystemOverviewSnapshot combines queue, rollout, and provider alerts",
       generatedOlderThanSevenDays: 1,
       liveWithoutPageUrl: 1,
       staleDeployments: 2,
+      unhealthyVerifications: 1,
+      warningVerifications: 1,
     },
   });
 
@@ -234,5 +260,11 @@ test("buildSystemOverviewSnapshot combines queue, rollout, and provider alerts",
   assert.equal(snapshot.activeAlerts.some((issue) => issue.source === "rollout registry"), true);
   assert.equal(snapshot.rules.some((rule) => rule.id === "execution-failures" && rule.triggered === true), true);
   assert.equal(snapshot.rules.some((rule) => rule.id === "provider-capability-health" && typeof rule.href === "string"), true);
-  assert.equal(snapshot.watchlist.length >= 4, true);
+  assert.equal(snapshot.rules.some((rule) => rule.id === "growth-pageview-no-cta" && rule.triggered), true);
+  assert.equal(snapshot.rules.some((rule) => rule.id === "growth-formstart-no-capture" && rule.triggered), true);
+  assert.equal(snapshot.rules.some((rule) => rule.id === "growth-checkout-no-payment" && rule.triggered), true);
+  assert.equal(snapshot.rules.some((rule) => rule.id === "growth-referral-inactive" && rule.triggered), true);
+  assert.equal(snapshot.rules.some((rule) => rule.id === "growth-voice-recovery-inactive" && rule.triggered), true);
+  assert.equal(snapshot.activeAlerts.some((issue) => issue.id === "rule:growth-formstart-no-capture"), true);
+  assert.equal(snapshot.watchlist.length >= 6, true);
 });

@@ -66,6 +66,8 @@ export default async function AlertsDashboardPage() {
   );
   const overview = buildSystemOverviewSnapshot({
     consoleSnapshot,
+    runtimeConfig,
+    events,
     leads,
     workflowRuns,
     providerExecutions,

@@ -1,4 +1,5 @@
 import { getDispatchSlaSnapshot } from "./dispatch-sla.ts";
+import { buildGrowthOpsSnapshot } from "./growth-ops.ts";
 import { getAutomationHealth } from "./providers.ts";
 import {
   buildLeadDisplayName,
@@ -20,6 +21,7 @@ import type {
 } from "./runtime-store.ts";
 import type { CanonicalEvent } from "./trace.ts";
 import type { PlumbingJobOutcome, PlumbingLeadContext } from "./runtime-schema.ts";
+import type { OperationalRuntimeConfig } from "./runtime-config.ts";
 
 export type JourneyItemSeverity = "info" | "success" | "warning" | "danger";
 
@@ -578,6 +580,16 @@ function buildObservabilityRules(input: {
   warningVerifications: number;
   degradedProviders: number;
   missingProviders: number;
+  growthPageViews: number;
+  growthCtaClicks: number;
+  growthFormStarts: number;
+  growthLeadsCaptured: number;
+  growthCheckoutsStarted: number;
+  growthPaymentsReceived: number;
+  referralConfigured: boolean;
+  referralActivityCount: number;
+  voiceRecoveryEnabled: boolean;
+  voiceRecoveryActivityCount: number;
 }) {
   const rules: ObservabilityRuleResult[] = [
     {
@@ -690,6 +702,65 @@ function buildObservabilityRules(input: {
       resolution: "Repair degraded adapters and finish missing provider configuration before those channels silently underperform.",
       href: queueHref("/dashboard/providers", { focus: "capability" }),
     },
+    {
+      id: "growth-pageview-no-cta",
+      title: "Public page views without CTA activity",
+      severity: "warning",
+      thresholdLabel: "Trigger when public page views are recorded but CTA clicks remain at 0",
+      currentLabel: `${input.growthPageViews} page views / ${input.growthCtaClicks} CTA clicks`,
+      triggered: input.growthPageViews >= 1 && input.growthCtaClicks === 0,
+      notificationChannel: "dashboard",
+      resolution: "Review hero copy, CTA placement, and mobile visibility before buying more traffic into pages that are not prompting action.",
+      href: "/dashboard/growth",
+    },
+    {
+      id: "growth-formstart-no-capture",
+      title: "Form starts without captured leads",
+      severity: "danger",
+      thresholdLabel: "Trigger when forms start but captured leads remain at 0",
+      currentLabel: `${input.growthFormStarts} form starts / ${input.growthLeadsCaptured} captured leads`,
+      triggered: input.growthFormStarts >= 1 && input.growthLeadsCaptured === 0,
+      notificationChannel: "email",
+      resolution: "Inspect form friction, validation, and follow-up handoff so interested visitors are not falling out before becoming leads.",
+      href: "/dashboard/growth",
+    },
+    {
+      id: "growth-checkout-no-payment",
+      title: "Checkouts started without payment receipt",
+      severity: "danger",
+      thresholdLabel: "Trigger when checkout starts are recorded but no payments arrive",
+      currentLabel: `${input.growthCheckoutsStarted} checkouts / ${input.growthPaymentsReceived} payments`,
+      triggered: input.growthCheckoutsStarted >= 1 && input.growthPaymentsReceived === 0,
+      notificationChannel: "email",
+      resolution: "Verify payment handoff, invoice follow-through, and checkout recovery before active demand reaches the money step and leaks out.",
+      href: "/dashboard/growth",
+    },
+    {
+      id: "growth-referral-inactive",
+      title: "Referral layer configured but inactive",
+      severity: "warning",
+      thresholdLabel: "Trigger when referral automation is configured but no referral activity is recorded",
+      currentLabel: input.referralConfigured
+        ? `${input.referralActivityCount} referral events recorded`
+        : "Referral layer not configured",
+      triggered: input.referralConfigured && input.referralActivityCount === 0,
+      notificationChannel: "dashboard",
+      resolution: "Verify referral enrollment triggers and invite delivery so paid customers are actually being invited into the referral loop.",
+      href: "/dashboard/growth",
+    },
+    {
+      id: "growth-voice-recovery-inactive",
+      title: "After-hours voice recovery inactive",
+      severity: "warning",
+      thresholdLabel: "Trigger when after-hours voice recovery is enabled but no recovery activity is recorded",
+      currentLabel: input.voiceRecoveryEnabled
+        ? `${input.voiceRecoveryActivityCount} voice recovery events recorded`
+        : "After-hours voice recovery disabled",
+      triggered: input.voiceRecoveryEnabled && input.voiceRecoveryActivityCount === 0,
+      notificationChannel: "sms",
+      resolution: "Verify after-hours routing, webhook delivery, and callback automation so missed calls are actually being recovered when the office is closed.",
+      href: "/dashboard/growth",
+    },
   ];
 
   return rules;
@@ -721,6 +792,8 @@ export function buildSystemOverviewSnapshot(input: {
       };
     };
   };
+  runtimeConfig: OperationalRuntimeConfig;
+  events: CanonicalEvent[];
   leads: StoredLeadRecord[];
   workflowRuns: WorkflowRunRecord[];
   providerExecutions: ProviderExecutionRecord[];
@@ -741,6 +814,7 @@ export function buildSystemOverviewSnapshot(input: {
   };
 }) {
   const health = getAutomationHealth();
+  const growthSnapshot = buildGrowthOpsSnapshot(input.runtimeConfig, input.events, input.providerExecutions);
   const providerEntries = Object.values(health.providers);
   const executableProviders = providerEntries.filter((provider) => provider.capability === "executable").length;
   const degradedProviders = providerEntries.filter((provider) => provider.capability === "degraded").length;
@@ -758,6 +832,16 @@ export function buildSystemOverviewSnapshot(input: {
     warningVerifications: input.deploymentSummary.warningVerifications,
     degradedProviders,
     missingProviders,
+    growthPageViews: growthSnapshot.metrics.pageViews,
+    growthCtaClicks: growthSnapshot.metrics.ctaClicks,
+    growthFormStarts: growthSnapshot.metrics.formStarts,
+    growthLeadsCaptured: growthSnapshot.metrics.leadsCaptured,
+    growthCheckoutsStarted: growthSnapshot.metrics.checkoutsStarted,
+    growthPaymentsReceived: growthSnapshot.metrics.paymentsReceived,
+    referralConfigured: Boolean(input.runtimeConfig.partnero.webhookUrl || input.runtimeConfig.partnero.programId),
+    referralActivityCount: growthSnapshot.metrics.referralsSent,
+    voiceRecoveryEnabled: input.runtimeConfig.thoughtly.afterHoursEnabled,
+    voiceRecoveryActivityCount: growthSnapshot.toolPulse.find((item) => item.label === "Thoughtly")?.totalExecutions ?? 0,
   });
   const activeAlerts = buildSystemIssueInsights({
     leads: input.leads,
@@ -805,6 +889,12 @@ export function buildSystemOverviewSnapshot(input: {
         value: input.consoleSnapshot.plumbingDispatch.executionQueue.failedCount,
         detail: `${input.consoleSnapshot.plumbingDispatch.executionQueue.pendingCount} additional tasks are still queued.`,
         tone: input.consoleSnapshot.plumbingDispatch.executionQueue.failedCount > 0 ? "danger" : "success",
+      },
+      {
+        label: "CTA engagement gap",
+        value: growthSnapshot.metrics.pageViews - growthSnapshot.metrics.ctaClicks,
+        detail: "Public traffic arriving without enough CTA engagement yet.",
+        tone: rules.some((rule) => rule.id === "growth-pageview-no-cta" && rule.triggered) ? "warning" : "success",
       },
     ],
     rolloutPulse: [
@@ -858,12 +948,22 @@ export function buildSystemOverviewSnapshot(input: {
         detail: `${input.consoleSnapshot.plumbingDispatch.finance.contributionMarginRate.toFixed(1)}% contribution rate with ${input.consoleSnapshot.plumbingDispatch.finance.unprofitableProviders} unprofitable providers.`,
         tone: input.consoleSnapshot.plumbingDispatch.finance.contributionMargin < 0 ? "danger" : "success",
       },
+      {
+        label: "Voice recovery activity",
+        value: growthSnapshot.toolPulse.find((item) => item.label === "Thoughtly")?.totalExecutions ?? 0,
+        detail: input.runtimeConfig.thoughtly.afterHoursEnabled
+          ? "After-hours voice recovery signal recorded by Thoughtly."
+          : "After-hours voice recovery is not enabled.",
+        tone: rules.some((rule) => rule.id === "growth-voice-recovery-inactive" && rule.triggered) ? "warning" : "neutral",
+      },
     ],
     watchlist: [
       `Lead M1 to M2 conversion is ${input.consoleSnapshot.conversionRates.leadM1ToM2.toFixed(1)}%.`,
       `Lead M2 to M3 conversion is ${input.consoleSnapshot.conversionRates.leadM2ToM3.toFixed(1)}%.`,
       `Customer activation is ${input.consoleSnapshot.conversionRates.customerM1ToM2.toFixed(1)}%.`,
       `Customer value realization is ${input.consoleSnapshot.conversionRates.customerM2ToM3.toFixed(1)}%.`,
+      `Public funnels show ${growthSnapshot.metrics.pageViews} page views and ${growthSnapshot.metrics.ctaClicks} CTA clicks.`,
+      `Growth value path shows ${growthSnapshot.metrics.checkoutsStarted} checkout starts and ${growthSnapshot.metrics.paymentsReceived} recorded payments.`,
       input.consoleSnapshot.plumbingDispatch.providerScores[0]
         ? `Top routing score is ${input.consoleSnapshot.plumbingDispatch.providerScores[0].routingScore} for ${input.consoleSnapshot.plumbingDispatch.providerScores[0].provider}.`
         : "No provider score history is available yet.",
