@@ -26,6 +26,7 @@ The hosted runtime owns:
 
 ## Key docs
 
+- [Lead Operating System architecture (canonical, umbrella repo)](https://github.com/pinohu/lead-os/blob/master/docs/LEAD_OPERATING_SYSTEM_ARCHITECTURE.md)
 - [AGENTS.md](./AGENTS.md)
 - [docs/runtime-operator-setup.md](./docs/runtime-operator-setup.md)
 - [docs/plumbing-marketplace-scaling.md](./docs/plumbing-marketplace-scaling.md)
